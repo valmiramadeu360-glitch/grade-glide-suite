@@ -21,7 +21,6 @@ export function DisciplineChecklist({ disciplineId }: { disciplineId: string }) 
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Só carrega se o disciplineId existir, evitando erros de "undefined"
     if (disciplineId) {
       loadItems();
     }
@@ -34,7 +33,7 @@ export function DisciplineChecklist({ disciplineId }: { disciplineId: string }) 
         .from("checklist_items")
         .select("*")
         .eq("discipline_id", disciplineId)
-        .order("sort_order");
+        .order("sort_order", { ascending: true });
       
       if (error) throw error;
       setItems(data ?? []);
@@ -51,30 +50,40 @@ export function DisciplineChecklist({ disciplineId }: { disciplineId: string }) 
     const title = newItem.trim();
     setNewItem("");
 
-    const { data, error } = await supabase.from("checklist_items").insert({
-      discipline_id: disciplineId,
-      user_id: user.id,
-      title: title,
-      sort_order: items.length,
-    }).select().single();
+    const { data, error } = await supabase
+      .from("checklist_items")
+      .insert({
+        discipline_id: disciplineId,
+        user_id: user.id,
+        title: title,
+        sort_order: items.length,
+        completed: false
+      })
+      .select()
+      .single();
 
     if (!error && data) {
       setItems(prev => [...prev, data]);
     } else {
-      loadItems();
+      console.error("Erro ao adicionar:", error);
     }
   }
 
   async function toggleItem(item: ChecklistItem) {
     const previousItems = [...items];
-    setItems(items.map(i => i.id === item.id ? { ...i, completed: !i.completed } : i));
+    const newStatus = !item.completed;
+    
+    // Atualização otimista
+    setItems(items.map(i => i.id === item.id ? { ...i, completed: newStatus } : i));
 
     const { error } = await supabase
       .from("checklist_items")
-      .update({ completed: !item.completed })
+      .update({ completed: newStatus })
       .eq("id", item.id);
 
-    if (error) setItems(previousItems);
+    if (error) {
+      setItems(previousItems);
+    }
   }
 
   async function deleteItem(id: string) {
@@ -86,7 +95,9 @@ export function DisciplineChecklist({ disciplineId }: { disciplineId: string }) 
       .delete()
       .eq("id", id);
 
-    if (error) setItems(previousItems);
+    if (error) {
+      setItems(previousItems);
+    }
   }
 
   const completed = items.filter((i) => i.completed).length;
@@ -145,9 +156,9 @@ export function DisciplineChecklist({ disciplineId }: { disciplineId: string }) 
                 <Checkbox 
                   checked={item.completed} 
                   onCheckedChange={() => toggleItem(item)}
-                  className="h-5 w-5 rounded-md border-2 border-primary/30 data-[state=checked]:bg-primary"
+                  className="h-5 w-5 rounded-md border-2 border-primary/30 data-[state=checked]:bg-primary transition-colors"
                 />
-                <span className={`flex-1 text-sm font-bold tracking-tight ${item.completed ? "line-through text-muted-foreground" : "text-foreground"}`}>
+                <span className={`flex-1 text-sm font-bold tracking-tight transition-all ${item.completed ? "line-through text-muted-foreground" : "text-foreground"}`}>
                   {item.title}
                 </span>
                 <Button
