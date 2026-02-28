@@ -4,7 +4,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { 
   ChevronLeft, 
   Trash2, 
@@ -16,6 +15,10 @@ import {
   CheckCircle2 
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+
+// IMPORTAÇÃO DOS COMPONENTES DE FUNCIONALIDADE
+import { DisciplineChecklist } from "@/components/DisciplineChecklist";
+import { DisciplineGeneral } from "@/components/DisciplineGeneral";
 
 export default function DisciplineDetail() {
   const { id } = useParams();
@@ -34,13 +37,12 @@ export default function DisciplineDetail() {
   async function loadDiscipline() {
     try {
       setLoading(true);
-      // Proteção de Segurança: Adicionado filtro de user_id
       const { data, error } = await supabase
         .from("disciplines")
         .select("*")
         .eq("id", id)
         .eq("user_id", user?.id) 
-        .maybeSingle(); // maybeSingle é mais seguro que single() para evitar crash se não achar
+        .maybeSingle();
 
       if (error) throw error;
       
@@ -55,7 +57,6 @@ export default function DisciplineDetail() {
       console.error("Erro ao carregar:", error);
       toast({ title: "Erro de conexão", description: "Verifique sua internet.", variant: "destructive" });
     } finally {
-      // Garantimos um pequeno delay para a animação de loading ser fluida
       setTimeout(() => setLoading(false), 300);
     }
   }
@@ -69,7 +70,6 @@ export default function DisciplineDetail() {
     }
   }
 
-  // Tela de Loading mais robusta para evitar "piscada" branca
   if (loading || !discipline) {
     return (
       <div className="flex h-[80vh] items-center justify-center bg-background">
@@ -78,7 +78,7 @@ export default function DisciplineDetail() {
              <div className="h-12 w-12 rounded-full border-4 border-primary/20 border-t-primary animate-spin"></div>
              <BookOpen className="h-5 w-5 text-primary absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
            </div>
-           <p className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground animate-pulse">Carregando Matéria...</p>
+           <p className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground animate-pulse">Sincronizando...</p>
         </div>
       </div>
     );
@@ -112,10 +112,9 @@ export default function DisciplineDetail() {
       </div>
 
       <Tabs defaultValue="info" className="w-full">
-        {/* FIX DAS ABAS: "no-scrollbar" e "inline-flex" impedem que elas fiquem uma em cima da outra */}
         <div className="overflow-x-auto px-4 no-scrollbar">
           <TabsList className="inline-flex w-max sm:w-full bg-muted/30 p-1.5 rounded-[24px] border border-border/40 gap-1">
-            <TabsTrigger value="info" className="rounded-2xl px-6 py-2.5 gap-2 font-black text-[10px] uppercase tracking-widest data-[state=active]:bg-card data-[state=active]:shadow-sm">
+            <TabsTrigger value="info" className="rounded-2xl px-6 py-2.5 gap-2 font-black text-[10px] uppercase tracking-widest data-[state=active]:bg-card shadow-none">
               <Settings2 className="h-3.5 w-3.5" /> Info
             </TabsTrigger>
             <TabsTrigger value="checklist" className="rounded-2xl px-6 py-2.5 gap-2 font-black text-[10px] uppercase tracking-widest data-[state=active]:bg-card">
@@ -131,35 +130,14 @@ export default function DisciplineDetail() {
         </div>
 
         <div className="mt-4 px-4">
-          <TabsContent value="info" className="animate-in fade-in slide-in-from-right-4 duration-500 outline-none">
-            <Card className="rounded-[40px] border-none shadow-xl shadow-black/5 bg-card/60">
-              <CardContent className="p-8 space-y-8">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
-                  <div className="space-y-3">
-                    <label className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground ml-1">Docente Responsável</label>
-                    <div className="p-5 bg-muted/20 rounded-3xl font-bold text-foreground border border-border/20">
-                      {discipline?.professor || "Não informado"}
-                    </div>
-                  </div>
-                  <div className="space-y-3">
-                    <label className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground ml-1">Performance (Média)</label>
-                    <div className="p-5 bg-muted/20 rounded-3xl font-black text-4xl text-primary border border-border/20">
-                      {discipline?.current_grade ? Number(discipline.current_grade).toFixed(1).replace('.', ',') : "0,0"}
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+          {/* ABA INFO: Agora usando o componente de Gestão Geral */}
+          <TabsContent value="info" className="outline-none animate-in fade-in slide-in-from-right-4 duration-500">
+            <DisciplineGeneral discipline={discipline} onUpdate={loadDiscipline} />
           </TabsContent>
 
+          {/* ABA ESTUDOS: Agora usando o componente de Checklist Real */}
           <TabsContent value="checklist" className="outline-none animate-in fade-in slide-in-from-right-4 duration-500">
-            <div className="p-20 border-2 border-dashed border-border/40 rounded-[48px] flex flex-col items-center justify-center text-muted-foreground bg-muted/5">
-              <div className="h-16 w-16 rounded-3xl bg-muted/20 flex items-center justify-center mb-4">
-                <CheckCircle2 className="h-8 w-8 opacity-20" />
-              </div>
-              <p className="text-sm font-bold uppercase tracking-widest opacity-40">Módulo de Estudos</p>
-              <p className="text-[10px] mt-2 italic">Organize suas tarefas de Economia aqui em breve.</p>
-            </div>
+            <DisciplineChecklist disciplineId={id!} />
           </TabsContent>
           
           <TabsContent value="media" className="outline-none animate-in fade-in slide-in-from-right-4 duration-500">
@@ -167,7 +145,8 @@ export default function DisciplineDetail() {
               <div className="h-16 w-16 rounded-3xl bg-muted/20 flex items-center justify-center mb-4">
                 <Paperclip className="h-8 w-8 opacity-20" />
               </div>
-              <p className="text-sm font-bold uppercase tracking-widest opacity-40">Repositório de Mídia</p>
+              <p className="text-sm font-bold uppercase tracking-widest opacity-40">Mídia e Fotos</p>
+              <p className="text-[10px] mt-2 italic">Módulo de câmera em breve.</p>
             </div>
           </TabsContent>
 
@@ -176,7 +155,8 @@ export default function DisciplineDetail() {
               <div className="h-16 w-16 rounded-3xl bg-muted/20 flex items-center justify-center mb-4">
                 <FileText className="h-8 w-8 opacity-20" />
               </div>
-              <p className="text-sm font-bold uppercase tracking-widest opacity-40">Base de Conhecimento</p>
+              <p className="text-sm font-bold uppercase tracking-widest opacity-40">Resumos em Texto</p>
+              <p className="text-[10px] mt-2 italic">Editor de notas em breve.</p>
             </div>
           </TabsContent>
         </div>
