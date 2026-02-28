@@ -8,11 +8,12 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Plus, Bell, Trash2 } from "lucide-react";
-import { format, isPast, differenceInDays } from "date-fns";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
+import { Plus, Bell, Trash2, Calendar, AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
+import { format, isPast, differenceInDays, isToday, isTomorrow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
 
 interface Discipline { id: string; name: string; }
 interface Reminder {
@@ -31,11 +32,14 @@ export default function Reminders() {
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [disciplines, setDisciplines] = useState<Discipline[]>([]);
   const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+
+  // Estados do formulário
   const [title, setTitle] = useState("");
   const [type, setType] = useState("exam");
   const [dueDate, setDueDate] = useState("");
-  const [discId, setDiscId] = useState<string>("");
-  const [loading, setLoading] = useState(true);
+  const [discId, setDiscId] = useState<string>("none");
 
   useEffect(() => {
     if (user) load();
@@ -43,8 +47,16 @@ export default function Reminders() {
 
   async function load() {
     const [remRes, discRes] = await Promise.all([
-      supabase.from("reminders").select("*, disciplines(name)").order("due_date"),
-      supabase.from("disciplines").select("id, name").order("name"),
+      supabase
+        .from("reminders")
+        .select("*, disciplines(name)")
+        .eq("user_id", user?.id)
+        .order("due_date", { ascending: true }),
+      supabase
+        .from("disciplines")
+        .select("id, name")
+        .eq("user_id", user?.id)
+        .order("name"),
     ]);
     setReminders(remRes.data ?? []);
     setDisciplines(discRes.data ?? []);
@@ -52,74 +64,111 @@ export default function Reminders() {
   }
 
   async function create() {
-    if (!title.trim() || !dueDate) return;
-    await supabase.from("reminders").insert({
-      user_id: user!.id,
+    if (!title.trim() || !dueDate || !user) {
+      toast({ title: "Preencha o título e a data", variant: "destructive" });
+      return;
+    }
+
+    setSubmitting(true);
+    const { error } = await supabase.from("reminders").insert({
+      user_id: user.id,
       title: title.trim(),
       type,
       due_date: new Date(dueDate).toISOString(),
-      discipline_id: discId || null,
+      discipline_id: discId === "none" ? null : discId,
     });
-    setTitle("");
-    setDueDate("");
-    setOpen(false);
-    load();
+
+    if (error) {
+      toast({ title: "Erro ao criar", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "Lembrete criado!" });
+      setTitle("");
+      setDueDate("");
+      setDiscId("none");
+      setOpen(false);
+      load();
+    }
+    setSubmitting(false);
   }
 
   async function toggle(r: Reminder) {
-    await supabase.from("reminders").update({ completed: !r.completed }).eq("id", r.id);
-    load();
+    const { error } = await supabase
+      .from("reminders")
+      .update({ completed: !r.completed })
+      .eq("id", r.id);
+    
+    if (!error) load();
   }
 
   async function remove(id: string) {
-    await supabase.from("reminders").delete().eq("id", id);
-    load();
+    const { error } = await supabase.from("reminders").delete().eq("id", id);
+    if (!error) {
+      toast({ title: "Lembrete removido" });
+      load();
+    }
   }
 
-  const typeLabels: Record<string, string> = { exam: "Prova", assignment: "Trabalho", other: "Outro" };
+  const typeLabels: Record<string, string> = { 
+    exam: "Prova", 
+    assignment: "Trabalho", 
+    other: "Outro" 
+  };
 
   if (loading) {
-    return <div className="flex items-center justify-center h-64"><div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full" /></div>;
+    return (
+      <div className="flex flex-col items-center justify-center h-80 gap-3">
+        <Loader2 className="h-10 w-10 animate-spin text-primary/50" />
+        <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Sincronizando prazos...</p>
+      </div>
+    );
   }
 
   const pending = reminders.filter((r) => !r.completed);
   const done = reminders.filter((r) => r.completed);
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between">
+    <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in duration-500 px-2">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Lembretes</h1>
-          <p className="text-sm text-muted-foreground">Provas, trabalhos e prazos</p>
+          <h1 className="text-3xl font-black text-foreground tracking-tight">Cronograma de Prazos</h1>
+          <p className="text-muted-foreground font-medium">Gestão de entregas e avaliações</p>
         </div>
+        
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button size="sm"><Plus className="mr-1 h-4 w-4" /> Novo</Button>
+            <Button className="shadow-lg shadow-primary/20 font-bold uppercase text-xs tracking-widest h-12 px-6">
+              <Plus className="mr-2 h-4 w-4" /> Novo Lembrete
+            </Button>
           </DialogTrigger>
-          <DialogContent>
-            <DialogHeader><DialogTitle>Novo Lembrete</DialogTitle></DialogHeader>
-            <div className="space-y-4 pt-2">
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle className="text-xl font-bold">Novo Lembrete</DialogTitle>
+              <DialogDescription>Agende um novo prazo para suas disciplinas.</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-5 pt-4">
               <div className="space-y-2">
-                <Label>Título</Label>
-                <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Ex: Prova de Cálculo" />
+                <Label className="font-bold text-xs uppercase text-muted-foreground">Título do Evento</Label>
+                <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Ex: P1 de Microeconomia" className="h-12" />
               </div>
+              
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Tipo</Label>
+                  <Label className="font-bold text-xs uppercase text-muted-foreground">Categoria</Label>
                   <Select value={type} onValueChange={setType}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectTrigger className="h-12"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="exam">Prova</SelectItem>
-                      <SelectItem value="assignment">Trabalho</SelectItem>
-                      <SelectItem value="other">Outro</SelectItem>
+                      <SelectItem value="exam">Prova 📝</SelectItem>
+                      <SelectItem value="assignment">Trabalho 📚</SelectItem>
+                      <SelectItem value="other">Outro 📍</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label>Disciplina</Label>
+                  <Label className="font-bold text-xs uppercase text-muted-foreground">Disciplina</Label>
                   <Select value={discId} onValueChange={setDiscId}>
-                    <SelectTrigger><SelectValue placeholder="Opcional" /></SelectTrigger>
+                    <SelectTrigger className="h-12"><SelectValue placeholder="Escolha..." /></SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="none">Geral / Extra</SelectItem>
                       {disciplines.map((d) => (
                         <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
                       ))}
@@ -127,73 +176,95 @@ export default function Reminders() {
                   </Select>
                 </div>
               </div>
+
               <div className="space-y-2">
-                <Label>Data e hora</Label>
-                <Input type="datetime-local" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+                <Label className="font-bold text-xs uppercase text-muted-foreground">Data e Horário Limite</Label>
+                <Input type="datetime-local" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="h-12" />
               </div>
-              <Button onClick={create} className="w-full">Criar</Button>
+
+              <Button onClick={create} disabled={submitting} className="w-full h-12 font-bold uppercase tracking-widest shadow-lg">
+                {submitting ? <Loader2 className="h-5 w-5 animate-spin" /> : "Agendar Lembrete"}
+              </Button>
             </div>
           </DialogContent>
         </Dialog>
       </div>
 
-      {pending.length === 0 && done.length === 0 ? (
-        <Card className="glass-card">
-          <CardContent className="flex flex-col items-center py-12">
-            <Bell className="h-12 w-12 text-muted-foreground/40 mb-3" />
-            <p className="text-muted-foreground">Nenhum lembrete cadastrado.</p>
-          </CardContent>
-        </Card>
-      ) : (
-        <>
-          {pending.length > 0 && (
-            <Card className="glass-card">
-              <CardHeader className="pb-3"><CardTitle className="text-base">Pendentes</CardTitle></CardHeader>
-              <CardContent className="space-y-2">
-                {pending.map((r) => {
-                  const overdue = isPast(new Date(r.due_date));
-                  const diff = differenceInDays(new Date(r.due_date), new Date());
-                  return (
-                    <div key={r.id} className="flex items-center gap-3 rounded-lg p-3 bg-muted/50 group">
-                      <Checkbox checked={r.completed} onCheckedChange={() => toggle(r)} />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-foreground">{r.title}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {r.disciplines?.name && `${r.disciplines.name} · `}
-                          {format(new Date(r.due_date), "dd/MM/yyyy HH:mm", { locale: ptBR })}
-                        </p>
+      <div className="space-y-8">
+        {/* Seção de Pendentes */}
+        <section className="space-y-4">
+          <h3 className="text-sm font-black uppercase tracking-widest text-primary flex items-center gap-2">
+            <AlertCircle className="h-4 w-4" /> Pendentes ({pending.length})
+          </h3>
+          
+          {pending.length === 0 ? (
+            <div className="p-12 text-center border-2 border-dashed rounded-[32px] bg-muted/10">
+              <CheckCircle2 className="h-10 w-10 text-emerald-500 mx-auto mb-3 opacity-50" />
+              <p className="text-sm text-muted-foreground italic">Nenhum compromisso para os próximos dias.</p>
+            </div>
+          ) : (
+            <div className="grid gap-3">
+              {pending.map((r) => {
+                const date = new Date(r.due_date);
+                const overdue = isPast(date) && !isToday(date);
+                const isUrgent = differenceInDays(date, new Date()) <= 2;
+                
+                return (
+                  <div key={r.id} className={cn(
+                    "flex items-center gap-4 rounded-2xl p-4 transition-all border group",
+                    overdue ? "bg-rose-500/5 border-rose-500/20" : "bg-card border-border/50 hover:border-primary/40 shadow-sm"
+                  )}>
+                    <Checkbox checked={r.completed} onCheckedChange={() => toggle(r)} className="h-5 w-5 rounded-md border-primary/30" />
+                    
+                    <div className="flex-1 min-w-0">
+                      <p className={cn("font-bold text-sm text-foreground", overdue && "text-rose-600")}>{r.title}</p>
+                      <div className="flex flex-wrap items-center gap-2 mt-1">
+                        <span className="text-[10px] font-bold text-muted-foreground uppercase flex items-center gap-1">
+                          <Calendar className="h-3 w-3" />
+                          {format(date, "EEEE, dd 'de' MMM 'às' HH:mm", { locale: ptBR })}
+                        </span>
+                        {r.disciplines?.name && (
+                          <Badge variant="outline" className="text-[9px] py-0 px-1.5 h-4 font-bold border-primary/20 text-primary uppercase">
+                            {r.disciplines.name}
+                          </Badge>
+                        )}
                       </div>
-                      <Badge variant={overdue ? "destructive" : diff <= 2 ? "default" : "secondary"}>
-                        {typeLabels[r.type]}
-                      </Badge>
-                      <Button size="icon" variant="ghost" className="h-7 w-7 opacity-0 group-hover:opacity-100 text-destructive" onClick={() => remove(r.id)}>
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
                     </div>
-                  );
-                })}
-              </CardContent>
-            </Card>
-          )}
 
-          {done.length > 0 && (
-            <Card className="glass-card">
-              <CardHeader className="pb-3"><CardTitle className="text-base text-muted-foreground">Concluídos</CardTitle></CardHeader>
-              <CardContent className="space-y-2">
-                {done.map((r) => (
-                  <div key={r.id} className="flex items-center gap-3 rounded-lg p-3 bg-muted/30 group">
-                    <Checkbox checked={r.completed} onCheckedChange={() => toggle(r)} />
-                    <p className="flex-1 text-sm text-muted-foreground line-through">{r.title}</p>
-                    <Button size="icon" variant="ghost" className="h-7 w-7 opacity-0 group-hover:opacity-100 text-destructive" onClick={() => remove(r.id)}>
-                      <Trash2 className="h-3 w-3" />
+                    <Badge variant={overdue ? "destructive" : isUrgent ? "default" : "secondary"} className="text-[10px] font-bold shrink-0">
+                      {overdue ? "ATRASADO" : isUrgent ? "URGENTE" : typeLabels[r.type]}
+                    </Badge>
+
+                    <Button size="icon" variant="ghost" className="h-9 w-9 text-destructive opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive/10" onClick={() => remove(r.id)}>
+                      <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
-                ))}
-              </CardContent>
-            </Card>
+                );
+              })}
+            </div>
           )}
-        </>
-      )}
+        </section>
+
+        {/* Seção de Concluídos */}
+        {done.length > 0 && (
+          <section className="space-y-4 pt-4">
+            <h3 className="text-sm font-black uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4" /> Finalizados
+            </h3>
+            <div className="grid gap-2 opacity-60">
+              {done.map((r) => (
+                <div key={r.id} className="flex items-center gap-4 rounded-xl p-3 bg-muted/40 border border-transparent group">
+                  <Checkbox checked={r.completed} onCheckedChange={() => toggle(r)} className="h-4 w-4 rounded-md" />
+                  <p className="flex-1 text-sm text-muted-foreground line-through font-medium truncate">{r.title}</p>
+                  <Button size="icon" variant="ghost" className="h-7 w-7 opacity-0 group-hover:opacity-100 text-destructive" onClick={() => remove(r.id)}>
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+      </div>
     </div>
   );
 }
