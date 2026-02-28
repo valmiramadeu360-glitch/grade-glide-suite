@@ -4,38 +4,48 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { ChevronLeft, Trash2, Loader2, BookOpen, Paperclip, FileText, Settings2 } from "lucide-react";
+import { ArrowLeft, Trash2, Loader2, BookOpen } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-
-// Importe seus subcomponentes aqui (Checklist, Materials, etc)
-// import Checklist from "@/components/Checklist"; 
+import { DisciplineGeneral } from "@/components/discipline/DisciplineGeneral";
+import { DisciplineChecklist } from "@/components/discipline/DisciplineChecklist";
+import { DisciplineMaterials } from "@/components/discipline/DisciplineMaterials";
+import { DisciplineNotes } from "@/components/discipline/DisciplineNotes";
 
 export default function DisciplineDetail() {
-  const { id } = useParams();
-  const navigate = useNavigate();
+  const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
+  const navigate = useNavigate();
   const { toast } = useToast();
   const [discipline, setDiscipline] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
-    if (user && id) loadDiscipline();
+    if (user && id) {
+      loadDiscipline();
+    }
   }, [user, id]);
 
   async function loadDiscipline() {
     try {
-      setLoading(true);
       const { data, error } = await supabase
         .from("disciplines")
         .select("*")
         .eq("id", id)
+        .eq("user_id", user?.id) // Segurança extra: garante que a disciplina é do usuário
         .single();
 
-      if (error) throw error;
+      if (error || !data) {
+        toast({ 
+          title: "Não encontrado", 
+          description: "Disciplina não localizada ou sem permissão.",
+          variant: "destructive" 
+        });
+        navigate("/disciplines");
+        return;
+      }
       setDiscipline(data);
-    } catch (error: any) {
-      toast({ title: "Erro", description: "Não foi possível carregar a matéria.", variant: "destructive" });
+    } catch (err) {
       navigate("/disciplines");
     } finally {
       setLoading(false);
@@ -43,88 +53,107 @@ export default function DisciplineDetail() {
   }
 
   async function deleteDiscipline() {
-    if (!confirm("Tem certeza que deseja excluir esta disciplina?")) return;
-    const { error } = await supabase.from("disciplines").delete().eq("id", id);
-    if (!error) {
-      toast({ title: "Excluída", description: "Disciplina removida com sucesso." });
-      navigate("/disciplines");
+    if (!id || !user) return;
+    
+    const confirmDelete = window.confirm("Isso excluirá permanentemente todos os resumos, notas e links desta disciplina. Continuar?");
+    
+    if (confirmDelete) {
+      setDeleting(true);
+      const { error } = await supabase
+        .from("disciplines")
+        .delete()
+        .eq("id", id)
+        .eq("user_id", user.id);
+
+      if (error) {
+        toast({ title: "Erro ao excluir", description: error.message, variant: "destructive" });
+        setDeleting(false);
+      } else {
+        toast({ title: "Disciplina removida com sucesso" });
+        navigate("/disciplines");
+      }
     }
   }
 
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-background">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="flex flex-col items-center justify-center h-[60vh] gap-4">
+        <Loader2 className="h-10 w-10 animate-spin text-primary" />
+        <p className="text-xs font-bold uppercase tracking-tighter text-muted-foreground">Carregando conteúdo...</p>
       </div>
     );
   }
 
+  const disciplineColor = discipline.color || "#6366f1";
+
   return (
-    <div className="max-w-4xl mx-auto space-y-6 pb-20 animate-in fade-in duration-500">
-      {/* Cabeçalho Ajustado para Mobile */}
-      <div className="flex flex-col gap-4 px-2">
-        <Button variant="ghost" size="sm" onClick={() => navigate(-1)} className="w-fit gap-2 text-muted-foreground">
-          <ChevronLeft className="h-4 w-4" /> Voltar
-        </Button>
-        
-        <div className="flex items-center justify-between bg-card p-4 rounded-3xl border shadow-sm">
+    <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in duration-500 px-2">
+      {/* Cabeçalho da Disciplina */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-card p-6 rounded-3xl border border-border/40 shadow-sm">
+        <div className="flex items-center gap-4">
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={() => navigate("/disciplines")}
+            className="rounded-full hover:bg-muted transition-colors"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
+          
           <div className="flex items-center gap-4">
-            <div className="h-12 w-12 rounded-2xl flex items-center justify-center shadow-inner" style={{ backgroundColor: discipline?.color + "20" }}>
-              <BookOpen className="h-6 w-6" style={{ color: discipline?.color }} />
+            <div 
+              className="h-14 w-14 rounded-2xl flex items-center justify-center shadow-lg shadow-primary/5" 
+              style={{ backgroundColor: `${disciplineColor}15` }}
+            >
+              <BookOpen className="h-7 w-7" style={{ color: disciplineColor }} />
             </div>
-            <div>
-              <h1 className="text-xl font-black truncate max-w-[180px] sm:max-w-none">{discipline?.name}</h1>
-              <p className="text-xs text-muted-foreground font-bold uppercase">{discipline?.professor || "Sem Professor"}</p>
+            <div className="min-w-0">
+              <h1 className="text-2xl font-black text-foreground tracking-tight truncate">
+                {discipline.name}
+              </h1>
+              <div className="flex items-center gap-2">
+                <div className="h-2 w-2 rounded-full" style={{ backgroundColor: disciplineColor }} />
+                <p className="text-sm font-medium text-muted-foreground truncate italic">
+                  {discipline.professor || "Professor não informado"}
+                </p>
+              </div>
             </div>
           </div>
-          <Button variant="ghost" size="icon" onClick={deleteDiscipline} className="text-destructive hover:bg-destructive/10">
-            <Trash2 className="h-5 w-5" />
-          </Button>
         </div>
+
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          disabled={deleting}
+          onClick={deleteDiscipline} 
+          className="text-destructive hover:bg-destructive/10 font-bold text-xs uppercase tracking-widest gap-2"
+        >
+          {deleting ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+          Excluir Matéria
+        </Button>
       </div>
 
-      {/* ABAS CORRIGIDAS: Agora com scroll horizontal no mobile para não encavalar */}
-      <Tabs defaultValue="info" className="w-full">
-        <div className="overflow-x-auto pb-2 px-2 no-scrollbar">
-          <TabsList className="inline-flex w-auto bg-muted/50 p-1 rounded-2xl border min-w-full sm:min-w-0">
-            <TabsTrigger value="info" className="rounded-xl px-4 gap-2 font-bold text-xs uppercase"><Settings2 className="h-3.5 w-3.5" /> Info</TabsTrigger>
-            <TabsTrigger value="checklist" className="rounded-xl px-4 gap-2 font-bold text-xs uppercase"><CheckCircle2 className="h-3.5 w-3.5" /> Estudos</TabsTrigger>
-            <TabsTrigger value="media" className="rounded-xl px-4 gap-2 font-bold text-xs uppercase"><Paperclip className="h-3.5 w-3.5" /> Mídia</TabsTrigger>
-            <TabsTrigger value="notes" className="rounded-xl px-4 gap-2 font-bold text-xs uppercase"><FileText className="h-3.5 w-3.5" /> Resumos</TabsTrigger>
-          </TabsList>
-        </div>
+      {/* Navegação por Abas */}
+      <Tabs defaultValue="general" className="w-full">
+        <TabsList className="w-full bg-muted/50 p-1 rounded-xl h-12 grid grid-cols-4 shadow-inner">
+          <TabsTrigger value="general" className="rounded-lg font-bold text-[10px] uppercase tracking-wider">Início</TabsTrigger>
+          <TabsTrigger value="checklist" className="rounded-lg font-bold text-[10px] uppercase tracking-wider">Estudos</TabsTrigger>
+          <TabsTrigger value="materials" className="rounded-lg font-bold text-[10px] uppercase tracking-wider">Mídia</TabsTrigger>
+          <TabsTrigger value="notes" className="rounded-lg font-bold text-[10px] uppercase tracking-wider">Resumos</TabsTrigger>
+        </TabsList>
 
-        <div className="mt-4 px-2">
-          <TabsContent value="info" className="animate-in slide-in-from-bottom-2 duration-300">
-            <Card className="rounded-[32px] border-none shadow-md bg-card">
-              <CardContent className="p-6 space-y-6">
-                <div>
-                  <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Professor</label>
-                  <div className="mt-1 p-4 bg-muted/30 rounded-2xl font-bold text-foreground border border-transparent focus-within:border-primary/20 transition-all">
-                    {discipline?.professor || "Não informado"}
-                  </div>
-                </div>
-                <div>
-                  <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Média Atual</label>
-                  <div className="mt-1 p-4 bg-muted/30 rounded-2xl font-black text-2xl text-primary border border-transparent">
-                    {discipline?.current_grade?.toFixed(1) || "0,0"}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+        <div className="mt-8 transition-all">
+          <TabsContent value="general" className="animate-in slide-in-from-bottom-2 duration-300">
+            <DisciplineGeneral discipline={discipline} onUpdate={loadDiscipline} />
           </TabsContent>
-
-          <TabsContent value="checklist">
-            {/* Aqui entra o seu componente de Checklist */}
-            <div className="p-10 text-center text-muted-foreground italic text-sm">Área de Checklist em desenvolvimento...</div>
+          <TabsContent value="checklist" className="animate-in slide-in-from-bottom-2 duration-300">
+            <DisciplineChecklist disciplineId={discipline.id} />
           </TabsContent>
-          
-          <TabsContent value="media">
-             <div className="p-10 text-center text-muted-foreground italic text-sm">Área de Mídia em desenvolvimento...</div>
+          <TabsContent value="materials" className="animate-in slide-in-from-bottom-2 duration-300">
+            <DisciplineMaterials disciplineId={discipline.id} />
           </TabsContent>
-
-          <TabsContent value="notes">
-             <div className="p-10 text-center text-muted-foreground italic text-sm">Área de Resumos em desenvolvimento...</div>
+          <TabsContent value="notes" className="animate-in slide-in-from-bottom-2 duration-300">
+            <DisciplineNotes disciplineId={discipline.id} />
           </TabsContent>
         </div>
       </Tabs>
