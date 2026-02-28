@@ -37,6 +37,7 @@ export function DisciplineGeneral({ discipline, onUpdate }: { discipline: any; o
       .select("*")
       .eq("discipline_id", discipline.id)
       .order("day_of_week");
+    
     setSchedules(data?.map((s: any) => ({
       id: s.id,
       day_of_week: s.day_of_week,
@@ -47,29 +48,52 @@ export function DisciplineGeneral({ discipline, onUpdate }: { discipline: any; o
   }
 
   async function save() {
+    if (!user) return;
     setSaving(true);
-    await supabase.from("disciplines").update({
-      professor: professor || null,
-      current_grade: grade ? parseFloat(grade) : null,
-    }).eq("id", discipline.id);
+    
+    try {
+      // 1. Atualiza dados básicos da disciplina
+      const { error: discError } = await supabase.from("disciplines").update({
+        professor: professor.trim() || null,
+        current_grade: grade !== "" ? parseFloat(grade) : null,
+      }).eq("id", discipline.id);
 
-    // Delete old and re-insert schedules
-    await supabase.from("discipline_schedules").delete().eq("discipline_id", discipline.id);
-    if (schedules.length > 0) {
-      await supabase.from("discipline_schedules").insert(
-        schedules.map((s) => ({
-          discipline_id: discipline.id,
-          user_id: user!.id,
-          day_of_week: s.day_of_week,
-          start_time: s.start_time,
-          end_time: s.end_time,
-          room: s.room || null,
-        }))
-      );
+      if (discError) throw discError;
+
+      // 2. Sincroniza horários (Deleta antigos e insere novos)
+      // Usamos uma lógica simples: limpa e repovoa
+      const { error: delError } = await supabase
+        .from("discipline_schedules")
+        .delete()
+        .eq("discipline_id", discipline.id);
+
+      if (delError) throw delError;
+
+      if (schedules.length > 0) {
+        const { error: insError } = await supabase.from("discipline_schedules").insert(
+          schedules.map((s) => ({
+            discipline_id: discipline.id,
+            user_id: user.id,
+            day_of_week: s.day_of_week,
+            start_time: s.start_time,
+            end_time: s.end_time,
+            room: s.room?.trim() || null,
+          }))
+        );
+        if (insError) throw insError;
+      }
+
+      toast({ title: "Alterações salvas com sucesso!" });
+      onUpdate();
+    } catch (error: any) {
+      toast({ 
+        title: "Erro ao salvar", 
+        description: error.message, 
+        variant: "destructive" 
+      });
+    } finally {
+      setSaving(false);
     }
-    toast({ title: "Salvo!" });
-    setSaving(false);
-    onUpdate();
   }
 
   function addSchedule() {
@@ -96,11 +120,23 @@ export function DisciplineGeneral({ discipline, onUpdate }: { discipline: any; o
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label>Professor</Label>
-              <Input value={professor} onChange={(e) => setProfessor(e.target.value)} />
+              <Input 
+                placeholder="Nome do docente"
+                value={professor} 
+                onChange={(e) => setProfessor(e.target.value)} 
+              />
             </div>
             <div className="space-y-2">
               <Label>Média Atual</Label>
-              <Input type="number" step="0.1" min="0" max="10" value={grade} onChange={(e) => setGrade(e.target.value)} />
+              <Input 
+                type="number" 
+                step="0.1" 
+                min="0" 
+                max="10" 
+                placeholder="0.0"
+                value={grade} 
+                onChange={(e) => setGrade(e.target.value)} 
+              />
             </div>
           </div>
         </CardContent>
@@ -108,19 +144,19 @@ export function DisciplineGeneral({ discipline, onUpdate }: { discipline: any; o
 
       <Card className="glass-card">
         <CardHeader className="pb-3 flex flex-row items-center justify-between">
-          <CardTitle className="text-base">Horários</CardTitle>
+          <CardTitle className="text-base">Horários da Aula</CardTitle>
           <Button size="sm" variant="outline" onClick={addSchedule}>
-            <Plus className="mr-1 h-3 w-3" /> Horário
+            <Plus className="mr-1 h-3 w-3" /> Adicionar
           </Button>
         </CardHeader>
         <CardContent className="space-y-3">
           {schedules.length === 0 && (
-            <p className="text-sm text-muted-foreground text-center py-4">Nenhum horário cadastrado.</p>
+            <p className="text-sm text-muted-foreground text-center py-4">Nenhum horário definido para esta matéria.</p>
           )}
           {schedules.map((s, i) => (
-            <div key={i} className="flex flex-wrap items-end gap-2 p-3 rounded-lg bg-muted/50">
-              <div className="space-y-1 flex-1 min-w-[120px]">
-                <Label className="text-xs">Dia</Label>
+            <div key={i} className="flex flex-wrap items-end gap-2 p-3 rounded-lg bg-muted/30 border border-border/50">
+              <div className="space-y-1 flex-1 min-w-[140px]">
+                <Label className="text-xs">Dia da Semana</Label>
                 <Select value={s.day_of_week.toString()} onValueChange={(v) => updateSchedule(i, "day_of_week", parseInt(v))}>
                   <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -130,29 +166,33 @@ export function DisciplineGeneral({ discipline, onUpdate }: { discipline: any; o
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Início</Label>
-                <Input type="time" className="h-9 w-24" value={s.start_time} onChange={(e) => updateSchedule(i, "start_time", e.target.value)} />
+              <div className="flex gap-2">
+                <div className="space-y-1">
+                  <Label className="text-xs">Início</Label>
+                  <Input type="time" className="h-9 w-[100px]" value={s.start_time} onChange={(e) => updateSchedule(i, "start_time", e.target.value)} />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Fim</Label>
+                  <Input type="time" className="h-9 w-[100px]" value={s.end_time} onChange={(e) => updateSchedule(i, "end_time", e.target.value)} />
+                </div>
               </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Fim</Label>
-                <Input type="time" className="h-9 w-24" value={s.end_time} onChange={(e) => updateSchedule(i, "end_time", e.target.value)} />
+              <div className="space-y-1 flex-1 min-w-[100px]">
+                <Label className="text-xs">Sala/Local</Label>
+                <Input placeholder="Ex: Bloco A" className="h-9" value={s.room} onChange={(e) => updateSchedule(i, "room", e.target.value)} />
               </div>
-              <div className="space-y-1 flex-1 min-w-[80px]">
-                <Label className="text-xs">Sala</Label>
-                <Input className="h-9" value={s.room} onChange={(e) => updateSchedule(i, "room", e.target.value)} />
-              </div>
-              <Button size="icon" variant="ghost" className="h-9 w-9 text-destructive" onClick={() => removeSchedule(i)}>
-                <X className="h-3 w-3" />
+              <Button size="icon" variant="ghost" className="h-9 w-9 text-destructive hover:bg-destructive/10" onClick={() => removeSchedule(i)}>
+                <X className="h-4 w-4" />
               </Button>
             </div>
           ))}
         </CardContent>
       </Card>
 
-      <Button onClick={save} disabled={saving} className="w-full sm:w-auto">
-        <Save className="mr-1 h-4 w-4" /> {saving ? "Salvando..." : "Salvar alterações"}
-      </Button>
+      <div className="flex justify-end">
+        <Button onClick={save} disabled={saving} className="w-full sm:w-auto shadow-lg">
+          <Save className="mr-2 h-4 w-4" /> {saving ? "Salvando..." : "Salvar todas as alterações"}
+        </Button>
+      </div>
     </div>
   );
 }
