@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, X, Save } from "lucide-react";
+import { Plus, X, Save, Clock, MapPin, User as UserIcon, Loader2 } from "lucide-react";
 
 const DAYS = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
 
@@ -25,49 +25,55 @@ export function DisciplineGeneral({ discipline, onUpdate }: { discipline: any; o
   const [professor, setProfessor] = useState(discipline.professor ?? "");
   const [grade, setGrade] = useState(discipline.current_grade?.toString() ?? "");
   const [schedules, setSchedules] = useState<Schedule[]>([]);
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    loadSchedules();
+    if (discipline?.id) {
+      loadSchedules();
+    }
   }, [discipline.id]);
 
   async function loadSchedules() {
-    const { data } = await supabase
-      .from("discipline_schedules")
-      .select("*")
-      .eq("discipline_id", discipline.id)
-      .order("day_of_week");
-    
-    setSchedules(data?.map((s: any) => ({
-      id: s.id,
-      day_of_week: s.day_of_week,
-      start_time: s.start_time?.slice(0, 5) ?? "08:00",
-      end_time: s.end_time?.slice(0, 5) ?? "10:00",
-      room: s.room ?? "",
-    })) ?? []);
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from("discipline_schedules")
+        .select("*")
+        .eq("discipline_id", discipline.id)
+        .order("day_of_week");
+      
+      if (error) throw error;
+
+      setSchedules(data?.map((s: any) => ({
+        id: s.id,
+        day_of_week: s.day_of_week,
+        start_time: s.start_time?.slice(0, 5) ?? "08:00",
+        end_time: s.end_time?.slice(0, 5) ?? "10:00",
+        room: s.room ?? "",
+      })) ?? []);
+    } catch (err) {
+      console.error("Erro ao carregar horários:", err);
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function save() {
-    if (!user) return;
+    if (!user || !discipline?.id) return;
     setSaving(true);
     
     try {
-      // 1. Atualiza dados básicos da disciplina
+      // 1. Atualiza dados básicos
       const { error: discError } = await supabase.from("disciplines").update({
         professor: professor.trim() || null,
-        current_grade: grade !== "" ? parseFloat(grade) : null,
+        current_grade: grade !== "" ? parseFloat(grade.replace(',', '.')) : null,
       }).eq("id", discipline.id);
 
       if (discError) throw discError;
 
-      // 2. Sincroniza horários (Deleta antigos e insere novos)
-      // Usamos uma lógica simples: limpa e repovoa
-      const { error: delError } = await supabase
-        .from("discipline_schedules")
-        .delete()
-        .eq("discipline_id", discipline.id);
-
-      if (delError) throw delError;
+      // 2. Sincroniza horários
+      await supabase.from("discipline_schedules").delete().eq("discipline_id", discipline.id);
 
       if (schedules.length > 0) {
         const { error: insError } = await supabase.from("discipline_schedules").insert(
@@ -83,57 +89,49 @@ export function DisciplineGeneral({ discipline, onUpdate }: { discipline: any; o
         if (insError) throw insError;
       }
 
-      toast({ title: "Alterações salvas com sucesso!" });
+      toast({ title: "Sucesso!", description: "Dados atualizados." });
       onUpdate();
     } catch (error: any) {
-      toast({ 
-        title: "Erro ao salvar", 
-        description: error.message, 
-        variant: "destructive" 
-      });
+      toast({ title: "Erro ao salvar", description: error.message, variant: "destructive" });
     } finally {
       setSaving(false);
     }
   }
 
-  function addSchedule() {
-    setSchedules([...schedules, { day_of_week: 1, start_time: "08:00", end_time: "10:00", room: "" }]);
-  }
-
-  function removeSchedule(idx: number) {
-    setSchedules(schedules.filter((_, i) => i !== idx));
-  }
-
-  function updateSchedule(idx: number, field: keyof Schedule, value: any) {
-    const updated = [...schedules];
-    (updated[idx] as any)[field] = value;
-    setSchedules(updated);
+  if (loading) {
+    return (
+      <div className="flex justify-center p-12">
+        <Loader2 className="h-6 w-6 animate-spin text-primary opacity-30" />
+      </div>
+    );
   }
 
   return (
-    <div className="space-y-4">
-      <Card className="glass-card">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Informações</CardTitle>
+    <div className="space-y-6 animate-in fade-in duration-500">
+      {/* Informações Básicas */}
+      <Card className="glass-card border-none shadow-xl bg-card/60 rounded-[32px]">
+        <CardHeader className="pb-3 pt-6 px-6">
+          <CardTitle className="text-xs font-black uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+            <UserIcon className="h-3.5 w-3.5" /> Gestão Docente
+          </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="px-6 pb-6 space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Professor</Label>
+            <div className="space-y-1.5">
+              <Label className="text-[10px] font-bold uppercase ml-1 opacity-60">Professor(a)</Label>
               <Input 
-                placeholder="Nome do docente"
+                className="rounded-2xl bg-muted/20 border-border/40 focus:ring-primary/20"
+                placeholder="Ex: Dr. Silva"
                 value={professor} 
                 onChange={(e) => setProfessor(e.target.value)} 
               />
             </div>
-            <div className="space-y-2">
-              <Label>Média Atual</Label>
+            <div className="space-y-1.5">
+              <Label className="text-[10px] font-bold uppercase ml-1 opacity-60">Sua Média</Label>
               <Input 
-                type="number" 
-                step="0.1" 
-                min="0" 
-                max="10" 
-                placeholder="0.0"
+                className="rounded-2xl bg-muted/20 border-border/40 font-bold"
+                type="text" 
+                placeholder="0,0"
                 value={grade} 
                 onChange={(e) => setGrade(e.target.value)} 
               />
@@ -142,57 +140,79 @@ export function DisciplineGeneral({ discipline, onUpdate }: { discipline: any; o
         </CardContent>
       </Card>
 
-      <Card className="glass-card">
-        <CardHeader className="pb-3 flex flex-row items-center justify-between">
-          <CardTitle className="text-base">Horários da Aula</CardTitle>
-          <Button size="sm" variant="outline" onClick={addSchedule}>
+      {/* Cronograma de Aulas */}
+      <Card className="glass-card border-none shadow-xl bg-card/60 rounded-[32px]">
+        <CardHeader className="pb-3 pt-6 px-6 flex flex-row items-center justify-between">
+          <CardTitle className="text-xs font-black uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+            <Clock className="h-3.5 w-3.5" /> Agenda Semanal
+          </CardTitle>
+          <Button size="sm" variant="ghost" className="text-primary font-black text-[10px] uppercase hover:bg-primary/10 rounded-xl" onClick={() => setSchedules([...schedules, { day_of_week: 1, start_time: "08:00", end_time: "10:00", room: "" }])}>
             <Plus className="mr-1 h-3 w-3" /> Adicionar
           </Button>
         </CardHeader>
-        <CardContent className="space-y-3">
-          {schedules.length === 0 && (
-            <p className="text-sm text-muted-foreground text-center py-4">Nenhum horário definido para esta matéria.</p>
-          )}
-          {schedules.map((s, i) => (
-            <div key={i} className="flex flex-wrap items-end gap-2 p-3 rounded-lg bg-muted/30 border border-border/50">
-              <div className="space-y-1 flex-1 min-w-[140px]">
-                <Label className="text-xs">Dia da Semana</Label>
-                <Select value={s.day_of_week.toString()} onValueChange={(v) => updateSchedule(i, "day_of_week", parseInt(v))}>
-                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {DAYS.map((d, idx) => (
-                      <SelectItem key={idx} value={idx.toString()}>{d}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex gap-2">
-                <div className="space-y-1">
-                  <Label className="text-xs">Início</Label>
-                  <Input type="time" className="h-9 w-[100px]" value={s.start_time} onChange={(e) => updateSchedule(i, "start_time", e.target.value)} />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Fim</Label>
-                  <Input type="time" className="h-9 w-[100px]" value={s.end_time} onChange={(e) => updateSchedule(i, "end_time", e.target.value)} />
-                </div>
-              </div>
-              <div className="space-y-1 flex-1 min-w-[100px]">
-                <Label className="text-xs">Sala/Local</Label>
-                <Input placeholder="Ex: Bloco A" className="h-9" value={s.room} onChange={(e) => updateSchedule(i, "room", e.target.value)} />
-              </div>
-              <Button size="icon" variant="ghost" className="h-9 w-9 text-destructive hover:bg-destructive/10" onClick={() => removeSchedule(i)}>
-                <X className="h-4 w-4" />
-              </Button>
+        <CardContent className="px-6 pb-6 space-y-4">
+          {schedules.length === 0 ? (
+            <div className="text-center py-8 border-2 border-dashed rounded-3xl opacity-30">
+              <p className="text-[10px] font-black uppercase tracking-widest">Nenhum horário definido</p>
             </div>
-          ))}
+          ) : (
+            schedules.map((s, i) => (
+              <div key={i} className="flex flex-col gap-3 p-4 rounded-3xl bg-muted/20 border border-border/20 relative group">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="space-y-1">
+                    <Label className="text-[9px] font-black uppercase opacity-40">Dia</Label>
+                    <Select value={s.day_of_week.toString()} onValueChange={(v) => {
+                      const updated = [...schedules];
+                      updated[i].day_of_week = parseInt(v);
+                      setSchedules(updated);
+                    }}>
+                      <SelectTrigger className="h-10 rounded-xl bg-background/50 border-none shadow-sm"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {DAYS.map((d, idx) => <SelectItem key={idx} value={idx.toString()}>{d}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-[9px] font-black uppercase opacity-40">Horário</Label>
+                    <div className="flex items-center gap-1">
+                      <Input type="time" className="h-10 rounded-xl bg-background/50 border-none shadow-sm text-xs" value={s.start_time} onChange={(e) => {
+                        const updated = [...schedules];
+                        updated[i].start_time = e.target.value;
+                        setSchedules(updated);
+                      }} />
+                      <span className="text-muted-foreground text-xs">às</span>
+                      <Input type="time" className="h-10 rounded-xl bg-background/50 border-none shadow-sm text-xs" value={s.end_time} onChange={(e) => {
+                        const updated = [...schedules];
+                        updated[i].end_time = e.target.value;
+                        setSchedules(updated);
+                      }} />
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-[9px] font-black uppercase opacity-40">Sala</Label>
+                    <div className="relative">
+                      <Input placeholder="Local" className="h-10 pl-8 rounded-xl bg-background/50 border-none shadow-sm text-xs" value={s.room} onChange={(e) => {
+                        const updated = [...schedules];
+                        updated[i].room = e.target.value;
+                        setSchedules(updated);
+                      }} />
+                      <MapPin className="absolute left-2.5 top-3 h-3.5 w-3.5 text-muted-foreground" />
+                    </div>
+                  </div>
+                </div>
+                <Button size="icon" variant="ghost" className="absolute -top-2 -right-2 h-7 w-7 bg-background shadow-md text-destructive hover:bg-destructive/10 rounded-full" onClick={() => setSchedules(schedules.filter((_, idx) => idx !== i))}>
+                  <X className="h-3 w-3" />
+                </Button>
+              </div>
+            ))
+          )}
         </CardContent>
       </Card>
 
-      <div className="flex justify-end">
-        <Button onClick={save} disabled={saving} className="w-full sm:w-auto shadow-lg">
-          <Save className="mr-2 h-4 w-4" /> {saving ? "Salvando..." : "Salvar todas as alterações"}
-        </Button>
-      </div>
+      <Button onClick={save} disabled={saving} className="w-full h-14 rounded-[24px] font-black uppercase tracking-widest text-xs shadow-xl shadow-primary/20 transition-all hover:scale-[1.02]">
+        {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="mr-2 h-4 w-4" />}
+        {saving ? "Processando..." : "Salvar Alterações"}
+      </Button>
     </div>
   );
 }
