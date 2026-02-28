@@ -17,66 +17,96 @@ export default function Auth() {
 
   async function handleAuth(e: React.FormEvent) {
     e.preventDefault();
+    
+    // Validação básica de segurança
+    if (password.length < 6) {
+      toast({ 
+        title: "Senha muito curta", 
+        description: "A senha deve ter pelo menos 6 caracteres.", 
+        variant: "destructive" 
+      });
+      return;
+    }
+
     setLoading(true);
 
-    if (isSignUp) {
-      const { error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            full_name: fullName,
+    try {
+      if (isSignUp) {
+        const { error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              full_name: fullName.trim(),
+            },
+            // Garante que o link de confirmação retorne para o app
+            emailRedirectTo: window.location.origin,
           },
-        },
-      });
-      if (error) {
-        toast({ title: "Erro no cadastro", description: error.message, variant: "destructive" });
+        });
+
+        if (error) throw error;
+        
+        toast({ 
+          title: "Quase lá!", 
+          description: "Enviamos um link de confirmação para o seu e-mail.",
+        });
       } else {
-        toast({ title: "Sucesso!", description: "Verifique seu e-mail para confirmar o cadastro." });
+        const { error } = await supabase.auth.signInWithPassword({ 
+          email: email.trim(), 
+          password 
+        });
+        
+        if (error) throw error;
       }
-    } else {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) {
-        toast({ title: "Erro no login", description: "E-mail ou senha incorretos.", variant: "destructive" });
-      }
+    } catch (error: any) {
+      const errorMessage = error.message === "Invalid login credentials" 
+        ? "E-mail ou senha incorretos." 
+        : error.message;
+
+      toast({ 
+        title: isSignUp ? "Erro no cadastro" : "Erro no acesso", 
+        description: errorMessage, 
+        variant: "destructive" 
+      });
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950 p-4">
-      <div className="mb-8 text-center animate-in fade-in slide-in-from-top-4 duration-1000">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950 p-4 selection:bg-primary/30">
+      <div className="mb-8 text-center animate-in fade-in slide-in-from-top-6 duration-1000">
         <h1 className="text-5xl font-black text-white italic tracking-tighter flex items-center justify-center gap-2">
           EduFlow
         </h1>
-        <p className="text-slate-400 font-bold uppercase tracking-[0.3em] text-[10px] mt-2">
+        <p className="text-slate-500 font-bold uppercase tracking-[0.4em] text-[10px] mt-3">
           Sua jornada acadêmica organizada
         </p>
       </div>
 
-      <Card className="w-full max-w-md border-none bg-slate-900/50 backdrop-blur-xl shadow-2xl rounded-[32px] overflow-hidden">
-        <div className="h-1.5 w-full bg-primary" />
-        <CardHeader className="space-y-2 pt-8 text-center">
+      <Card className="w-full max-w-md border-none bg-slate-900/40 backdrop-blur-2xl shadow-2xl rounded-[40px] overflow-hidden ring-1 ring-white/5">
+        <div className="h-1.5 w-full bg-gradient-to-r from-primary/50 via-primary to-primary/50" />
+        <CardHeader className="space-y-2 pt-10 text-center px-8">
           <CardTitle className="text-3xl font-black text-white tracking-tight">
             {isSignUp ? "Criar Conta" : "Acessar Conta"}
           </CardTitle>
-          <CardDescription className="text-slate-400 font-medium">
+          <CardDescription className="text-slate-500 font-medium">
             {isSignUp 
-              ? "Cadastre-se para começar a organizar seus estudos." 
-              : "Entre para gerenciar sua vida acadêmica."}
+              ? "Cadastre-se para centralizar seus estudos hoje." 
+              : "Bem-vindo de volta ao seu painel acadêmico."}
           </CardDescription>
         </CardHeader>
         
         <form onSubmit={handleAuth}>
-          <CardContent className="space-y-5">
+          <CardContent className="space-y-5 px-8">
             {isSignUp && (
-              <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Nome Completo</Label>
+              <div className="space-y-2.5">
+                <Label className="text-[10px] font-black uppercase tracking-widest text-slate-600 ml-1">Nome Completo</Label>
                 <div className="relative group">
-                  <User className="absolute left-3 top-3 h-5 w-5 text-slate-600 group-focus-within:text-primary transition-colors" />
+                  <User className="absolute left-4 top-3.5 h-5 w-5 text-slate-600 group-focus-within:text-primary transition-colors" />
                   <Input
-                    className="pl-11 h-12 bg-slate-950/50 border-slate-800 text-white rounded-2xl focus:ring-primary/20"
-                    placeholder="Seu nome"
+                    className="pl-12 h-12 bg-slate-950/40 border-slate-800/50 text-white rounded-2xl focus:ring-primary/20 transition-all placeholder:text-slate-700"
+                    placeholder="Como devemos te chamar?"
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
                     required
@@ -85,14 +115,14 @@ export default function Auth() {
               </div>
             )}
             
-            <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">E-mail acadêmico</Label>
+            <div className="space-y-2.5">
+              <Label className="text-[10px] font-black uppercase tracking-widest text-slate-600 ml-1">E-mail Acadêmico</Label>
               <div className="relative group">
-                <Mail className="absolute left-3 top-3 h-5 w-5 text-slate-600 group-focus-within:text-primary transition-colors" />
+                <Mail className="absolute left-4 top-3.5 h-5 w-5 text-slate-600 group-focus-within:text-primary transition-colors" />
                 <Input
-                  className="pl-11 h-12 bg-slate-950/50 border-slate-800 text-white rounded-2xl focus:ring-primary/20"
+                  className="pl-12 h-12 bg-slate-950/40 border-slate-800/50 text-white rounded-2xl focus:ring-primary/20 transition-all placeholder:text-slate-700"
                   type="email"
-                  placeholder="seu@email.com"
+                  placeholder="estudante@instituicao.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
@@ -100,14 +130,14 @@ export default function Auth() {
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase tracking-widest text-slate-500 ml-1">Senha</Label>
+            <div className="space-y-2.5">
+              <Label className="text-[10px] font-black uppercase tracking-widest text-slate-600 ml-1">Senha</Label>
               <div className="relative group">
-                <Lock className="absolute left-3 top-3 h-5 w-5 text-slate-600 group-focus-within:text-primary transition-colors" />
+                <Lock className="absolute left-4 top-3.5 h-5 w-5 text-slate-600 group-focus-within:text-primary transition-colors" />
                 <Input
-                  className="pl-11 h-12 bg-slate-950/50 border-slate-800 text-white rounded-2xl focus:ring-primary/20"
+                  className="pl-12 h-12 bg-slate-950/40 border-slate-800/50 text-white rounded-2xl focus:ring-primary/20 transition-all placeholder:text-slate-700"
                   type="password"
-                  placeholder="No mínimo 6 caracteres"
+                  placeholder="Mínimo 6 caracteres"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
@@ -116,30 +146,31 @@ export default function Auth() {
             </div>
           </CardContent>
 
-          <CardFooter className="flex flex-col gap-4 pb-8 pt-4">
+          <CardFooter className="flex flex-col gap-5 pb-10 pt-6 px-8">
             <Button 
-              className="w-full h-12 rounded-2xl font-black uppercase tracking-widest text-xs shadow-lg shadow-primary/20 transition-all hover:scale-[1.02]" 
+              className="w-full h-14 rounded-2xl font-black uppercase tracking-widest text-xs shadow-xl shadow-primary/10 transition-all active:scale-95" 
               type="submit" 
               disabled={loading}
             >
-              {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : (isSignUp ? "Cadastrar no EduFlow" : "Entrar no EduFlow")}
+              {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : (isSignUp ? "Cadastrar Agora" : "Entrar no Painel")}
             </Button>
             
             <button
               type="button"
               onClick={() => setIsSignUp(!isSignUp)}
-              className="text-sm font-bold text-slate-400 hover:text-white transition-colors"
+              className="text-xs font-black uppercase tracking-widest text-slate-500 hover:text-primary transition-colors"
             >
-              {isSignUp ? "Já tem uma conta? Entre aqui" : "Ainda não tem conta? Cadastre-se"}
+              {isSignUp ? "Já possui acesso? Clique aqui" : "Criar nova conta acadêmica"}
             </button>
           </CardFooter>
         </form>
       </Card>
 
-      <footer className="mt-8 flex items-center gap-2 text-slate-600">
+      <footer className="mt-10 flex items-center gap-3 text-slate-700">
         <GraduationCap className="h-4 w-4" />
-        <span className="text-[10px] font-black uppercase tracking-widest">EduFlow Academy · 2026</span>
+        <span className="text-[9px] font-black uppercase tracking-[0.3em]">EduFlow Academy · Versão 2026.1</span>
       </footer>
     </div>
   );
 }
+
