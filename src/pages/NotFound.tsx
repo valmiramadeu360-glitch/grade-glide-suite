@@ -8,34 +8,42 @@ const NotFound = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Log do erro para ajudar você a debugar se houver links quebrados no futuro
+    // Log para monitoramento de rotas quebradas
     console.error(
       "404 Error: Rota inexistente acessada ->", 
       location.pathname
     );
   }, [location.pathname]);
 
+  const handleBack = () => {
+    // Se não houver histórico (ex: abriu link direto), vai para a home
+    if (window.history.length <= 1) {
+      navigate("/");
+    } else {
+      navigate(-1);
+    }
+  };
+
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-slate-950 p-6 text-center">
-      {/* Círculo de Alerta Visual */}
-      <div className="mb-6 flex h-24 w-24 items-center justify-center rounded-full bg-rose-500/10 animate-pulse">
-        <AlertCircle className="h-12 w-12 text-rose-500" />
+    <div className="flex min-h-screen flex-col items-center justify-center bg-slate-950 p-6 text-center animate-in fade-in duration-700">
+      {/* Elemento Visual de Alerta */}
+      <div className="mb-8 flex h-28 w-28 items-center justify-center rounded-[32px] bg-rose-500/10 ring-1 ring-rose-500/20 shadow-2xl shadow-rose-500/5">
+        <AlertCircle className="h-14 w-14 text-rose-500 animate-pulse" />
       </div>
 
       <div className="max-w-md space-y-4">
-        <h1 className="text-7xl font-black text-white tracking-tighter">404</h1>
-        <h2 className="text-2xl font-bold text-slate-200">Página não encontrada</h2>
-        <p className="text-slate-400 text-sm leading-relaxed">
-          Parece que você tentou acessar um conteúdo que não existe ou foi movido. 
-          Verifique se o link da disciplina está correto.
+        <h1 className="text-8xl font-black text-white tracking-tighter leading-none">404</h1>
+        <h2 className="text-2xl font-black text-slate-100 uppercase tracking-tight">Conteúdo Indisponível</h2>
+        <p className="text-slate-500 text-sm font-medium leading-relaxed px-4">
+          A rota <span className="text-primary font-mono">{location.pathname}</span> não foi localizada em nossa base acadêmica.
         </p>
       </div>
 
-      <div className="mt-10 flex flex-col sm:flex-row gap-4">
+      <div className="mt-12 flex flex-col sm:flex-row gap-4 w-full max-w-xs sm:max-w-none justify-center">
         <Button 
           variant="outline" 
-          onClick={() => navigate(-1)}
-          className="border-slate-800 bg-transparent text-slate-300 hover:bg-slate-900 hover:text-white px-8 h-12 rounded-2xl gap-2"
+          onClick={handleBack}
+          className="border-white/5 bg-white/5 text-slate-300 hover:bg-white/10 hover:text-white px-8 h-14 rounded-[20px] gap-2 font-black uppercase text-[10px] tracking-widest transition-all"
         >
           <ArrowLeft className="h-4 w-4" />
           Voltar
@@ -43,19 +51,20 @@ const NotFound = () => {
         
         <Button 
           onClick={() => navigate("/")}
-          className="bg-primary text-primary-foreground shadow-lg shadow-primary/20 px-8 h-12 rounded-2xl font-bold gap-2"
+          className="bg-primary text-white shadow-xl shadow-primary/20 px-8 h-14 rounded-[20px] font-black uppercase text-[10px] tracking-widest gap-2 transition-all hover:scale-[1.02]"
         >
           <Home className="h-4 w-4" />
-          Ir para o Dashboard
+          Dashboard
         </Button>
       </div>
 
-      <p className="mt-12 text-[10px] font-bold uppercase tracking-widest text-slate-600">
-        EduFlow Academy · Sistema de Gestão
-      </p>
+      <footer className="mt-20">
+        <p className="text-[10px] font-black uppercase tracking-[0.4em] text-slate-800">
+          EduFlow Academy · 2026
+        </p>
+      </footer>
     </div>
   );
 };
 
 export default NotFound;
-
