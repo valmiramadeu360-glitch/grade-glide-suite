@@ -1,13 +1,16 @@
-// This file is optimized for Academic Management App (EduFlow)
+// Optimized for EduFlow Academy - Supabase Client
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
-// Verificação de segurança para evitar que o app quebre sem aviso
+// Verificação rigorosa para evitar falhas silenciosas na pré-visualização
 if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
-  console.warn("Atenção: As chaves do Supabase não foram encontradas no arquivo .env");
+  console.error(
+    "ERRO CRÍTICO: Chaves do Supabase ausentes no arquivo .env. " +
+    "Verifique as variáveis VITE_SUPABASE_URL e VITE_SUPABASE_PUBLISHABLE_KEY."
+  );
 }
 
 export const supabase = createClient<Database>(
@@ -16,9 +19,13 @@ export const supabase = createClient<Database>(
   {
     auth: {
       storage: window.localStorage,
-      persistSession: true,
       autoRefreshToken: true,
-      detectSessionInUrl: true, // Importante para redirecionamento de login no mobile
-    }
+      persistSession: true,
+      detectSessionInUrl: true,
+    },
+    // Adicionado para melhor estabilidade em redes móveis (PWA)
+    global: {
+      headers: { 'x-application-name': 'eduflow-academy' },
+    },
   }
 );
