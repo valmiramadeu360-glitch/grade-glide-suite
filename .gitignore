@@ -1,24 +1,39 @@
-# Logs
+# --- EduFlow: Dependências e Builds ---
+node_modules
+/dist
+/dist-ssr
+*.local
+
+# --- Segurança: Variáveis de Ambiente (CRÍTICO) ---
+# Nunca suba esses arquivos para o GitHub
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# --- Logs de Erro ---
 logs
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
-lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
-*.local
-
-# Editor directories and files
+# --- Editor & OS (Limpeza de Sistema) ---
 .vscode/*
 !.vscode/extensions.json
 .idea
 .DS_Store
+Thumbs.db
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
+
+# --- Supabase & TypeScript ---
+.supabase/
+.temp
+.cache
+tsconfig.tsbuildinfo
