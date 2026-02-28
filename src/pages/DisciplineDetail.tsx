@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { 
   ChevronLeft, 
   Trash2, 
-  Loader2, 
   BookOpen, 
   Paperclip, 
   FileText, 
@@ -16,7 +15,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
-// COMPONENTES DE FUNCIONALIDADE INTEGRADOS
+// COMPONENTES DE FUNCIONALIDADE
 import { DisciplineChecklist } from "@/components/DisciplineChecklist";
 import { DisciplineGeneral } from "@/components/DisciplineGeneral";
 import { DisciplineMaterials } from "@/components/DisciplineMaterials";
@@ -59,18 +58,18 @@ export default function DisciplineDetail() {
       console.error("Erro ao carregar:", error);
       toast({ title: "Erro de conexão", description: "Verifique sua internet.", variant: "destructive" });
     } finally {
-      setTimeout(() => setLoading(false), 300);
+      setLoading(false);
     }
   }
 
   async function deleteDiscipline() {
-    if (!confirm("Tem certeza que deseja excluir esta disciplina e todos os seus dados?")) return;
+    if (!confirm("Tem certeza que deseja excluir esta disciplina?")) return;
     
     try {
       const { error } = await supabase.from("disciplines").delete().eq("id", id);
       if (error) throw error;
       
-      toast({ title: "Sucesso", description: "Disciplina removida." });
+      toast({ title: "Removida", description: "Disciplina excluída com sucesso." });
       navigate("/disciplines");
     } catch (error: any) {
       toast({ title: "Erro ao excluir", description: error.message, variant: "destructive" });
@@ -79,14 +78,11 @@ export default function DisciplineDetail() {
 
   if (loading || !discipline) {
     return (
-      <div className="flex h-[80vh] items-center justify-center bg-background">
+      <div className="flex h-[80vh] items-center justify-center bg-slate-950">
         <div className="flex flex-col items-center gap-4">
-           <div className="relative">
-             <div className="h-12 w-12 rounded-full border-4 border-primary/20 border-t-primary animate-spin"></div>
-             <BookOpen className="h-5 w-5 text-primary absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
-           </div>
-           <p className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground animate-pulse">
-             Sincronizando Dados...
+           <div className="h-12 w-12 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
+           <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 animate-pulse">
+             Sincronizando Metadados...
            </p>
         </div>
       </div>
@@ -95,30 +91,29 @@ export default function DisciplineDetail() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-24 animate-in fade-in slide-in-from-bottom-4 duration-700 px-4">
-      {/* Cabeçalho de Navegação */}
-      <div className="flex flex-col gap-4 mt-4">
+      <div className="flex flex-col gap-4 mt-6">
         <Button 
           variant="ghost" 
           size="sm" 
-          onClick={() => navigate(-1)} 
-          className="w-fit gap-2 text-muted-foreground hover:text-primary transition-all rounded-xl"
+          onClick={() => navigate("/disciplines")} 
+          className="w-fit gap-2 text-slate-500 hover:text-primary transition-all rounded-xl"
         >
           <ChevronLeft className="h-4 w-4" /> Voltar para Grade
         </Button>
         
-        <div className="flex items-center justify-between bg-card/40 backdrop-blur-xl p-6 rounded-[32px] border border-white/5 shadow-2xl">
+        <div className="flex items-center justify-between bg-slate-900/40 backdrop-blur-xl p-6 rounded-[32px] border border-white/5 shadow-2xl">
           <div className="flex items-center gap-5">
             <div 
-              className="h-16 w-16 rounded-[22px] flex items-center justify-center shadow-2xl group-hover:scale-105 transition-transform" 
-              style={{ backgroundColor: (discipline?.color || "#3b82f6") + "20" }}
+              className="h-16 w-16 rounded-[22px] flex items-center justify-center shadow-inner" 
+              style={{ backgroundColor: `${discipline?.color || "#3b82f6"}20` }}
             >
               <BookOpen className="h-8 w-8" style={{ color: discipline?.color || "#3b82f6" }} />
             </div>
             <div className="min-w-0">
-              <h1 className="text-3xl font-black truncate max-w-[200px] sm:max-w-none tracking-tighter text-white">
+              <h1 className="text-2xl sm:text-3xl font-black truncate max-w-[180px] sm:max-w-none tracking-tighter text-white">
                 {discipline?.name}
               </h1>
-              <p className="text-[10px] text-slate-500 font-black uppercase tracking-[0.3em] opacity-80 mt-1">
+              <p className="text-[10px] text-slate-500 font-black uppercase tracking-[0.3em] mt-1">
                 Prof. {discipline?.professor || "Não atribuído"}
               </p>
             </div>
@@ -127,50 +122,46 @@ export default function DisciplineDetail() {
             variant="ghost" 
             size="icon" 
             onClick={deleteDiscipline} 
-            className="text-destructive hover:bg-destructive/10 rounded-2xl h-12 w-12 transition-colors"
+            className="text-rose-500 hover:bg-rose-500/10 rounded-2xl h-12 w-12 transition-colors"
           >
             <Trash2 className="h-5 w-5" />
           </Button>
         </div>
       </div>
 
-      <Tabs defaultValue="info" className="w-full">
-        {/* Navegação por Abas Otimizada para Mobile */}
+      <Tabs defaultValue="checklist" className="w-full">
         <div className="overflow-x-auto no-scrollbar mb-6">
-          <TabsList className="inline-flex w-max sm:w-full bg-slate-900/40 p-1.5 rounded-[24px] border border-white/5 gap-1 shadow-inner">
-            <TabsTrigger value="info" className="rounded-2xl px-6 py-3 gap-2 font-black text-[10px] uppercase tracking-widest data-[state=active]:bg-primary data-[state=active]:text-white">
-              <Settings2 className="h-4 w-4" /> Info
-            </TabsTrigger>
-            <TabsTrigger value="checklist" className="rounded-2xl px-6 py-3 gap-2 font-black text-[10px] uppercase tracking-widest data-[state=active]:bg-primary data-[state=active]:text-white">
+          <TabsList className="inline-flex w-max sm:w-full bg-slate-900/60 p-1.5 rounded-[24px] border border-white/5 gap-1">
+            <TabsTrigger value="checklist" className="rounded-2xl px-6 py-3 gap-2 font-black text-[10px] uppercase tracking-widest data-[state=active]:bg-primary">
               <CheckCircle2 className="h-4 w-4" /> Estudos
             </TabsTrigger>
-            <TabsTrigger value="media" className="rounded-2xl px-6 py-3 gap-2 font-black text-[10px] uppercase tracking-widest data-[state=active]:bg-primary data-[state=active]:text-white">
+            <TabsTrigger value="info" className="rounded-2xl px-6 py-3 gap-2 font-black text-[10px] uppercase tracking-widest data-[state=active]:bg-primary">
+              <Settings2 className="h-4 w-4" /> Info
+            </TabsTrigger>
+            <TabsTrigger value="media" className="rounded-2xl px-6 py-3 gap-2 font-black text-[10px] uppercase tracking-widest data-[state=active]:bg-primary">
               <Paperclip className="h-4 w-4" /> Mídia
             </TabsTrigger>
-            <TabsTrigger value="notes" className="rounded-2xl px-6 py-3 gap-2 font-black text-[10px] uppercase tracking-widest data-[state=active]:bg-primary data-[state=active]:text-white">
+            <TabsTrigger value="notes" className="rounded-2xl px-6 py-3 gap-2 font-black text-[10px] uppercase tracking-widest data-[state=active]:bg-primary">
               <FileText className="h-4 w-4" /> Resumos
             </TabsTrigger>
           </TabsList>
         </div>
 
         <div className="outline-none">
-          {/* Aba de Informações e Horários */}
-          <TabsContent value="info" className="animate-in fade-in slide-in-from-right-4 duration-500">
-            <DisciplineGeneral discipline={discipline} onUpdate={loadDiscipline} />
+          <TabsContent value="checklist" className="mt-0 focus-visible:ring-0">
+            {/* O segredo está nesta KEY: ela força o componente a recarregar com o ID correto */}
+            <DisciplineChecklist key={`checklist-${id}`} disciplineId={id!} />
           </TabsContent>
 
-          {/* Aba de Checklist/Estudos */}
-          <TabsContent value="checklist" className="animate-in fade-in slide-in-from-right-4 duration-500">
-            <DisciplineChecklist disciplineId={id!} />
+          <TabsContent value="info" className="mt-0 focus-visible:ring-0">
+            <DisciplineGeneral discipline={discipline} onUpdate={loadDiscipline} />
           </TabsContent>
           
-          {/* Aba de Mídia (Arquivos e Fotos) */}
-          <TabsContent value="media" className="animate-in fade-in slide-in-from-right-4 duration-500">
+          <TabsContent value="media" className="mt-0 focus-visible:ring-0">
              <DisciplineMaterials disciplineId={id!} />
           </TabsContent>
 
-          {/* Aba de Resumos (Editor de Notas) */}
-          <TabsContent value="notes" className="animate-in fade-in slide-in-from-right-4 duration-500">
+          <TabsContent value="notes" className="mt-0 focus-visible:ring-0">
              <DisciplineNotes disciplineId={id!} />
           </TabsContent>
         </div>
@@ -178,4 +169,3 @@ export default function DisciplineDetail() {
     </div>
   );
 }
-
