@@ -1,20 +1,22 @@
-/* Reset de layout para o EduFlow */
+/* Reset de layout global para o EduFlow */
 #root {
   width: 100%;
   min-height: 100vh;
   margin: 0;
   padding: 0;
+  overflow-x: hidden; /* Evita que o app "balance" para os lados no celular */
 }
 
-/* Garante que o scroll seja suave entre as abas de Disciplinas */
+/* Garante que o scroll seja suave entre as abas e seções */
 html {
   scroll-behavior: smooth;
+  -webkit-tap-highlight-color: transparent; /* Remove o quadrado cinza ao tocar em botões no Android */
 }
 
-/* Customização da barra de rolagem (Scrollbar) para o modo escuro */
+/* Customização da barra de rolagem (Scrollbar) Estilo BI */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 
 ::-webkit-scrollbar-track {
@@ -23,26 +25,67 @@ html {
 
 ::-webkit-scrollbar-thumb {
   background: rgba(100, 116, 139, 0.2);
-  border-radius: 10px;
+  border-radius: 20px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(99, 102, 241, 0.4);
+  background: rgba(99, 102, 241, 0.5);
 }
 
-/* Animações globais para as páginas (usadas pelo animate-fade-in) */
+/* Animações de entrada otimizadas */
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(4px); }
+  from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
 .animate-fade-in {
-  animation: fadeIn 0.4s ease-out forwards;
+  animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-/* Ajuste para garantir que o Dashboard ocupe a tela toda no Mobile */
+/* --- MELHORIAS PARA MOBILE (Performance e Correção de Bugs) --- */
 @media (max-width: 768px) {
   #root {
     padding: 0;
   }
+
+  /* 1. MELHORIA DE LENTIDÃO: Remove o desfoque pesado (blur) no celular */
+  /* Isso deixa a navegação muito mais rápida em aparelhos menos potentes */
+  .glass-card {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background: hsl(var(--card)) !important;
+    border: 1px solid hsl(var(--border) / 0.5) !important;
+  }
+
+  /* 2. CORREÇÃO DE ABAS: Utilitário para as abas não encavalarem */
+  /* Remove a barra de scroll visual mas mantém a funcionalidade de deslizar */
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+    display: flex;
+    overflow-x: auto;
+    gap: 8px;
+    padding-bottom: 4px;
+  }
+
+  /* 3. TOQUE RÁPIDO: Melhora a resposta do clique no celular */
+  button, a {
+    touch-action: manipulation;
+  }
+  
+  /* Reduz a duração das animações para parecer mais instantâneo */
+  .animate-fade-in {
+    animation-duration: 250ms !important;
+  }
+}
+
+/* Utilitário para evitar que textos longos quebrem o layout das matérias */
+.truncate-multiline {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
