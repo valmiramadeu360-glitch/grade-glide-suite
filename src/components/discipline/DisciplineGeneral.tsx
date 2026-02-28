@@ -22,19 +22,21 @@ interface Schedule {
 export function DisciplineGeneral({ discipline, onUpdate }: { discipline: any; onUpdate: () => void }) {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [professor, setProfessor] = useState(discipline.professor ?? "");
-  const [grade, setGrade] = useState(discipline.current_grade?.toString() ?? "");
+  const [professor, setProfessor] = useState(discipline?.professor ?? "");
+  const [grade, setGrade] = useState(discipline?.current_grade?.toString() ?? "");
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
+    let isMounted = true;
     if (discipline?.id) {
-      loadSchedules();
+      loadSchedules(isMounted);
     }
-  }, [discipline.id]);
+    return () => { isMounted = false; };
+  }, [discipline?.id]);
 
-  async function loadSchedules() {
+  async function loadSchedules(isMounted: boolean) {
     try {
       setLoading(true);
       const { data, error } = await supabase
@@ -45,17 +47,19 @@ export function DisciplineGeneral({ discipline, onUpdate }: { discipline: any; o
       
       if (error) throw error;
 
-      setSchedules(data?.map((s: any) => ({
-        id: s.id,
-        day_of_week: s.day_of_week,
-        start_time: s.start_time?.slice(0, 5) ?? "08:00",
-        end_time: s.end_time?.slice(0, 5) ?? "10:00",
-        room: s.room ?? "",
-      })) ?? []);
+      if (isMounted) {
+        setSchedules(data?.map((s: any) => ({
+          id: s.id,
+          day_of_week: s.day_of_week,
+          start_time: s.start_time?.slice(0, 5) ?? "08:00",
+          end_time: s.end_time?.slice(0, 5) ?? "10:00",
+          room: s.room ?? "",
+        })) ?? []);
+      }
     } catch (err) {
       console.error("Erro ao carregar horários:", err);
     } finally {
-      setLoading(false);
+      if (isMounted) setLoading(false);
     }
   }
 
@@ -65,15 +69,22 @@ export function DisciplineGeneral({ discipline, onUpdate }: { discipline: any; o
     
     try {
       // 1. Atualiza dados básicos
+      const numericGrade = grade.trim() !== "" ? parseFloat(grade.replace(',', '.')) : null;
+      
       const { error: discError } = await supabase.from("disciplines").update({
         professor: professor.trim() || null,
-        current_grade: grade !== "" ? parseFloat(grade.replace(',', '.')) : null,
+        current_grade: isNaN(numericGrade as number) ? null : numericGrade,
       }).eq("id", discipline.id);
 
       if (discError) throw discError;
 
-      // 2. Sincroniza horários
-      await supabase.from("discipline_schedules").delete().eq("discipline_id", discipline.id);
+      // 2. Sincroniza horários (Delete e Insert)
+      const { error: delError } = await supabase
+        .from("discipline_schedules")
+        .delete()
+        .eq("discipline_id", discipline.id);
+
+      if (delError) throw delError;
 
       if (schedules.length > 0) {
         const { error: insError } = await supabase.from("discipline_schedules").insert(
@@ -89,7 +100,7 @@ export function DisciplineGeneral({ discipline, onUpdate }: { discipline: any; o
         if (insError) throw insError;
       }
 
-      toast({ title: "Sucesso!", description: "Dados atualizados." });
+      toast({ title: "Sucesso!", description: "Dados atualizados com segurança." });
       onUpdate();
     } catch (error: any) {
       toast({ title: "Erro ao salvar", description: error.message, variant: "destructive" });
@@ -107,7 +118,7 @@ export function DisciplineGeneral({ discipline, onUpdate }: { discipline: any; o
   }
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
+    <div className="space-y-6 animate-in fade-in duration-500 pb-10">
       {/* Informações Básicas */}
       <Card className="glass-card border-none shadow-xl bg-card/60 rounded-[32px]">
         <CardHeader className="pb-3 pt-6 px-6">
@@ -131,6 +142,7 @@ export function DisciplineGeneral({ discipline, onUpdate }: { discipline: any; o
               <Input 
                 className="rounded-2xl bg-muted/20 border-border/40 font-bold"
                 type="text" 
+                inputMode="decimal"
                 placeholder="0,0"
                 value={grade} 
                 onChange={(e) => setGrade(e.target.value)} 
@@ -146,7 +158,12 @@ export function DisciplineGeneral({ discipline, onUpdate }: { discipline: any; o
           <CardTitle className="text-xs font-black uppercase tracking-widest text-muted-foreground flex items-center gap-2">
             <Clock className="h-3.5 w-3.5" /> Agenda Semanal
           </CardTitle>
-          <Button size="sm" variant="ghost" className="text-primary font-black text-[10px] uppercase hover:bg-primary/10 rounded-xl" onClick={() => setSchedules([...schedules, { day_of_week: 1, start_time: "08:00", end_time: "10:00", room: "" }])}>
+          <Button 
+            size="sm" 
+            variant="ghost" 
+            className="text-primary font-black text-[10px] uppercase hover:bg-primary/10 rounded-xl" 
+            onClick={() => setSchedules([...schedules, { day_of_week: 1, start_time: "08:00", end_time: "10:00", room: "" }])}
+          >
             <Plus className="mr-1 h-3 w-3" /> Adicionar
           </Button>
         </CardHeader>
@@ -157,7 +174,7 @@ export function DisciplineGeneral({ discipline, onUpdate }: { discipline: any; o
             </div>
           ) : (
             schedules.map((s, i) => (
-              <div key={i} className="flex flex-col gap-3 p-4 rounded-3xl bg-muted/20 border border-border/20 relative group">
+              <div key={i} className="flex flex-col gap-3 p-4 rounded-3xl bg-muted/20 border border-border/20 relative">
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div className="space-y-1">
                     <Label className="text-[9px] font-black uppercase opacity-40">Dia</Label>
@@ -180,7 +197,7 @@ export function DisciplineGeneral({ discipline, onUpdate }: { discipline: any; o
                         updated[i].start_time = e.target.value;
                         setSchedules(updated);
                       }} />
-                      <span className="text-muted-foreground text-xs">às</span>
+                      <span className="text-muted-foreground text-xs font-bold">às</span>
                       <Input type="time" className="h-10 rounded-xl bg-background/50 border-none shadow-sm text-xs" value={s.end_time} onChange={(e) => {
                         const updated = [...schedules];
                         updated[i].end_time = e.target.value;
@@ -191,7 +208,7 @@ export function DisciplineGeneral({ discipline, onUpdate }: { discipline: any; o
                   <div className="space-y-1">
                     <Label className="text-[9px] font-black uppercase opacity-40">Sala</Label>
                     <div className="relative">
-                      <Input placeholder="Local" className="h-10 pl-8 rounded-xl bg-background/50 border-none shadow-sm text-xs" value={s.room} onChange={(e) => {
+                      <Input placeholder="Local" className="h-10 pl-8 rounded-xl bg-background/50 border-none shadow-sm text-xs font-bold" value={s.room} onChange={(e) => {
                         const updated = [...schedules];
                         updated[i].room = e.target.value;
                         setSchedules(updated);
@@ -200,8 +217,13 @@ export function DisciplineGeneral({ discipline, onUpdate }: { discipline: any; o
                     </div>
                   </div>
                 </div>
-                <Button size="icon" variant="ghost" className="absolute -top-2 -right-2 h-7 w-7 bg-background shadow-md text-destructive hover:bg-destructive/10 rounded-full" onClick={() => setSchedules(schedules.filter((_, idx) => idx !== i))}>
-                  <X className="h-3 w-3" />
+                <Button 
+                  size="icon" 
+                  variant="ghost" 
+                  className="absolute -top-1 -right-1 h-8 w-8 bg-card border shadow-sm text-destructive hover:bg-destructive/10 rounded-full z-10" 
+                  onClick={() => setSchedules(schedules.filter((_, idx) => idx !== i))}
+                >
+                  <X className="h-4 w-4" />
                 </Button>
               </div>
             ))
@@ -209,9 +231,13 @@ export function DisciplineGeneral({ discipline, onUpdate }: { discipline: any; o
         </CardContent>
       </Card>
 
-      <Button onClick={save} disabled={saving} className="w-full h-14 rounded-[24px] font-black uppercase tracking-widest text-xs shadow-xl shadow-primary/20 transition-all hover:scale-[1.02]">
+      <Button 
+        onClick={save} 
+        disabled={saving} 
+        className="w-full h-14 rounded-[24px] font-black uppercase tracking-widest text-xs shadow-xl shadow-primary/20 transition-all active:scale-95"
+      >
         {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="mr-2 h-4 w-4" />}
-        {saving ? "Processando..." : "Salvar Alterações"}
+        {saving ? "Salvando Dados..." : "Salvar Alterações"}
       </Button>
     </div>
   );
