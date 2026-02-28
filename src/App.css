@@ -5,12 +5,16 @@
   margin: 0;
   padding: 0;
   overflow-x: hidden; /* Evita que o app "balance" para os lados no celular */
+  display: flex;
+  flex-direction: column;
 }
 
 /* Garante que o scroll seja suave entre as abas e seções */
-html {
+html, body {
   scroll-behavior: smooth;
-  -webkit-tap-highlight-color: transparent; /* Remove o quadrado cinza ao tocar em botões no Android */
+  -webkit-tap-highlight-color: transparent; /* Remove o quadrado cinza ao tocar no Android */
+  background-color: #020617; /* Slate-950 constante para evitar piscada branca */
+  height: 100%;
 }
 
 /* Customização da barra de rolagem (Scrollbar) Estilo BI */
@@ -49,7 +53,6 @@ html {
   }
 
   /* 1. MELHORIA DE LENTIDÃO: Remove o desfoque pesado (blur) no celular */
-  /* Isso deixa a navegação muito mais rápida em aparelhos menos potentes */
   .glass-card {
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
@@ -58,17 +61,23 @@ html {
   }
 
   /* 2. CORREÇÃO DE ABAS: Utilitário para as abas não encavalarem */
-  /* Remove a barra de scroll visual mas mantém a funcionalidade de deslizar */
   .no-scrollbar::-webkit-scrollbar {
     display: none;
   }
   .no-scrollbar {
     -ms-overflow-style: none;
     scrollbar-width: none;
-    display: flex;
-    overflow-x: auto;
+    display: flex !important; /* Força o alinhamento em linha */
+    overflow-x: auto !important; /* Ativa o deslize lateral */
     gap: 8px;
-    padding-bottom: 4px;
+    padding-bottom: 8px;
+    -webkit-overflow-scrolling: touch; /* Scroll suave no iOS */
+  }
+
+  /* Ajuste para os botões das abas no mobile não ficarem esmagados */
+  [data-role="tab-list"] button {
+    flex-shrink: 0; 
+    white-space: nowrap;
   }
 
   /* 3. TOQUE RÁPIDO: Melhora a resposta do clique no celular */
@@ -76,13 +85,12 @@ html {
     touch-action: manipulation;
   }
   
-  /* Reduz a duração das animações para parecer mais instantâneo */
   .animate-fade-in {
     animation-duration: 250ms !important;
   }
 }
 
-/* Utilitário para evitar que textos longos quebrem o layout das matérias */
+/* Utilitário para textos longos */
 .truncate-multiline {
   display: -webkit-box;
   -webkit-line-clamp: 2;
