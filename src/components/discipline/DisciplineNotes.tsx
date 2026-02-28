@@ -1,14 +1,13 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Trash2, Save, FileText, Loader2, Check } from "lucide-react";
+import { Plus, Trash2, Save, FileText, Loader2, Check, ChevronLeft } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
-import { debounce } from "lodash"; // Certifique-se que lodash está instalado ou use o setTimeout abaixo
 
 interface Note {
   id: string;
@@ -26,40 +25,51 @@ export function DisciplineNotes({ disciplineId }: { disciplineId: string }) {
   const [content, setContent] = useState("");
   const [saving, setSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadNotes();
+    if (disciplineId) {
+      loadNotes();
+    }
   }, [disciplineId]);
 
-  // Carrega as notas do banco
   async function loadNotes() {
-    const { data } = await supabase
-      .from("notes")
-      .select("*")
-      .eq("discipline_id", disciplineId)
-      .order("updated_at", { ascending: false });
-    setNotes(data ?? []);
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from("notes")
+        .select("*")
+        .eq("discipline_id", disciplineId)
+        .order("updated_at", { ascending: false });
+      
+      if (error) throw error;
+      setNotes(data ?? []);
+    } catch (err) {
+      console.error("Erro ao carregar notas:", err);
+    } finally {
+      setLoading(false);
+    }
   }
 
-  // Cria uma nota nova
   async function createNote() {
-    if (!user) return;
-    const { data, error } = await supabase.from("notes").insert({
-      discipline_id: disciplineId,
-      user_id: user.id,
-      title: "Nova anotação " + format(new Date(), "dd/MM"),
-      content: ""
-    }).select().single();
+    if (!user || !disciplineId) return;
+    try {
+      const { data, error } = await supabase.from("notes").insert({
+        discipline_id: disciplineId,
+        user_id: user.id,
+        title: "Resumo - " + format(new Date(), "dd/MM"),
+        content: ""
+      }).select().single();
 
-    if (error) {
+      if (error) throw error;
+
+      if (data) {
+        const newNote = data as Note;
+        setNotes([newNote, ...notes]);
+        selectNote(newNote);
+      }
+    } catch (err) {
       toast({ title: "Erro ao criar nota", variant: "destructive" });
-      return;
-    }
-
-    if (data) {
-      const newNote = data as Note;
-      setNotes([newNote, ...notes]);
-      selectNote(newNote);
     }
   }
 
@@ -70,112 +80,120 @@ export function DisciplineNotes({ disciplineId }: { disciplineId: string }) {
     setLastSaved(null);
   }
 
-  // Função de salvar
   async function saveNote() {
     if (!selected || !user) return;
-    setSaving(true);
-    
-    const { error } = await supabase
-      .from("notes")
-      .update({ 
-        title: title.trim() || "Sem título", 
-        content,
-        updated_at: new Date().toISOString()
-      })
-      .eq("id", selected.id);
+    try {
+      setSaving(true);
+      const now = new Date().toISOString();
+      
+      const { error } = await supabase
+        .from("notes")
+        .update({ 
+          title: title.trim() || "Sem título", 
+          content,
+          updated_at: now
+        })
+        .eq("id", selected.id);
 
-    if (!error) {
+      if (error) throw error;
+
       setLastSaved(new Date());
-      // Atualiza a lista lateral sem recarregar tudo
-      setNotes(notes.map(n => n.id === selected.id ? { ...n, title, content, updated_at: new Date().toISOString() } : n));
+      setNotes(notes.map(n => n.id === selected.id ? { ...n, title, content, updated_at: now } : n));
+    } catch (err) {
+      toast({ title: "Erro ao salvar", variant: "destructive" });
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
   }
 
-  // Deleta a nota
   async function deleteNote(id: string) {
-    const { error } = await supabase.from("notes").delete().eq("id", id);
-    if (!error) {
+    if (!confirm("Deseja apagar este resumo permanentemente?")) return;
+    try {
+      const { error } = await supabase.from("notes").delete().eq("id", id);
+      if (error) throw error;
+      
       setNotes(notes.filter(n => n.id !== id));
       if (selected?.id === id) {
         setSelected(null);
-        setTitle("");
-        setContent("");
       }
       toast({ title: "Nota excluída" });
+    } catch (err) {
+      toast({ title: "Erro ao excluir", variant: "destructive" });
     }
   }
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 h-full min-h-[500px]">
-      {/* Lista de Notas Lateral */}
-      <Card className="glass-card lg:col-span-1 overflow-hidden flex flex-col">
-        <CardHeader className="pb-3 flex flex-row items-center justify-between shrink-0">
-          <CardTitle className="text-base">Meus Resumos</CardTitle>
-          <Button size="sm" variant="outline" onClick={createNote} className="h-8">
-            <Plus className="mr-1 h-3 w-3" /> Nova
+    <div className="flex flex-col lg:grid lg:grid-cols-3 gap-6 min-h-[500px] h-[calc(100vh-350px)]">
+      {/* Lista de Notas Lateral - Esconde no mobile se uma nota estiver selecionada */}
+      <Card className={`glass-card lg:col-span-1 overflow-hidden flex flex-col rounded-[32px] border-none shadow-xl bg-card/60 ${selected ? 'hidden lg:flex' : 'flex'}`}>
+        <CardHeader className="pb-4 pt-6 flex flex-row items-center justify-between shrink-0">
+          <CardTitle className="text-xs font-black uppercase tracking-widest text-muted-foreground">Meus Resumos</CardTitle>
+          <Button size="icon" variant="ghost" onClick={createNote} className="h-9 w-9 rounded-xl bg-primary/10 text-primary hover:bg-primary/20">
+            <Plus className="h-5 w-5" />
           </Button>
         </CardHeader>
-        <CardContent className="space-y-1 overflow-y-auto flex-1 pr-2 custom-scrollbar">
-          {notes.length === 0 && (
-            <p className="text-sm text-muted-foreground text-center py-8">Nenhuma nota por aqui.</p>
-          )}
-          {notes.map((note) => (
-            <div
-              key={note.id}
-              className={`flex items-center gap-3 rounded-lg p-3 cursor-pointer group transition-all border border-transparent ${
-                selected?.id === note.id ? "bg-primary/10 border-primary/20" : "hover:bg-muted/50"
-              }`}
-              onClick={() => selectNote(note)}
-            >
-              <div className={`p-2 rounded-md ${selected?.id === note.id ? "bg-primary/20" : "bg-muted"}`}>
-                <FileText className={`h-4 w-4 ${selected?.id === note.id ? "text-primary" : "text-muted-foreground"}`} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-foreground truncate">{note.title}</p>
-                <p className="text-[10px] text-muted-foreground uppercase">
-                  {format(new Date(note.updated_at), "dd MMM · HH:mm")}
-                </p>
-              </div>
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-7 w-7 opacity-0 group-hover:opacity-100 text-destructive hover:bg-destructive/10"
-                onClick={(e) => { e.stopPropagation(); deleteNote(note.id); }}
+        <CardContent className="space-y-2 overflow-y-auto flex-1 px-4 pb-6 no-scrollbar">
+          {loading ? (
+            <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin text-primary opacity-20" /></div>
+          ) : notes.length === 0 ? (
+            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground text-center py-12 opacity-30">Vazio</p>
+          ) : (
+            notes.map((note) => (
+              <div
+                key={note.id}
+                className={`flex items-center gap-3 rounded-2xl p-4 cursor-pointer transition-all border ${
+                  selected?.id === note.id ? "bg-card border-primary/30 shadow-md" : "hover:bg-muted/10 border-transparent"
+                } group`}
+                onClick={() => selectNote(note)}
               >
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            </div>
-          ))}
+                <div className={`h-10 w-10 flex items-center justify-center rounded-xl ${selected?.id === note.id ? "bg-primary text-white" : "bg-muted/30 text-muted-foreground"}`}>
+                  <FileText className="h-5 w-5" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-bold truncate">{note.title}</p>
+                  <p className="text-[10px] font-black uppercase opacity-40">
+                    {format(new Date(note.updated_at), "dd MMM")}
+                  </p>
+                </div>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-8 w-8 text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+                  onClick={(e) => { e.stopPropagation(); deleteNote(note.id); }}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            ))
+          )}
         </CardContent>
       </Card>
 
       {/* Editor de Texto */}
-      <Card className="glass-card lg:col-span-2 flex flex-col overflow-hidden">
-        <CardContent className="pt-6 flex-1 flex flex-col space-y-4">
+      <Card className={`glass-card lg:col-span-2 flex flex-col overflow-hidden rounded-[32px] border-none shadow-xl bg-card/60 ${!selected ? 'hidden lg:flex' : 'flex'}`}>
+        <CardContent className="pt-6 flex-1 flex flex-col px-6">
           {selected ? (
             <>
-              <div className="flex items-center justify-between shrink-0">
+              <div className="flex items-center justify-between mb-6 gap-4">
+                <Button variant="ghost" size="icon" className="lg:hidden h-10 w-10 rounded-xl" onClick={() => setSelected(null)}>
+                  <ChevronLeft className="h-6 w-6" />
+                </Button>
                 <div className="flex-1">
                    <Input
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
-                    className="text-xl font-bold border-none bg-transparent px-0 focus-visible:ring-0 placeholder:opacity-30"
+                    className="text-xl font-black border-none bg-transparent px-0 focus-visible:ring-0 placeholder:opacity-20 tracking-tighter"
                     placeholder="Título do resumo..."
                   />
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-4">
                   {saving ? (
-                    <span className="text-[10px] flex items-center text-muted-foreground animate-pulse">
-                      <Loader2 className="mr-1 h-3 w-3 animate-spin" /> SALVANDO...
-                    </span>
+                    <Loader2 className="h-4 w-4 animate-spin text-primary" />
                   ) : lastSaved && (
-                    <span className="text-[10px] flex items-center text-emerald-500 font-medium">
-                      <Check className="mr-1 h-3 w-3" /> SALVO
-                    </span>
+                    <Check className="h-4 w-4 text-emerald-500" />
                   )}
-                  <Button size="sm" onClick={saveNote} disabled={saving} className="shadow-md">
-                    <Save className="mr-2 h-4 w-4" /> Salvar
+                  <Button size="sm" onClick={saveNote} disabled={saving} className="rounded-xl px-6 font-black uppercase text-[10px] tracking-widest shadow-lg shadow-primary/20">
+                    Salvar
                   </Button>
                 </div>
               </div>
@@ -183,19 +201,14 @@ export function DisciplineNotes({ disciplineId }: { disciplineId: string }) {
               <Textarea
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
-                className="flex-1 min-h-[400px] resize-none border-none bg-muted/20 p-4 focus-visible:ring-1 focus-visible:ring-primary/20 leading-relaxed text-base"
-                placeholder="Comece a escrever seu resumo da aula aqui..."
+                className="flex-1 min-h-[300px] resize-none border-none bg-muted/20 rounded-3xl p-6 focus-visible:ring-0 leading-relaxed text-sm font-medium text-foreground/80 scrollbar-hide"
+                placeholder="Desenvolva seu raciocínio aqui..."
               />
             </>
           ) : (
-            <div className="flex flex-col items-center justify-center h-full text-muted-foreground py-20">
-              <div className="bg-muted/30 p-6 rounded-full mb-4">
-                <FileText className="h-12 w-12 opacity-20" />
-              </div>
-              <h3 className="font-medium text-foreground">Editor de Resumos</h3>
-              <p className="text-sm max-w-[250px] text-center mt-1">
-                Selecione uma nota ao lado ou crie uma nova para começar a estudar.
-              </p>
+            <div className="flex flex-col items-center justify-center h-full text-muted-foreground py-20 animate-pulse">
+              <FileText className="h-16 w-16 mb-4 opacity-10" />
+              <p className="text-[10px] font-black uppercase tracking-[0.3em] opacity-30">Selecione um resumo</p>
             </div>
           )}
         </CardContent>
