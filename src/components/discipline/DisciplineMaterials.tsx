@@ -5,9 +5,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Link as LinkIcon, FileIcon, ImageIcon, Trash2, ExternalLink, Loader2, CloudUpload } from "lucide-react";
+import { Plus, Link as LinkIcon, FileIcon, ImageIcon, Trash2, ExternalLink, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 interface Material {
@@ -22,7 +23,6 @@ export function DisciplineMaterials({ disciplineId }: { disciplineId: string }) 
   const { user } = useAuth();
   const { toast } = useToast();
   const [materials, setMaterials] = useState<Material[]>([]);
-  const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [type, setType] = useState<string>("link");
@@ -32,34 +32,22 @@ export function DisciplineMaterials({ disciplineId }: { disciplineId: string }) 
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (disciplineId) {
-      loadMaterials();
-    }
+    loadMaterials();
   }, [disciplineId]);
 
   async function loadMaterials() {
-    try {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from("materials")
-        .select("*")
-        .eq("discipline_id", disciplineId)
-        .order("created_at", { ascending: false });
-      
-      if (error) throw error;
-      setMaterials(data ?? []);
-    } catch (err) {
-      console.error("Erro ao carregar materiais:", err);
-    } finally {
-      setLoading(false);
-    }
+    const { data } = await supabase
+      .from("materials")
+      .select("*")
+      .eq("discipline_id", disciplineId)
+      .order("created_at", { ascending: false });
+    setMaterials(data ?? []);
   }
 
   async function addMaterial() {
-    if (!title.trim() || !user || !disciplineId) return;
+    if (!title.trim() || !user) return;
 
     try {
-      setUploading(true);
       if (type === "link") {
         let formattedUrl = url.trim();
         if (formattedUrl && !/^https?:\/\//i.test(formattedUrl)) {
@@ -81,9 +69,10 @@ export function DisciplineMaterials({ disciplineId }: { disciplineId: string }) 
           return;
         }
         
+        setUploading(true);
         const fileExt = file.name.split('.').pop();
-        const safeFileName = `${Math.random().toString(36).substring(7)}.${fileExt}`;
-        const path = `${user.id}/${disciplineId}/${Date.now()}_${safeFileName}`;
+        const fileName = `${Math.random()}.${fileExt}`;
+        const path = `${user.id}/${disciplineId}/${Date.now()}_${fileName}`;
         
         const { error: upErr } = await supabase.storage.from("materials").upload(path, file);
         if (upErr) throw upErr;
@@ -112,7 +101,6 @@ export function DisciplineMaterials({ disciplineId }: { disciplineId: string }) 
   }
 
   async function deleteMaterial(m: Material) {
-    if (!confirm("Excluir este material permanentemente?")) return;
     try {
       setDeletingId(m.id);
       if (m.file_path) {
@@ -121,7 +109,7 @@ export function DisciplineMaterials({ disciplineId }: { disciplineId: string }) 
       const { error } = await supabase.from("materials").delete().eq("id", m.id);
       if (error) throw error;
       
-      setMaterials(prev => prev.filter(item => item.id !== m.id));
+      setMaterials(materials.filter(item => item.id !== m.id));
       toast({ title: "Removido com sucesso" });
     } catch (error: any) {
       toast({ title: "Erro ao deletar", description: error.message, variant: "destructive" });
@@ -135,36 +123,28 @@ export function DisciplineMaterials({ disciplineId }: { disciplineId: string }) 
     return data.publicUrl;
   }
 
-  const iconMap: Record<string, any> = { link: LinkIcon, file: FileIcon, image: ImageIcon };
+  const iconMap = { link: LinkIcon, file: FileIcon, image: ImageIcon };
 
   return (
-    <Card className="glass-card border-none shadow-xl bg-card/60 rounded-[40px] overflow-hidden">
-      <CardHeader className="pb-4 pt-8 px-8 flex flex-row items-center justify-between">
-        <CardTitle className="text-sm font-black uppercase tracking-widest text-foreground/80">
-          Repositório de Mídia
-        </CardTitle>
+    <Card className="glass-card">
+      <CardHeader className="pb-3 flex flex-row items-center justify-between">
+        <CardTitle className="text-base">Materiais e Links</CardTitle>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button size="sm" className="rounded-xl h-9 px-4 gap-2 shadow-lg shadow-primary/20">
-              <Plus className="h-4 w-4" /> Novo
-            </Button>
+            <Button size="sm" variant="outline"><Plus className="mr-1 h-3 w-3" /> Adicionar</Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[425px] rounded-[32px] border-none shadow-2xl">
-            <DialogHeader>
-              <DialogTitle className="text-xl font-black tracking-tight">Adicionar Material</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-5 pt-4">
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader><DialogTitle>Novo Material</DialogTitle></DialogHeader>
+            <div className="space-y-4 pt-4">
               <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase tracking-widest ml-1 opacity-60">Título</Label>
-                <Input className="rounded-xl bg-muted/30 border-none" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Ex: Notas de Microeconomia" />
+                <Label>Título do Material</Label>
+                <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Ex: PDF da Aula 01" />
               </div>
               <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase tracking-widest ml-1 opacity-60">Tipo</Label>
+                <Label>Tipo de Conteúdo</Label>
                 <Select value={type} onValueChange={setType}>
-                  <SelectTrigger className="rounded-xl bg-muted/30 border-none">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="rounded-xl">
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
                     <SelectItem value="link">Link da Web</SelectItem>
                     <SelectItem value="file">Arquivo ou Foto</SelectItem>
                   </SelectContent>
@@ -172,73 +152,64 @@ export function DisciplineMaterials({ disciplineId }: { disciplineId: string }) 
               </div>
               {type === "link" ? (
                 <div className="space-y-2">
-                  <Label className="text-[10px] font-black uppercase tracking-widest ml-1 opacity-60">URL</Label>
-                  <Input className="rounded-xl bg-muted/30 border-none" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="www.github.com" />
+                  <Label>Endereço (URL)</Label>
+                  <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="www.exemplo.com" />
                 </div>
               ) : (
                 <div className="space-y-2">
-                  <Label className="text-[10px] font-black uppercase tracking-widest ml-1 opacity-60">Arquivo</Label>
-                  <div className="flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-2xl bg-muted/10 hover:bg-muted/20 transition-all cursor-pointer relative">
-                    <CloudUpload className="h-8 w-8 text-primary opacity-40 mb-2" />
-                    <span className="text-[10px] font-bold text-muted-foreground uppercase">Clique para selecionar</span>
-                    <Input ref={fileRef} type="file" className="absolute inset-0 opacity-0 cursor-pointer" />
-                  </div>
+                  <Label>Selecionar Arquivo</Label>
+                  <Input ref={fileRef} type="file" className="cursor-pointer" />
                 </div>
               )}
-              <Button onClick={addMaterial} disabled={uploading} className="w-full h-12 rounded-2xl font-black uppercase tracking-widest text-xs">
-                {uploading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Plus className="h-4 w-4 mr-2" />}
-                {uploading ? "Enviando..." : "Salvar no EduFlow"}
+              <Button onClick={addMaterial} disabled={uploading} className="w-full">
+                {uploading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Enviando arquivo...
+                  </>
+                ) : "Salvar no App"}
               </Button>
             </div>
           </DialogContent>
         </Dialog>
       </CardHeader>
-      
-      <CardContent className="px-8 pb-8">
-        {loading ? (
-          <div className="py-12 flex flex-col items-center">
-            <Loader2 className="h-6 w-6 animate-spin text-primary opacity-20" />
-          </div>
-        ) : materials.length === 0 ? (
-          <div className="py-12 border-2 border-dashed border-border/40 rounded-[32px] bg-muted/5 text-center">
-            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground opacity-30">Nenhum arquivo anexado</p>
-          </div>
+      <CardContent>
+        {materials.length === 0 ? (
+          <p className="text-sm text-muted-foreground text-center py-8">Nenhum material cadastrado nesta disciplina.</p>
         ) : (
-          <div className="grid grid-cols-1 gap-3">
+          <div className="space-y-2">
             {materials.map((m) => {
-              const Icon = iconMap[m.type] || FileIcon;
+              const Icon = iconMap[m.type as keyof typeof iconMap] ?? FileIcon;
               const isDeleting = deletingId === m.id;
 
               return (
-                <div key={m.id} className="flex items-center gap-4 p-4 rounded-3xl bg-muted/10 border border-border/20 group hover:border-primary/20 transition-all">
-                  <div className="h-10 w-10 rounded-xl bg-card flex items-center justify-center shadow-sm">
-                    <Icon className="h-5 w-5 text-primary" />
+                <div key={m.id} className="flex items-center gap-3 rounded-lg p-3 bg-muted/40 border border-transparent hover:border-border/50 transition-all group">
+                  <div className="p-2 bg-background rounded-md shadow-sm">
+                    <Icon className="h-4 w-4 text-accent shrink-0" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-bold truncate leading-none mb-1">{m.title}</p>
-                    <p className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground opacity-50">{m.type}</p>
+                    <p className="text-sm font-medium text-foreground truncate">{m.title}</p>
+                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{m.type}</p>
                   </div>
-                  <div className="flex items-center gap-1">
-                    {(m.url || m.file_path) && (
-                      <a
-                        href={m.url ?? getFileUrl(m.file_path!)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="h-9 w-9 flex items-center justify-center rounded-xl hover:bg-primary/10 text-primary transition-all"
-                      >
-                        <ExternalLink className="h-4 w-4" />
-                      </a>
-                    )}
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      disabled={isDeleting}
-                      className="h-9 w-9 text-destructive hover:bg-destructive/10 rounded-xl transition-all"
-                      onClick={() => deleteMaterial(m)}
+                  {(m.url || m.file_path) && (
+                    <a
+                      href={m.url ?? getFileUrl(m.file_path!)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-2 text-muted-foreground hover:text-accent transition-colors"
                     >
-                      {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                    </Button>
-                  </div>
+                      <ExternalLink className="h-4 w-4" />
+                    </a>
+                  )}
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    disabled={isDeleting}
+                    className="h-8 w-8 text-destructive hover:bg-destructive/10 sm:opacity-0 group-hover:opacity-100 transition-opacity"
+                    onClick={() => deleteMaterial(m)}
+                  >
+                    {isDeleting ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                  </Button>
                 </div>
               );
             })}

@@ -4,7 +4,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { BookOpen, Clock, AlertTriangle, CheckCircle2, Calendar, LayoutDashboard, ArrowRight, Loader2 } from "lucide-react";
+import { BookOpen, Clock, AlertTriangle, CheckCircle2, Calendar, LayoutDashboard, ArrowRight } from "lucide-react";
 import { format, isToday, isTomorrow, differenceInDays, startOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useNavigate } from "react-router-dom";
@@ -38,34 +38,30 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (user) {
-      loadDashboard();
-    }
+    if (!user) return;
+    loadDashboard();
   }, [user]);
 
   async function loadDashboard() {
-    if (!user?.id) return;
-    
     const today = new Date().getDay();
 
     try {
-      setLoading(true);
       const [schedRes, remRes, discRes, profileRes] = await Promise.all([
         supabase
           .from("discipline_schedules")
           .select("day_of_week, start_time, end_time, room, discipline_id, disciplines(name, color)")
           .eq("day_of_week", today)
-          .eq("user_id", user.id),
+          .eq("user_id", user?.id),
         supabase
           .from("reminders")
           .select("*, disciplines(name, color)")
           .eq("completed", false)
-          .eq("user_id", user.id)
+          .eq("user_id", user?.id)
           .gte("due_date", startOfDay(new Date()).toISOString())
           .order("due_date", { ascending: true })
-          .limit(5),
-        supabase.from("disciplines").select("id").eq("user_id", user.id).eq("is_extra_course", false),
-        supabase.from("profiles").select("semester_start, semester_end").eq("user_id", user.id).maybeSingle(),
+          .limit(8),
+        supabase.from("disciplines").select("id").eq("user_id", user?.id).eq("is_extra_course", false),
+        supabase.from("profiles").select("semester_start, semester_end").eq("user_id", user!.id).maybeSingle(),
       ]);
 
       if (schedRes.data) {
@@ -73,7 +69,7 @@ export default function Dashboard() {
           schedRes.data.map((s: any) => ({
             discipline_name: s.disciplines?.name ?? "Sem nome",
             discipline_id: s.discipline_id,
-            color: s.disciplines?.color ?? "#3b82f6",
+            color: s.disciplines?.color ?? "#6366f1",
             start_time: s.start_time,
             end_time: s.end_time,
             room: s.room,
@@ -127,139 +123,133 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <div className="flex h-[80vh] flex-col items-center justify-center bg-slate-950">
-        <Loader2 className="h-10 w-10 animate-spin text-primary opacity-40" />
-        <p className="mt-4 text-[10px] font-black uppercase tracking-[0.3em] text-slate-500">Sincronizando EduFlow</p>
+      <div className="flex h-[60vh] items-center justify-center">
+        <div className="flex flex-col items-center gap-2">
+          <div className="animate-spin h-10 w-10 border-4 border-primary border-t-transparent rounded-full shadow-lg shadow-primary/20" />
+          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground animate-pulse">Sincronizando painel...</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20 px-4 sm:px-0">
-      <header className="flex flex-col sm:flex-row sm:items-end justify-between gap-6 pt-4">
-        <div className="space-y-2">
+    <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in duration-700">
+      <header className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+        <div className="space-y-1">
           <div className="flex items-center gap-2 text-primary">
             <LayoutDashboard className="h-4 w-4" />
-            <span className="text-[10px] font-black uppercase tracking-[0.3em]">Painel de Controle</span>
+            <span className="text-[10px] font-black uppercase tracking-[0.2em]">Dashboard Acadêmico</span>
           </div>
-          <h1 className="text-4xl font-black text-white tracking-tighter leading-none">
-            {user?.user_metadata?.full_name ? `Olá, ${user.user_metadata.full_name.split(' ')[0]}` : 'Olá, Estudante'}
-          </h1>
-          <p className="text-slate-500 font-medium italic text-sm">
+          <h1 className="text-4xl font-black text-foreground tracking-tighter">Olá, pronto para focar?</h1>
+          <p className="text-muted-foreground font-medium italic">
             {disciplineCount === 0 
-              ? "Pronto para organizar seu novo semestre?"
-              : `Você tem ${disciplineCount} matérias em andamento.`}
+              ? "Comece cadastrando suas disciplinas para organizar o semestre."
+              : `Você tem ${disciplineCount} ${disciplineCount === 1 ? 'disciplina ativa' : 'disciplinas ativas'} para gerenciar.`}
           </p>
         </div>
-        <div className="bg-slate-900/50 backdrop-blur-md border border-white/5 px-5 py-3 rounded-[24px] flex items-center gap-3 shadow-2xl">
+        <div className="bg-card/50 backdrop-blur-sm border border-border/50 px-4 py-2 rounded-2xl flex items-center gap-3 shadow-sm">
            <Calendar className="h-4 w-4 text-primary" />
-           <span className="text-xs font-black text-slate-300 uppercase tracking-wider">
+           <span className="text-xs font-bold text-foreground">
               {format(new Date(), "EEEE, dd 'de' MMMM", { locale: ptBR })}
            </span>
         </div>
       </header>
 
-      {/* Grid de estatísticas Rápidas */}
+      {/* Grid de estatísticas */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card onClick={() => navigate('/disciplines')} className="glass-card bg-slate-900/40 border-none shadow-xl hover:-translate-y-1 transition-all cursor-pointer group rounded-[32px]">
-          <CardContent className="flex items-center gap-5 p-7">
-            <div className="flex h-16 w-16 items-center justify-center rounded-[22px] bg-primary/10 text-primary group-hover:bg-primary group-hover:text-white transition-all duration-500 shadow-inner">
-              <BookOpen className="h-8 w-8" />
+        <Card onClick={() => navigate('/disciplines')} className="glass-card border-none shadow-md hover:shadow-xl hover:-translate-y-1 transition-all cursor-pointer group">
+          <CardContent className="flex items-center gap-4 p-6">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-500/10 text-indigo-500 group-hover:bg-indigo-500 group-hover:text-white transition-colors">
+              <BookOpen className="h-7 w-7" />
             </div>
             <div>
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">Disciplinas</p>
-              <p className="text-4xl font-black text-white tracking-tighter">{disciplineCount}</p>
+              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Grade Regular</p>
+              <p className="text-3xl font-black text-foreground">{disciplineCount}</p>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="glass-card bg-slate-900/40 border-none shadow-xl rounded-[32px]">
-          <CardContent className="flex items-center gap-5 p-7">
-            <div className="flex h-16 w-16 items-center justify-center rounded-[22px] bg-amber-500/10 text-amber-500 shadow-inner">
-              <Clock className="h-8 w-8" />
+        <Card className="glass-card border-none shadow-md hover:shadow-xl transition-all group">
+          <CardContent className="flex items-center gap-4 p-6">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-500/10 text-amber-500 group-hover:bg-amber-500 group-hover:text-white transition-colors">
+              <Clock className="h-7 w-7" />
             </div>
             <div>
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">Aulas Hoje</p>
-              <p className="text-4xl font-black text-white tracking-tighter">{todayClasses.length}</p>
+              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Hoje</p>
+              <p className="text-3xl font-black text-foreground">{todayClasses.length} Aulas</p>
             </div>
           </CardContent>
         </Card>
 
-        <Card onClick={() => navigate('/reminders')} className="glass-card bg-slate-900/40 border-none shadow-xl hover:-translate-y-1 transition-all cursor-pointer group rounded-[32px]">
-          <CardContent className="flex items-center gap-5 p-7">
-            <div className="flex h-16 w-16 items-center justify-center rounded-[22px] bg-rose-500/10 text-rose-500 group-hover:bg-rose-500 group-hover:text-white transition-all duration-500 shadow-inner">
-              <AlertTriangle className="h-8 w-8" />
+        <Card onClick={() => navigate('/reminders')} className="glass-card border-none shadow-md hover:shadow-xl hover:-translate-y-1 transition-all cursor-pointer group">
+          <CardContent className="flex items-center gap-4 p-6">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-rose-500/10 text-rose-500 group-hover:bg-rose-500 group-hover:text-white transition-colors">
+              <AlertTriangle className="h-7 w-7" />
             </div>
             <div>
-              <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-1">Pendências</p>
-              <p className="text-4xl font-black text-white tracking-tighter">{reminders.length}</p>
+              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Prazos</p>
+              <p className="text-3xl font-black text-foreground">{reminders.length} Alertas</p>
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Progresso do Semestre Otimizado */}
-      <Card className="border-none bg-slate-900/40 rounded-[40px] overflow-hidden shadow-2xl ring-1 ring-white/5">
-        <CardHeader className="pb-4 px-10 pt-10">
-          <CardTitle className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 flex items-center justify-between">
-            Status do Período Letivo
-            <span className="text-primary text-xl font-black">{semesterProgress}%</span>
+      {/* Progresso do Semestre */}
+      <Card className="glass-card border-none shadow-inner bg-muted/20 rounded-[32px] overflow-hidden">
+        <CardHeader className="pb-3 px-8 pt-8">
+          <CardTitle className="text-xs font-black uppercase tracking-[0.2em] text-muted-foreground flex items-center justify-between">
+            Jornada do Semestre
+            <span className="text-primary font-black text-lg">{semesterProgress}%</span>
           </CardTitle>
         </CardHeader>
-        <CardContent className="px-10 pb-10">
-          <Progress value={semesterProgress} className="h-5 bg-slate-950 shadow-inner rounded-full" />
+        <CardContent className="px-8 pb-8">
+          <Progress value={semesterProgress} className="h-4 shadow-sm bg-background/50" />
           {semesterProgress === 0 && (
             <button 
               onClick={() => navigate('/settings')}
-              className="mt-6 flex items-center gap-2 text-[10px] font-black text-primary hover:gap-4 transition-all uppercase tracking-widest group"
+              className="mt-4 flex items-center gap-2 text-[10px] font-black text-primary hover:gap-3 transition-all uppercase tracking-widest"
             >
-              Defina as datas do semestre nas configurações <ArrowRight className="h-3 w-3 group-hover:translate-x-1 transition-transform" />
+              Configure seu período letivo para ativar o monitoramento <ArrowRight className="h-3 w-3" />
             </button>
           )}
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 lg:grid-cols-5 gap-10">
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
         <div className="lg:col-span-3 space-y-6">
-          <div className="flex items-center justify-between px-2">
-            <h3 className="text-xs font-black uppercase tracking-[0.2em] text-slate-400 flex items-center gap-3">
-              <div className="h-2 w-2 rounded-full bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.5)] animate-pulse" />
-              Cronograma do Dia
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-black uppercase tracking-widest flex items-center gap-2">
+              <div className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
+              Sessões de Hoje
             </h3>
           </div>
           
           <div className="grid gap-4">
             {todayClasses.length === 0 ? (
-              <div className="p-16 border-2 border-dashed border-slate-800 rounded-[48px] flex flex-col items-center justify-center text-slate-500 bg-slate-900/20">
-                <p className="text-sm font-bold italic opacity-40">Sem aulas registradas para hoje.</p>
-                <button onClick={() => navigate('/disciplines')} className="text-[10px] mt-5 font-black uppercase text-primary hover:tracking-widest transition-all">Configurar Grade Horária</button>
+              <div className="p-12 border-2 border-dashed rounded-[40px] flex flex-col items-center justify-center text-muted-foreground bg-muted/5">
+                <p className="text-sm font-medium italic opacity-60">Nenhuma aula programada para este dia da semana.</p>
+                <button onClick={() => navigate('/disciplines')} className="text-[10px] mt-4 font-black uppercase text-primary hover:underline">Ver todas as matérias</button>
               </div>
             ) : (
               todayClasses.map((c, i) => (
                 <button
                   key={i}
                   onClick={() => navigate(`/disciplines/${c.discipline_id}`)}
-                  className="group flex items-center gap-6 w-full rounded-[32px] p-6 bg-slate-900/40 border border-white/5 hover:border-primary/30 hover:bg-slate-900/60 transition-all text-left shadow-lg"
+                  className="group flex items-center gap-5 w-full rounded-[28px] p-5 bg-card border border-border/40 hover:border-primary/40 hover:shadow-2xl hover:shadow-primary/10 transition-all text-left"
                 >
-                  <div className="h-16 w-16 rounded-[22px] flex items-center justify-center text-white font-black shadow-2xl group-hover:scale-105 transition-transform" style={{ backgroundColor: c.color }}>
+                  <div className="h-14 w-14 rounded-2xl flex items-center justify-center text-white font-black shadow-lg group-hover:scale-110 transition-transform" style={{ backgroundColor: c.color }}>
                     {c.discipline_name.slice(0, 1).toUpperCase()}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-black text-xl text-white group-hover:text-primary transition-colors truncate tracking-tight">
+                    <p className="font-black text-lg text-foreground group-hover:text-primary transition-colors truncate">
                       {c.discipline_name}
                     </p>
-                    <div className="flex items-center gap-4 text-[11px] font-bold text-slate-500 mt-2">
-                      <span className="flex items-center gap-1.5 bg-slate-950/50 px-3 py-1.5 rounded-full tracking-tight">
-                        <Clock className="h-3.5 w-3.5 text-primary" /> {c.start_time?.slice(0, 5)} - {c.end_time?.slice(0, 5)}
-                      </span>
-                      {c.room && (
-                        <span className="flex items-center gap-1.5 bg-slate-950/50 px-3 py-1.5 rounded-full uppercase tracking-widest text-[9px] font-black">
-                          SALA {c.room}
-                        </span>
-                      )}
+                    <div className="flex items-center gap-3 text-xs font-bold text-muted-foreground mt-1">
+                      <span className="flex items-center gap-1"><Clock className="h-3.5 w-3.5 text-primary" /> {c.start_time?.slice(0, 5)} - {c.end_time?.slice(0, 5)}</span>
+                      {c.room && <span className="bg-muted/80 px-2 py-0.5 rounded-lg text-[10px] font-black tracking-widest">SALA {c.room}</span>}
                     </div>
                   </div>
-                  <ArrowRight className="h-5 w-5 text-slate-700 group-hover:text-primary group-hover:translate-x-1 transition-all mr-2" />
+                  <ArrowRight className="h-5 w-5 text-muted-foreground/30 group-hover:text-primary transition-colors mr-2" />
                 </button>
               ))
             )}
@@ -267,36 +257,35 @@ export default function Dashboard() {
         </div>
 
         <div className="lg:col-span-2 space-y-6">
-          <h3 className="text-xs font-black uppercase tracking-[0.2em] text-rose-500 flex items-center gap-3 px-2">
+          <h3 className="text-sm font-black uppercase tracking-widest flex items-center gap-2 text-rose-500">
             <AlertTriangle className="h-4 w-4" />
-            Urgências Acadêmicas
+            Prazos Críticos
           </h3>
           <div className="space-y-4">
             {reminders.length === 0 ? (
-              <div className="p-12 rounded-[40px] bg-emerald-500/5 border border-emerald-500/10 flex flex-col items-center text-center">
-                <div className="h-14 w-14 rounded-full bg-emerald-500/10 flex items-center justify-center mb-4">
-                  <CheckCircle2 className="h-7 w-7 text-emerald-500 opacity-60" />
+              <div className="p-10 rounded-[32px] bg-emerald-500/5 border border-emerald-500/10 flex flex-col items-center text-center">
+                <div className="h-12 w-12 rounded-full bg-emerald-500/20 flex items-center justify-center mb-3">
+                  <CheckCircle2 className="h-6 w-6 text-emerald-500" />
                 </div>
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-600/60">Tudo em dia</p>
+                <p className="text-xs font-black uppercase tracking-widest text-emerald-600">Foco Total</p>
+                <p className="text-[10px] text-emerald-600/70 mt-1 uppercase">Nenhuma entrega pendente detectada.</p>
               </div>
             ) : (
               reminders.map((r) => {
                 const urgency = getUrgencyLabel(r.due_date);
                 return (
-                  <div key={r.id} onClick={() => navigate('/reminders')} className="cursor-pointer group flex flex-col gap-4 rounded-[32px] p-6 bg-slate-900/40 border border-white/5 hover:border-rose-500/30 transition-all shadow-xl">
-                    <div className="flex items-start justify-between gap-4">
+                  <div key={r.id} onClick={() => navigate('/reminders')} className="cursor-pointer group flex flex-col gap-3 rounded-[28px] p-5 bg-card border border-border/40 hover:border-rose-500/40 transition-all shadow-sm">
+                    <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <p className="font-black text-base text-white leading-tight group-hover:text-rose-500 transition-colors tracking-tight">{r.title}</p>
-                        <div className="flex items-center gap-2.5 mt-3">
-                           <div className="h-2.5 w-2.5 rounded-full shadow-[0_0_8px_currentColor]" style={{ backgroundColor: r.discipline_color || '#475569' }} />
-                           <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest truncate max-w-[150px]">
+                        <p className="font-black text-sm text-foreground leading-tight group-hover:text-rose-500 transition-colors">{r.title}</p>
+                        <div className="flex items-center gap-2 mt-2">
+                           <div className="h-2 w-2 rounded-full" style={{ backgroundColor: r.discipline_color }} />
+                           <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest truncate max-w-[140px]">
                               {r.discipline_name || "Geral"}
                            </span>
                         </div>
                       </div>
-                      <Badge variant={urgency.variant} className="shrink-0 text-[9px] font-black px-3 py-1.5 tracking-widest rounded-full uppercase border-none shadow-lg">
-                        {urgency.label}
-                      </Badge>
+                      <Badge variant={urgency.variant} className="shrink-0 text-[9px] font-black px-2 py-1 tracking-widest">{urgency.label}</Badge>
                     </div>
                   </div>
                 );

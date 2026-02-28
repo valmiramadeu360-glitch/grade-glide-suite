@@ -10,7 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { Plus, Bell, Trash2, Calendar, AlertCircle, CheckCircle2, Loader2 } from "lucide-react";
-import { format, isPast, differenceInDays, isToday, isTomorrow, parseISO } from "date-fns";
+import { format, isPast, differenceInDays, isToday, isTomorrow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -35,6 +35,7 @@ export default function Reminders() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
+  // Estados do formulário
   const [title, setTitle] = useState("");
   const [type, setType] = useState("exam");
   const [dueDate, setDueDate] = useState("");
@@ -45,78 +46,65 @@ export default function Reminders() {
   }, [user]);
 
   async function load() {
-    try {
-      const [remRes, discRes] = await Promise.all([
-        supabase
-          .from("reminders")
-          .select("*, disciplines(name)")
-          .eq("user_id", user?.id)
-          .order("due_date", { ascending: true }),
-        supabase
-          .from("disciplines")
-          .select("id, name")
-          .eq("user_id", user?.id)
-          .order("name"),
-      ]);
-      setReminders(remRes.data ?? []);
-      setDisciplines(discRes.data ?? []);
-    } catch (err) {
-      console.error("Erro ao carregar lembretes:", err);
-    } finally {
-      setLoading(false);
-    }
+    const [remRes, discRes] = await Promise.all([
+      supabase
+        .from("reminders")
+        .select("*, disciplines(name)")
+        .eq("user_id", user?.id)
+        .order("due_date", { ascending: true }),
+      supabase
+        .from("disciplines")
+        .select("id, name")
+        .eq("user_id", user?.id)
+        .order("name"),
+    ]);
+    setReminders(remRes.data ?? []);
+    setDisciplines(discRes.data ?? []);
+    setLoading(false);
   }
 
   async function create() {
     if (!title.trim() || !dueDate || !user) {
-      toast({ title: "Dados incompletos", description: "Preencha o título e a data do compromisso.", variant: "destructive" });
+      toast({ title: "Preencha o título e a data", variant: "destructive" });
       return;
     }
 
-    try {
-      setSubmitting(true);
-      const { error } = await supabase.from("reminders").insert({
-        user_id: user.id,
-        title: title.trim(),
-        type,
-        due_date: dueDate, // Mantém a string local do input datetime-local
-        discipline_id: discId === "none" ? null : discId,
-        completed: false
-      });
+    setSubmitting(true);
+    const { error } = await supabase.from("reminders").insert({
+      user_id: user.id,
+      title: title.trim(),
+      type,
+      due_date: new Date(dueDate).toISOString(),
+      discipline_id: discId === "none" ? null : discId,
+    });
 
-      if (error) throw error;
-
-      toast({ title: "Agendado!", description: "Lembrete adicionado ao seu cronograma." });
+    if (error) {
+      toast({ title: "Erro ao criar", description: error.message, variant: "destructive" });
+    } else {
+      toast({ title: "Lembrete criado!" });
       setTitle("");
       setDueDate("");
       setDiscId("none");
       setOpen(false);
       load();
-    } catch (error: any) {
-      toast({ title: "Erro ao salvar", description: error.message, variant: "destructive" });
-    } finally {
-      setSubmitting(false);
     }
+    setSubmitting(false);
   }
 
   async function toggle(r: Reminder) {
-    // Atualização Otimista
-    const newStatus = !r.completed;
-    setReminders(prev => prev.map(item => item.id === r.id ? { ...item, completed: newStatus } : item));
-
     const { error } = await supabase
       .from("reminders")
-      .update({ completed: newStatus })
+      .update({ completed: !r.completed })
       .eq("id", r.id);
     
-    if (error) load(); // Reverte se falhar
+    if (!error) load();
   }
 
   async function remove(id: string) {
     const { error } = await supabase.from("reminders").delete().eq("id", id);
     if (!error) {
-      setReminders(prev => prev.filter(item => item.id !== id));
-      toast({ title: "Removido", description: "O lembrete foi excluído." });
+      toast({ title: "Lembrete removido" });
+      load();
     }
   }
 
@@ -128,9 +116,9 @@ export default function Reminders() {
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center h-[60vh] gap-4">
-        <Loader2 className="h-10 w-10 animate-spin text-primary opacity-30" />
-        <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500">Sincronizando Agenda</p>
+      <div className="flex flex-col items-center justify-center h-80 gap-3">
+        <Loader2 className="h-10 w-10 animate-spin text-primary/50" />
+        <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Sincronizando prazos...</p>
       </div>
     );
   }
@@ -139,36 +127,36 @@ export default function Reminders() {
   const done = reminders.filter((r) => r.completed);
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-700 pb-20 px-4 sm:px-0">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 pt-4">
-        <div className="space-y-1">
-          <h1 className="text-4xl font-black text-white tracking-tighter">Cronograma de Prazos</h1>
-          <p className="text-slate-500 font-medium italic text-sm">Controle total de avaliações e entregas.</p>
+    <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in duration-500 px-2">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-black text-foreground tracking-tight">Cronograma de Prazos</h1>
+          <p className="text-muted-foreground font-medium">Gestão de entregas e avaliações</p>
         </div>
         
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button className="h-12 rounded-2xl px-6 shadow-xl shadow-primary/20 font-black uppercase text-[10px] tracking-widest active:scale-95 transition-all">
+            <Button className="shadow-lg shadow-primary/20 font-bold uppercase text-xs tracking-widest h-12 px-6">
               <Plus className="mr-2 h-4 w-4" /> Novo Lembrete
             </Button>
           </DialogTrigger>
-          <DialogContent className="sm:max-w-[425px] rounded-[32px] border-none bg-slate-900 shadow-2xl">
+          <DialogContent className="sm:max-w-[425px]">
             <DialogHeader>
-              <DialogTitle className="text-xl font-black text-white">Novo Lembrete</DialogTitle>
-              <DialogDescription className="text-slate-400 font-medium tracking-tight">Agende um novo compromisso para suas disciplinas.</DialogDescription>
+              <DialogTitle className="text-xl font-bold">Novo Lembrete</DialogTitle>
+              <DialogDescription>Agende um novo prazo para suas disciplinas.</DialogDescription>
             </DialogHeader>
-            <div className="space-y-6 pt-4">
+            <div className="space-y-5 pt-4">
               <div className="space-y-2">
-                <Label className="font-black text-[10px] uppercase tracking-widest text-slate-500 ml-1">Título do Evento</Label>
-                <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Ex: Entrega do BI" className="h-12 bg-slate-950 border-white/5 rounded-xl text-white placeholder:text-slate-700" />
+                <Label className="font-bold text-xs uppercase text-muted-foreground">Título do Evento</Label>
+                <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Ex: P1 de Microeconomia" className="h-12" />
               </div>
               
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label className="font-black text-[10px] uppercase tracking-widest text-slate-500 ml-1">Categoria</Label>
+                  <Label className="font-bold text-xs uppercase text-muted-foreground">Categoria</Label>
                   <Select value={type} onValueChange={setType}>
-                    <SelectTrigger className="h-12 bg-slate-950 border-white/5 rounded-xl text-white"><SelectValue /></SelectTrigger>
-                    <SelectContent className="rounded-xl">
+                    <SelectTrigger className="h-12"><SelectValue /></SelectTrigger>
+                    <SelectContent>
                       <SelectItem value="exam">Prova 📝</SelectItem>
                       <SelectItem value="assignment">Trabalho 📚</SelectItem>
                       <SelectItem value="other">Outro 📍</SelectItem>
@@ -176,10 +164,10 @@ export default function Reminders() {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label className="font-black text-[10px] uppercase tracking-widest text-slate-500 ml-1">Disciplina</Label>
+                  <Label className="font-bold text-xs uppercase text-muted-foreground">Disciplina</Label>
                   <Select value={discId} onValueChange={setDiscId}>
-                    <SelectTrigger className="h-12 bg-slate-950 border-white/5 rounded-xl text-white"><SelectValue placeholder="Escolha..." /></SelectTrigger>
-                    <SelectContent className="rounded-xl">
+                    <SelectTrigger className="h-12"><SelectValue placeholder="Escolha..." /></SelectTrigger>
+                    <SelectContent>
                       <SelectItem value="none">Geral / Extra</SelectItem>
                       {disciplines.map((d) => (
                         <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
@@ -190,63 +178,64 @@ export default function Reminders() {
               </div>
 
               <div className="space-y-2">
-                <Label className="font-black text-[10px] uppercase tracking-widest text-slate-500 ml-1">Data e Horário</Label>
-                <Input type="datetime-local" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="h-12 bg-slate-950 border-white/5 rounded-xl text-white [color-scheme:dark]" />
+                <Label className="font-bold text-xs uppercase text-muted-foreground">Data e Horário Limite</Label>
+                <Input type="datetime-local" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="h-12" />
               </div>
 
-              <Button onClick={create} disabled={submitting} className="w-full h-14 rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl shadow-primary/20">
-                {submitting ? <Loader2 className="h-5 w-5 animate-spin" /> : "Agendar Compromisso"}
+              <Button onClick={create} disabled={submitting} className="w-full h-12 font-bold uppercase tracking-widest shadow-lg">
+                {submitting ? <Loader2 className="h-5 w-5 animate-spin" /> : "Agendar Lembrete"}
               </Button>
             </div>
           </DialogContent>
         </Dialog>
       </div>
 
-      <div className="space-y-10">
-        <section className="space-y-5">
-          <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-primary flex items-center gap-3">
-            <AlertCircle className="h-4 w-4" /> Próximas Entregas ({pending.length})
+      <div className="space-y-8">
+        {/* Seção de Pendentes */}
+        <section className="space-y-4">
+          <h3 className="text-sm font-black uppercase tracking-widest text-primary flex items-center gap-2">
+            <AlertCircle className="h-4 w-4" /> Pendentes ({pending.length})
           </h3>
           
           {pending.length === 0 ? (
-            <div className="p-16 text-center border-2 border-dashed border-white/5 rounded-[48px] bg-slate-900/20">
-              <CheckCircle2 className="h-12 w-12 text-emerald-500 mx-auto mb-4 opacity-20" />
-              <p className="text-sm font-bold text-slate-500 italic">Tudo em dia por enquanto.</p>
+            <div className="p-12 text-center border-2 border-dashed rounded-[32px] bg-muted/10">
+              <CheckCircle2 className="h-10 w-10 text-emerald-500 mx-auto mb-3 opacity-50" />
+              <p className="text-sm text-muted-foreground italic">Nenhum compromisso para os próximos dias.</p>
             </div>
           ) : (
-            <div className="grid gap-4">
+            <div className="grid gap-3">
               {pending.map((r) => {
-                const date = parseISO(r.due_date);
+                const date = new Date(r.due_date);
                 const overdue = isPast(date) && !isToday(date);
-                const urgent = differenceInDays(date, new Date()) <= 2;
+                const isUrgent = differenceInDays(date, new Date()) <= 2;
                 
                 return (
                   <div key={r.id} className={cn(
-                    "flex items-center gap-5 rounded-[32px] p-5 transition-all border group",
-                    overdue ? "bg-rose-500/5 border-rose-500/20" : "bg-slate-900/40 border-white/5 hover:border-primary/30 shadow-xl"
+                    "flex items-center gap-4 rounded-2xl p-4 transition-all border group",
+                    overdue ? "bg-rose-500/5 border-rose-500/20" : "bg-card border-border/50 hover:border-primary/40 shadow-sm"
                   )}>
-                    <Checkbox checked={r.completed} onCheckedChange={() => toggle(r)} className="h-6 w-6 rounded-lg border-primary/30 data-[state=checked]:bg-primary transition-all" />
+                    <Checkbox checked={r.completed} onCheckedChange={() => toggle(r)} className="h-5 w-5 rounded-md border-primary/30" />
                     
                     <div className="flex-1 min-w-0">
-                      <p className={cn("font-black text-base text-white tracking-tight leading-none mb-2", overdue && "text-rose-500")}>{r.title}</p>
-                      <div className="flex flex-wrap items-center gap-3">
-                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
-                          <Calendar className="h-3.5 w-3.5 text-primary" />
+                      <p className={cn("font-bold text-sm text-foreground", overdue && "text-rose-600")}>{r.title}</p>
+                      <div className="flex flex-wrap items-center gap-2 mt-1">
+                        <span className="text-[10px] font-bold text-muted-foreground uppercase flex items-center gap-1">
+                          <Calendar className="h-3 w-3" />
                           {format(date, "EEEE, dd 'de' MMM 'às' HH:mm", { locale: ptBR })}
                         </span>
                         {r.disciplines?.name && (
-                          <span className="text-[9px] font-black uppercase tracking-tighter bg-primary/10 text-primary px-3 py-1 rounded-full">
+                          <Badge variant="outline" className="text-[9px] py-0 px-1.5 h-4 font-bold border-primary/20 text-primary uppercase">
                             {r.disciplines.name}
-                          </span>
+                          </Badge>
                         )}
                       </div>
                     </div>
 
-                    <Badge variant={overdue ? "destructive" : urgent ? "default" : "secondary"} className="text-[9px] font-black px-3 py-1.5 tracking-widest rounded-full uppercase border-none shadow-lg">
-                      {overdue ? "ATRASADO" : urgent ? "URGENTE" : typeLabels[r.type]}
+                    <Badge variant={overdue ? "destructive" : isUrgent ? "default" : "secondary"} className="text-[10px] font-bold shrink-0">
+                      {overdue ? "ATRASADO" : isUrgent ? "URGENTE" : typeLabels[r.type]}
                     </Badge>
 
-                    <Button size="icon" variant="ghost" className="h-10 w-10 text-slate-700 opacity-0 group-hover:opacity-100 transition-all hover:bg-rose-500/10 hover:text-rose-500 rounded-xl" onClick={() => remove(r.id)}>
+                    <Button size="icon" variant="ghost" className="h-9 w-9 text-destructive opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive/10" onClick={() => remove(r.id)}>
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
@@ -256,18 +245,19 @@ export default function Reminders() {
           )}
         </section>
 
+        {/* Seção de Concluídos */}
         {done.length > 0 && (
-          <section className="space-y-5 pt-6 border-t border-white/5">
-            <h3 className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-600 flex items-center gap-3">
-              <CheckCircle2 className="h-4 w-4" /> Concluídos
+          <section className="space-y-4 pt-4">
+            <h3 className="text-sm font-black uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4" /> Finalizados
             </h3>
-            <div className="grid gap-3 opacity-40 grayscale hover:grayscale-0 hover:opacity-70 transition-all">
+            <div className="grid gap-2 opacity-60">
               {done.map((r) => (
-                <div key={r.id} className="flex items-center gap-5 rounded-3xl p-4 bg-slate-900/40 border border-transparent group">
-                  <Checkbox checked={r.completed} onCheckedChange={() => toggle(r)} className="h-5 w-5 rounded-lg" />
-                  <p className="flex-1 text-sm text-slate-400 line-through font-bold truncate tracking-tight">{r.title}</p>
-                  <Button size="icon" variant="ghost" className="h-8 w-8 text-rose-500 opacity-0 group-hover:opacity-100" onClick={() => remove(r.id)}>
-                    <Trash2 className="h-4 w-4" />
+                <div key={r.id} className="flex items-center gap-4 rounded-xl p-3 bg-muted/40 border border-transparent group">
+                  <Checkbox checked={r.completed} onCheckedChange={() => toggle(r)} className="h-4 w-4 rounded-md" />
+                  <p className="flex-1 text-sm text-muted-foreground line-through font-medium truncate">{r.title}</p>
+                  <Button size="icon" variant="ghost" className="h-7 w-7 opacity-0 group-hover:opacity-100 text-destructive" onClick={() => remove(r.id)}>
+                    <Trash2 className="h-3 w-3" />
                   </Button>
                 </div>
               ))}

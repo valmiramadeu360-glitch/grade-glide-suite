@@ -9,7 +9,12 @@ interface AuthContextType {
   signOut: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const AuthContext = createContext<AuthContextType>({
+  user: null,
+  session: null,
+  loading: true,
+  signOut: async () => {},
+});
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -17,18 +22,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // 1. Inicialização segura da sessão
+    // 1. Função para buscar a sessão inicial de forma segura
     const initializeAuth = async () => {
       try {
-        const { data: { session: initialSession }, error } = await supabase.auth.getSession();
-        if (error) throw error;
-
-        if (initialSession) {
-          setSession(initialSession);
-          setUser(initialSession.user);
-        }
+        const { data: { session: initialSession } } = await supabase.auth.getSession();
+        setSession(initialSession);
+        setUser(initialSession?.user ?? null);
       } catch (error) {
-        console.error("Erro na inicialização de Auth:", error);
+        console.error("Erro ao recuperar sessão inicial:", error);
       } finally {
         setLoading(false);
       }
@@ -36,15 +37,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     initializeAuth();
 
-    // 2. Ouvinte de estado de autenticação (Login, Logout, Refresh)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, currentSession) => {
+    // 2. Escuta mudanças no estado (Login, Logout, Token renovado)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, currentSession) => {
       setSession(currentSession);
       setUser(currentSession?.user ?? null);
-      
-      // Garante que o loading saia após o primeiro evento de auth
-      if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || event === 'SIGNED_OUT') {
-        setLoading(false);
-      }
+      setLoading(false);
     });
 
     return () => {
@@ -56,7 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       setLoading(true);
       await supabase.auth.signOut();
-      // Limpeza imediata para UX fluida
+      // Limpa os estados locais imediatamente
       setSession(null);
       setUser(null);
     } catch (error) {

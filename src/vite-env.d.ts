@@ -1,14 +1,9 @@
 /// <reference types="vite/client" />
 
 interface ImportMetaEnv {
-  /** URL de conexão do projeto Supabase */
   readonly VITE_SUPABASE_URL: string
-  
-  /** Chave anônima pública para acesso ao banco */
   readonly VITE_SUPABASE_PUBLISHABLE_KEY: string
-  
-  // Caso adicione integrações futuras (ex: APIs de Economia ou BI),
-  // registre as chaves VITE_ abaixo.
+  // Adicione outras variáveis aqui se criar novas no seu .env
 }
 
 interface ImportMeta {

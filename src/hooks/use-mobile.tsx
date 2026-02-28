@@ -2,41 +2,25 @@ import * as React from "react";
 
 const MOBILE_BREAKPOINT = 768;
 
-/**
- * Hook customizado para detectar dispositivos móveis.
- * Essencial para o layout responsivo do EduFlow Academy.
- */
 export function useIsMobile() {
-  // Inicializa já verificando a largura para evitar Layout Shift
-  const [isMobile, setIsMobile] = React.useState<boolean>(
-    typeof window !== "undefined" ? window.innerWidth < MOBILE_BREAKPOINT : false
-  );
+  const [isMobile, setIsMobile] = React.useState<boolean>(false); // Começa como false por padrão
 
   React.useEffect(() => {
     const mql = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT - 1}px)`);
     
-    const onChange = () => {
-      setIsMobile(window.innerWidth < MOBILE_BREAKPOINT);
+    // Função otimizada: usa o evento do navegador diretamente
+    const onChange = (e: MediaQueryListEvent | MediaQueryList) => {
+      setIsMobile(e.matches);
     };
 
-    // Suporte para navegadores modernos e antigos (Safari iOS)
-    if (mql.addEventListener) {
-      mql.addEventListener("change", onChange);
-    } else {
-      mql.addListener(onChange);
-    }
+    // Adiciona o ouvinte de evento
+    mql.addEventListener("change", onChange);
     
-    // Sincronização final
-    onChange();
+    // Checagem inicial
+    setIsMobile(mql.matches);
 
-    return () => {
-      if (mql.removeEventListener) {
-        mql.removeEventListener("change", onChange);
-      } else {
-        mql.removeListener(onChange);
-      }
-    };
+    return () => mql.removeEventListener("change", onChange);
   }, []);
 
-  return !!isMobile;
+  return isMobile;
 }
