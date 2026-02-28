@@ -33,25 +33,54 @@ export function DisciplineChecklist({ disciplineId }: { disciplineId: string }) 
   }
 
   async function addItem() {
-    if (!newItem.trim()) return;
-    await supabase.from("checklist_items").insert({
-      discipline_id: disciplineId,
-      user_id: user!.id,
-      title: newItem.trim(),
-      sort_order: items.length,
-    });
+    if (!newItem.trim() || !user) return;
+    
+    const title = newItem.trim();
     setNewItem("");
-    loadItems();
+
+    // Adiciona o item localmente primeiro para ser instantâneo
+    const { data, error } = await supabase.from("checklist_items").insert({
+      discipline_id: disciplineId,
+      user_id: user.id,
+      title: title,
+      sort_order: items.length,
+    }).select().single();
+
+    if (!error && data) {
+      setItems([...items, data]);
+    } else {
+      loadItems(); // Recarrega em caso de erro
+    }
   }
 
   async function toggleItem(item: ChecklistItem) {
-    await supabase.from("checklist_items").update({ completed: !item.completed }).eq("id", item.id);
-    loadItems();
+    // Atualização Otimista: muda na tela antes de confirmar no banco
+    const previousItems = [...items];
+    setItems(items.map(i => i.id === item.id ? { ...i, completed: !i.completed } : i));
+
+    const { error } = await supabase
+      .from("checklist_items")
+      .update({ completed: !item.completed })
+      .eq("id", item.id);
+
+    if (error) {
+      setItems(previousItems); // Reverte se o banco falhar
+    }
   }
 
   async function deleteItem(id: string) {
-    await supabase.from("checklist_items").delete().eq("id", id);
-    loadItems();
+    // Atualização Otimista: remove da tela antes de confirmar no banco
+    const previousItems = [...items];
+    setItems(items.filter(i => i.id !== id));
+
+    const { error } = await supabase
+      .from("checklist_items")
+      .delete()
+      .eq("id", id);
+
+    if (error) {
+      setItems(previousItems); // Reverte se o banco falhar
+    }
   }
 
   const completed = items.filter((i) => i.completed).length;
@@ -81,7 +110,10 @@ export function DisciplineChecklist({ disciplineId }: { disciplineId: string }) 
         <div className="space-y-1">
           {items.map((item) => (
             <div key={item.id} className="flex items-center gap-3 rounded-lg p-2 hover:bg-muted/50 group">
-              <Checkbox checked={item.completed} onCheckedChange={() => toggleItem(item)} />
+              <Checkbox 
+                checked={item.completed} 
+                onCheckedChange={() => toggleItem(item)} 
+              />
               <span className={`flex-1 text-sm ${item.completed ? "line-through text-muted-foreground" : "text-foreground"}`}>
                 {item.title}
               </span>
