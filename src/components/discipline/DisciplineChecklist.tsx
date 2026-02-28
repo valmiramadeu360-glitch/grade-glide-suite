@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Loader2 } from "lucide-react";
 
 interface ChecklistItem {
   id: string;
@@ -18,27 +18,39 @@ export function DisciplineChecklist({ disciplineId }: { disciplineId: string }) 
   const { user } = useAuth();
   const [items, setItems] = useState<ChecklistItem[]>([]);
   const [newItem, setNewItem] = useState("");
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadItems();
+    // Só carrega se o disciplineId existir, evitando erros de "undefined"
+    if (disciplineId) {
+      loadItems();
+    }
   }, [disciplineId]);
 
   async function loadItems() {
-    const { data } = await supabase
-      .from("checklist_items")
-      .select("*")
-      .eq("discipline_id", disciplineId)
-      .order("sort_order");
-    setItems(data ?? []);
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from("checklist_items")
+        .select("*")
+        .eq("discipline_id", disciplineId)
+        .order("sort_order");
+      
+      if (error) throw error;
+      setItems(data ?? []);
+    } catch (err) {
+      console.error("Erro ao carregar checklist:", err);
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function addItem() {
-    if (!newItem.trim() || !user) return;
+    if (!newItem.trim() || !user || !disciplineId) return;
     
     const title = newItem.trim();
     setNewItem("");
 
-    // Adiciona o item localmente primeiro para ser instantâneo
     const { data, error } = await supabase.from("checklist_items").insert({
       discipline_id: disciplineId,
       user_id: user.id,
@@ -47,14 +59,13 @@ export function DisciplineChecklist({ disciplineId }: { disciplineId: string }) 
     }).select().single();
 
     if (!error && data) {
-      setItems([...items, data]);
+      setItems(prev => [...prev, data]);
     } else {
-      loadItems(); // Recarrega em caso de erro
+      loadItems();
     }
   }
 
   async function toggleItem(item: ChecklistItem) {
-    // Atualização Otimista: muda na tela antes de confirmar no banco
     const previousItems = [...items];
     setItems(items.map(i => i.id === item.id ? { ...i, completed: !i.completed } : i));
 
@@ -63,13 +74,10 @@ export function DisciplineChecklist({ disciplineId }: { disciplineId: string }) 
       .update({ completed: !item.completed })
       .eq("id", item.id);
 
-    if (error) {
-      setItems(previousItems); // Reverte se o banco falhar
-    }
+    if (error) setItems(previousItems);
   }
 
   async function deleteItem(id: string) {
-    // Atualização Otimista: remove da tela antes de confirmar no banco
     const previousItems = [...items];
     setItems(items.filter(i => i.id !== id));
 
@@ -78,55 +86,81 @@ export function DisciplineChecklist({ disciplineId }: { disciplineId: string }) 
       .delete()
       .eq("id", id);
 
-    if (error) {
-      setItems(previousItems); // Reverte se o banco falhar
-    }
+    if (error) setItems(previousItems);
   }
 
   const completed = items.filter((i) => i.completed).length;
   const progress = items.length > 0 ? Math.round((completed / items.length) * 100) : 0;
 
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center p-12 border-2 border-dashed rounded-[32px] bg-muted/5">
+        <Loader2 className="h-6 w-6 animate-spin text-primary opacity-20" />
+        <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mt-4">Sincronizando tarefas...</p>
+      </div>
+    );
+  }
+
   return (
-    <Card className="glass-card">
-      <CardHeader className="pb-3">
-        <CardTitle className="text-base">Assuntos para Estudar</CardTitle>
-        <div className="flex items-center gap-3 mt-2">
-          <Progress value={progress} className="flex-1" />
-          <span className="text-xs font-medium text-muted-foreground">{completed}/{items.length}</span>
+    <Card className="glass-card border-none shadow-xl bg-card/60 rounded-[40px] overflow-hidden">
+      <CardHeader className="pb-4 pt-8 px-8">
+        <div className="flex items-center justify-between mb-4">
+          <CardTitle className="text-sm font-black uppercase tracking-widest text-foreground/80">
+            Checklist de Estudos
+          </CardTitle>
+          <span className="text-[10px] font-black text-primary bg-primary/10 px-3 py-1 rounded-full tracking-tighter">
+            {progress}% CONCLUÍDO
+          </span>
         </div>
+        <Progress value={progress} className="h-2 bg-muted/30" />
       </CardHeader>
-      <CardContent className="space-y-3">
-        <div className="flex gap-2">
+      
+      <CardContent className="space-y-6 px-8 pb-8">
+        <div className="flex gap-2 p-1 bg-muted/20 rounded-2xl border border-border/40">
           <Input
-            placeholder="Novo assunto..."
+            placeholder="O que você precisa estudar?"
+            className="border-none bg-transparent focus-visible:ring-0 shadow-none text-sm font-medium"
             value={newItem}
             onChange={(e) => setNewItem(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && addItem()}
           />
-          <Button size="icon" onClick={addItem}>
-            <Plus className="h-4 w-4" />
+          <Button size="icon" onClick={addItem} className="rounded-xl h-10 w-10 shrink-0 shadow-lg shadow-primary/20">
+            <Plus className="h-5 w-5" />
           </Button>
         </div>
-        <div className="space-y-1">
-          {items.map((item) => (
-            <div key={item.id} className="flex items-center gap-3 rounded-lg p-2 hover:bg-muted/50 group">
-              <Checkbox 
-                checked={item.completed} 
-                onCheckedChange={() => toggleItem(item)} 
-              />
-              <span className={`flex-1 text-sm ${item.completed ? "line-through text-muted-foreground" : "text-foreground"}`}>
-                {item.title}
-              </span>
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-7 w-7 opacity-0 group-hover:opacity-100 text-destructive"
-                onClick={() => deleteItem(item.id)}
+
+        <div className="space-y-2 max-h-[350px] overflow-y-auto no-scrollbar pr-1">
+          {items.length === 0 ? (
+            <p className="text-center py-8 text-[10px] font-bold uppercase tracking-widest text-muted-foreground opacity-30">
+              Nenhum tópico cadastrado
+            </p>
+          ) : (
+            items.map((item) => (
+              <div 
+                key={item.id} 
+                className={`flex items-center gap-4 rounded-2xl p-4 transition-all duration-300 border ${
+                  item.completed ? "bg-muted/10 border-transparent opacity-60" : "bg-card border-border/30 hover:border-primary/20 shadow-sm"
+                } group`}
               >
-                <Trash2 className="h-3 w-3" />
-              </Button>
-            </div>
-          ))}
+                <Checkbox 
+                  checked={item.completed} 
+                  onCheckedChange={() => toggleItem(item)}
+                  className="h-5 w-5 rounded-md border-2 border-primary/30 data-[state=checked]:bg-primary"
+                />
+                <span className={`flex-1 text-sm font-bold tracking-tight ${item.completed ? "line-through text-muted-foreground" : "text-foreground"}`}>
+                  {item.title}
+                </span>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-8 w-8 opacity-0 group-hover:opacity-100 text-destructive hover:bg-destructive/10 rounded-xl transition-all"
+                  onClick={() => deleteItem(item.id)}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            ))
+          )}
         </div>
       </CardContent>
     </Card>
