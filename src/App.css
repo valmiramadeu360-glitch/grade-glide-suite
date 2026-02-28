@@ -1,26 +1,34 @@
-/* Reset de layout global para o EduFlow */
+/* Reset de layout global para o EduFlow Academy */
 #root {
   width: 100%;
   min-height: 100vh;
   margin: 0;
   padding: 0;
-  overflow-x: hidden; /* Evita que o app "balance" para os lados no celular */
+  overflow-x: hidden;
   display: flex;
   flex-direction: column;
+  /* Suporte para safe areas de dispositivos modernos */
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
 }
 
-/* Garante que o scroll seja suave entre as abas e seções */
 html, body {
   scroll-behavior: smooth;
-  -webkit-tap-highlight-color: transparent; /* Remove o quadrado cinza ao tocar no Android */
-  background-color: #020617; /* Slate-950 constante para evitar piscada branca */
+  background-color: #020617; /* Slate-950 constante */
   height: 100%;
+  margin: 0;
+  padding: 0;
+  /* Melhora a renderização de fontes pesadas (Black/Bold) */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  -webkit-tap-highlight-color: transparent;
 }
 
-/* Customização da barra de rolagem (Scrollbar) Estilo BI */
+/* Customização da barra de rolagem Estilo BI */
 ::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
@@ -28,72 +36,73 @@ html, body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(100, 116, 139, 0.2);
+  background: rgba(148, 163, 184, 0.1);
   border-radius: 20px;
+  border: 2px solid transparent;
+  background-clip: content-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(99, 102, 241, 0.5);
+  background: rgba(59, 130, 246, 0.5);
 }
 
-/* Animações de entrada otimizadas */
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-.animate-fade-in {
-  animation: fadeIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-
-/* --- MELHORIAS PARA MOBILE (Performance e Correção de Bugs) --- */
+/* --- MELHORIAS PARA MOBILE (Performance e UX) --- */
 @media (max-width: 768px) {
-  #root {
-    padding: 0;
-  }
-
-  /* 1. MELHORIA DE LENTIDÃO: Remove o desfoque pesado (blur) no celular */
+  /* Desativa desfoques pesados para economizar bateria e evitar lag */
   .glass-card {
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
     background: hsl(var(--card)) !important;
-    border: 1px solid hsl(var(--border) / 0.5) !important;
+    border: 1px solid hsl(var(--border) / 0.3) !important;
   }
 
-  /* 2. CORREÇÃO DE ABAS: Utilitário para as abas não encavalarem */
-  .no-scrollbar::-webkit-scrollbar {
-    display: none;
-  }
+  /* Utilitário de Scroll Lateral para Abas (Dashboard/Disciplinas) */
   .no-scrollbar {
     -ms-overflow-style: none;
     scrollbar-width: none;
-    display: flex !important; /* Força o alinhamento em linha */
-    overflow-x: auto !important; /* Ativa o deslize lateral */
+    display: flex !important;
+    overflow-x: auto !important;
     gap: 8px;
-    padding-bottom: 8px;
-    -webkit-overflow-scrolling: touch; /* Scroll suave no iOS */
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x proximity;
+  }
+  
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
   }
 
-  /* Ajuste para os botões das abas no mobile não ficarem esmagados */
-  [data-role="tab-list"] button {
+  /* Evita que botões de abas quebrem linha */
+  .no-scrollbar button, 
+  .no-scrollbar [role="tab"] {
     flex-shrink: 0; 
     white-space: nowrap;
+    scroll-snap-align: start;
   }
 
-  /* 3. TOQUE RÁPIDO: Melhora a resposta do clique no celular */
+  /* Toque Rápido e Prevenção de Zoom Acidental em Inputs */
   button, a {
     touch-action: manipulation;
   }
-  
-  .animate-fade-in {
-    animation-duration: 250ms !important;
+
+  input, textarea, select {
+    font-size: 16px !important; /* Impede o iOS de dar zoom automático no foco */
   }
 }
 
-/* Utilitário para textos longos */
+/* Utilitários de Texto */
 .truncate-multiline {
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+/* Animações Fluídas */
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-edu-in {
+  animation: slideUp 0.3s cubic-bezier(0.23, 1, 0.32, 1) forwards;
 }
