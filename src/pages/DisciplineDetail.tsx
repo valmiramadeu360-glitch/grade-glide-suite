@@ -13,7 +13,7 @@ import {
   Paperclip, 
   FileText, 
   Settings2, 
-  CheckCircle2 // <-- ESTAVA FALTANDO ESTE ÍCONE
+  CheckCircle2 
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -26,25 +26,37 @@ export default function DisciplineDetail() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (user && id) loadDiscipline();
+    if (user && id) {
+      loadDiscipline();
+    }
   }, [user, id]);
 
   async function loadDiscipline() {
     try {
       setLoading(true);
+      // Proteção de Segurança: Adicionado filtro de user_id
       const { data, error } = await supabase
         .from("disciplines")
         .select("*")
         .eq("id", id)
-        .single();
+        .eq("user_id", user?.id) 
+        .maybeSingle(); // maybeSingle é mais seguro que single() para evitar crash se não achar
 
       if (error) throw error;
+      
+      if (!data) {
+        toast({ title: "Não encontrado", description: "Disciplina não localizada.", variant: "destructive" });
+        navigate("/disciplines");
+        return;
+      }
+
       setDiscipline(data);
     } catch (error: any) {
-      toast({ title: "Erro", description: "Não foi possível carregar a matéria.", variant: "destructive" });
-      navigate("/disciplines");
+      console.error("Erro ao carregar:", error);
+      toast({ title: "Erro de conexão", description: "Verifique sua internet.", variant: "destructive" });
     } finally {
-      setLoading(false);
+      // Garantimos um pequeno delay para a animação de loading ser fluida
+      setTimeout(() => setLoading(false), 300);
     }
   }
 
@@ -57,78 +69,82 @@ export default function DisciplineDetail() {
     }
   }
 
-  if (loading) {
+  // Tela de Loading mais robusta para evitar "piscada" branca
+  if (loading || !discipline) {
     return (
-      <div className="flex h-screen items-center justify-center bg-background">
-        <div className="flex flex-col items-center gap-3">
-           <Loader2 className="h-10 w-10 animate-spin text-primary" />
-           <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Sincronizando dados...</p>
+      <div className="flex h-[80vh] items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-4">
+           <div className="relative">
+             <div className="h-12 w-12 rounded-full border-4 border-primary/20 border-t-primary animate-spin"></div>
+             <BookOpen className="h-5 w-5 text-primary absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
+           </div>
+           <p className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground animate-pulse">Carregando Matéria...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6 pb-20 animate-in fade-in duration-500">
-      <div className="flex flex-col gap-4 px-2">
-        <Button variant="ghost" size="sm" onClick={() => navigate(-1)} className="w-fit gap-2 text-muted-foreground hover:text-primary transition-colors">
+    <div className="max-w-4xl mx-auto space-y-6 pb-24 animate-in fade-in slide-in-from-bottom-4 duration-700">
+      <div className="flex flex-col gap-4 px-4">
+        <Button variant="ghost" size="sm" onClick={() => navigate(-1)} className="w-fit gap-2 text-muted-foreground hover:text-primary transition-all rounded-xl">
           <ChevronLeft className="h-4 w-4" /> Voltar
         </Button>
         
-        <div className="flex items-center justify-between bg-card p-4 rounded-3xl border shadow-sm">
+        <div className="flex items-center justify-between bg-card/50 backdrop-blur-sm p-5 rounded-[32px] border border-border/50 shadow-sm">
           <div className="flex items-center gap-4">
-            <div className="h-12 w-12 rounded-2xl flex items-center justify-center shadow-inner" style={{ backgroundColor: (discipline?.color || "#3b82f6") + "20" }}>
-              <BookOpen className="h-6 w-6" style={{ color: discipline?.color || "#3b82f6" }} />
+            <div className="h-14 w-14 rounded-2xl flex items-center justify-center shadow-inner" style={{ backgroundColor: (discipline?.color || "#3b82f6") + "20" }}>
+              <BookOpen className="h-7 w-7" style={{ color: discipline?.color || "#3b82f6" }} />
             </div>
             <div className="min-w-0">
-              <h1 className="text-xl font-black truncate max-w-[150px] sm:max-w-none tracking-tighter">
+              <h1 className="text-2xl font-black truncate max-w-[160px] sm:max-w-none tracking-tighter">
                 {discipline?.name}
               </h1>
-              <p className="text-[10px] text-muted-foreground font-black uppercase tracking-widest">
-                {discipline?.professor || "Sem Professor"}
+              <p className="text-[10px] text-muted-foreground font-black uppercase tracking-widest opacity-70">
+                Prof. {discipline?.professor || "Não atribuído"}
               </p>
             </div>
           </div>
-          <Button variant="ghost" size="icon" onClick={deleteDiscipline} className="text-destructive hover:bg-destructive/10 rounded-xl">
+          <Button variant="ghost" size="icon" onClick={deleteDiscipline} className="text-destructive hover:bg-destructive/10 rounded-2xl h-11 w-11 transition-colors">
             <Trash2 className="h-5 w-5" />
           </Button>
         </div>
       </div>
 
       <Tabs defaultValue="info" className="w-full">
-        {/* CORREÇÃO DO BUG DAS ABAS: overflow-x-auto e no-scrollbar garantem que não encavalem */}
-        <div className="overflow-x-auto pb-4 px-2 no-scrollbar">
-          <TabsList className="inline-flex w-auto bg-muted/50 p-1 rounded-2xl border min-w-full sm:min-w-0">
-            <TabsTrigger value="info" className="rounded-xl px-5 gap-2 font-black text-[10px] uppercase tracking-widest">
+        {/* FIX DAS ABAS: "no-scrollbar" e "inline-flex" impedem que elas fiquem uma em cima da outra */}
+        <div className="overflow-x-auto px-4 no-scrollbar">
+          <TabsList className="inline-flex w-max sm:w-full bg-muted/30 p-1.5 rounded-[24px] border border-border/40 gap-1">
+            <TabsTrigger value="info" className="rounded-2xl px-6 py-2.5 gap-2 font-black text-[10px] uppercase tracking-widest data-[state=active]:bg-card data-[state=active]:shadow-sm">
               <Settings2 className="h-3.5 w-3.5" /> Info
             </TabsTrigger>
-            <TabsTrigger value="checklist" className="rounded-xl px-5 gap-2 font-black text-[10px] uppercase tracking-widest">
+            <TabsTrigger value="checklist" className="rounded-2xl px-6 py-2.5 gap-2 font-black text-[10px] uppercase tracking-widest data-[state=active]:bg-card">
               <CheckCircle2 className="h-3.5 w-3.5" /> Estudos
             </TabsTrigger>
-            <TabsTrigger value="media" className="rounded-xl px-5 gap-2 font-black text-[10px] uppercase tracking-widest">
+            <TabsTrigger value="media" className="rounded-2xl px-6 py-2.5 gap-2 font-black text-[10px] uppercase tracking-widest data-[state=active]:bg-card">
               <Paperclip className="h-3.5 w-3.5" /> Mídia
             </TabsTrigger>
-            <TabsTrigger value="notes" className="rounded-xl px-5 gap-2 font-black text-[10px] uppercase tracking-widest">
+            <TabsTrigger value="notes" className="rounded-2xl px-6 py-2.5 gap-2 font-black text-[10px] uppercase tracking-widest data-[state=active]:bg-card">
               <FileText className="h-3.5 w-3.5" /> Resumos
             </TabsTrigger>
           </TabsList>
         </div>
 
-        <div className="mt-2 px-2">
-          <TabsContent value="info" className="animate-in slide-in-from-bottom-2 duration-300 outline-none">
-            <Card className="rounded-[32px] border-none shadow-md bg-card">
+        <div className="mt-4 px-4">
+          <TabsContent value="info" className="animate-in fade-in slide-in-from-right-4 duration-500 outline-none">
+            <Card className="rounded-[40px] border-none shadow-xl shadow-black/5 bg-card/60">
               <CardContent className="p-8 space-y-8">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-8">
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Responsável</label>
-                    <div className="p-4 bg-muted/30 rounded-2xl font-bold text-foreground border border-transparent">
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground ml-1">Docente Responsável</label>
+                    <div className="p-5 bg-muted/20 rounded-3xl font-bold text-foreground border border-border/20">
                       {discipline?.professor || "Não informado"}
                     </div>
                   </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Desempenho Atual</label>
-                    <div className="p-4 bg-muted/30 rounded-2xl font-black text-3xl text-primary border border-transparent">
-                      {discipline?.current_grade ? Number(discipline.current_grade).toFixed(1) : "0.0"}
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground ml-1">Performance (Média)</label>
+                    <div className="p-5 bg-muted/20 rounded-3xl font-black text-4xl text-primary border border-border/20">
+                      {discipline?.current_grade ? Number(discipline.current_grade).toFixed(1).replace('.', ',') : "0,0"}
                     </div>
                   </div>
                 </div>
@@ -136,24 +152,31 @@ export default function DisciplineDetail() {
             </Card>
           </TabsContent>
 
-          <TabsContent value="checklist" className="outline-none">
-            <div className="p-12 border-2 border-dashed rounded-[40px] flex flex-col items-center justify-center text-muted-foreground bg-muted/5">
-              <CheckCircle2 className="h-8 w-8 mb-3 opacity-20" />
-              <p className="text-sm font-medium italic">Cronograma de estudos em breve.</p>
+          <TabsContent value="checklist" className="outline-none animate-in fade-in slide-in-from-right-4 duration-500">
+            <div className="p-20 border-2 border-dashed border-border/40 rounded-[48px] flex flex-col items-center justify-center text-muted-foreground bg-muted/5">
+              <div className="h-16 w-16 rounded-3xl bg-muted/20 flex items-center justify-center mb-4">
+                <CheckCircle2 className="h-8 w-8 opacity-20" />
+              </div>
+              <p className="text-sm font-bold uppercase tracking-widest opacity-40">Módulo de Estudos</p>
+              <p className="text-[10px] mt-2 italic">Organize suas tarefas de Economia aqui em breve.</p>
             </div>
           </TabsContent>
           
-          <TabsContent value="media" className="outline-none">
-             <div className="p-12 border-2 border-dashed rounded-[40px] flex flex-col items-center justify-center text-muted-foreground bg-muted/5">
-              <Paperclip className="h-8 w-8 mb-3 opacity-20" />
-              <p className="text-sm font-medium italic">Galeria de fotos e documentos em breve.</p>
+          <TabsContent value="media" className="outline-none animate-in fade-in slide-in-from-right-4 duration-500">
+             <div className="p-20 border-2 border-dashed border-border/40 rounded-[48px] flex flex-col items-center justify-center text-muted-foreground bg-muted/5">
+              <div className="h-16 w-16 rounded-3xl bg-muted/20 flex items-center justify-center mb-4">
+                <Paperclip className="h-8 w-8 opacity-20" />
+              </div>
+              <p className="text-sm font-bold uppercase tracking-widest opacity-40">Repositório de Mídia</p>
             </div>
           </TabsContent>
 
-          <TabsContent value="notes" className="outline-none">
-             <div className="p-12 border-2 border-dashed rounded-[40px] flex flex-col items-center justify-center text-muted-foreground bg-muted/5">
-              <FileText className="h-8 w-8 mb-3 opacity-20" />
-              <p className="text-sm font-medium italic">Seus resumos de Economia aparecerão aqui.</p>
+          <TabsContent value="notes" className="outline-none animate-in fade-in slide-in-from-right-4 duration-500">
+             <div className="p-20 border-2 border-dashed border-border/40 rounded-[48px] flex flex-col items-center justify-center text-muted-foreground bg-muted/5">
+              <div className="h-16 w-16 rounded-3xl bg-muted/20 flex items-center justify-center mb-4">
+                <FileText className="h-8 w-8 opacity-20" />
+              </div>
+              <p className="text-sm font-bold uppercase tracking-widest opacity-40">Base de Conhecimento</p>
             </div>
           </TabsContent>
         </div>
