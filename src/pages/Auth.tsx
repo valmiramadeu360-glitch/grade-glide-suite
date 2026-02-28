@@ -63,7 +63,7 @@ export default function Auth() {
           <CardDescription className="text-slate-400 font-medium">
             {isSignUp 
               ? "Cadastre-se para começar a organizar seus estudos." 
-              : "Entre para gerenciar suas disciplinas e prazos."}
+              : "Entre para gerenciar sua vida acadêmica."}
           </CardDescription>
         </CardHeader>
         
