@@ -14,6 +14,47 @@ export type Database = {
   }
   public: {
     Tables: {
+      books: {
+        Row: {
+          author: string | null
+          created_at: string
+          discipline_id: string
+          end_date: string | null
+          id: string
+          start_date: string | null
+          title: string
+          user_id: string
+        }
+        Insert: {
+          author?: string | null
+          created_at?: string
+          discipline_id: string
+          end_date?: string | null
+          id?: string
+          start_date?: string | null
+          title: string
+          user_id: string
+        }
+        Update: {
+          author?: string | null
+          created_at?: string
+          discipline_id?: string
+          end_date?: string | null
+          id?: string
+          start_date?: string | null
+          title?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "books_discipline_id_fkey"
+            columns: ["discipline_id"]
+            isOneToOne: false
+            referencedRelation: "disciplines"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       checklist_items: {
         Row: {
           completed: boolean | null
@@ -48,6 +89,44 @@ export type Database = {
             columns: ["discipline_id"]
             isOneToOne: false
             referencedRelation: "disciplines"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      checklist_subtopics: {
+        Row: {
+          completed: boolean | null
+          created_at: string
+          id: string
+          parent_item_id: string
+          sort_order: number | null
+          title: string
+          user_id: string
+        }
+        Insert: {
+          completed?: boolean | null
+          created_at?: string
+          id?: string
+          parent_item_id: string
+          sort_order?: number | null
+          title: string
+          user_id: string
+        }
+        Update: {
+          completed?: boolean | null
+          created_at?: string
+          id?: string
+          parent_item_id?: string
+          sort_order?: number | null
+          title?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "checklist_subtopics_parent_item_id_fkey"
+            columns: ["parent_item_id"]
+            isOneToOne: false
+            referencedRelation: "checklist_items"
             referencedColumns: ["id"]
           },
         ]
@@ -92,6 +171,7 @@ export type Database = {
       }
       disciplines: {
         Row: {
+          archived: boolean | null
           color: string | null
           created_at: string
           current_grade: number | null
@@ -99,10 +179,12 @@ export type Database = {
           is_extra_course: boolean | null
           name: string
           professor: string | null
+          semester_number: number | null
           updated_at: string
           user_id: string
         }
         Insert: {
+          archived?: boolean | null
           color?: string | null
           created_at?: string
           current_grade?: number | null
@@ -110,10 +192,12 @@ export type Database = {
           is_extra_course?: boolean | null
           name: string
           professor?: string | null
+          semester_number?: number | null
           updated_at?: string
           user_id: string
         }
         Update: {
+          archived?: boolean | null
           color?: string | null
           created_at?: string
           current_grade?: number | null
@@ -121,6 +205,7 @@ export type Database = {
           is_extra_course?: boolean | null
           name?: string
           professor?: string | null
+          semester_number?: number | null
           updated_at?: string
           user_id?: string
         }

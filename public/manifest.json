@@ -10,7 +10,8 @@
     {
       "src": "icon-192.png",
       "type": "image/png",
-      "sizes": "192x192"
+      "sizes": "192x192",
+      "purpose": "any maskable"
     },
     {
       "src": "icon-512.png",
@@ -27,4 +28,3 @@
   "scope": "/",
   "description": "Sua jornada acadêmica organizada e inteligente."
 }
-Manifest.json 

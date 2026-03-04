@@ -6,85 +6,143 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, ChevronDown, ChevronRight } from "lucide-react";
+import { cn } from "@/lib/utils";
+
+interface Subtopic {
+  id: string;
+  title: string;
+  completed: boolean;
+}
 
 interface ChecklistItem {
   id: string;
   title: string;
   completed: boolean;
+  subtopics: Subtopic[];
+  expanded: boolean;
 }
 
 export function DisciplineChecklist({ disciplineId }: { disciplineId: string }) {
   const { user } = useAuth();
   const [items, setItems] = useState<ChecklistItem[]>([]);
   const [newItem, setNewItem] = useState("");
+  const [newSubtopics, setNewSubtopics] = useState<Record<string, string>>({});
 
   useEffect(() => {
     loadItems();
   }, [disciplineId]);
 
   async function loadItems() {
-    const { data } = await supabase
+    const { data: checklistData } = await supabase
       .from("checklist_items")
       .select("*")
       .eq("discipline_id", disciplineId)
       .order("sort_order");
-    setItems(data ?? []);
+
+    const { data: subtopicData } = await supabase
+      .from("checklist_subtopics")
+      .select("*")
+      .in("parent_item_id", (checklistData ?? []).map(i => i.id))
+      .order("sort_order");
+
+    const subtopicMap: Record<string, Subtopic[]> = {};
+    (subtopicData ?? []).forEach(s => {
+      if (!subtopicMap[s.parent_item_id]) subtopicMap[s.parent_item_id] = [];
+      subtopicMap[s.parent_item_id].push({ id: s.id, title: s.title, completed: s.completed ?? false });
+    });
+
+    setItems((checklistData ?? []).map(i => ({
+      id: i.id,
+      title: i.title,
+      completed: i.completed ?? false,
+      subtopics: subtopicMap[i.id] ?? [],
+      expanded: false,
+    })));
   }
 
   async function addItem() {
     if (!newItem.trim() || !user) return;
-    
     const title = newItem.trim();
     setNewItem("");
 
-    // Adiciona o item localmente primeiro para ser instantâneo
     const { data, error } = await supabase.from("checklist_items").insert({
       discipline_id: disciplineId,
       user_id: user.id,
-      title: title,
+      title,
       sort_order: items.length,
     }).select().single();
 
     if (!error && data) {
-      setItems([...items, data]);
-    } else {
-      loadItems(); // Recarrega em caso de erro
+      setItems([...items, { id: data.id, title: data.title, completed: false, subtopics: [], expanded: false }]);
     }
   }
 
   async function toggleItem(item: ChecklistItem) {
-    // Atualização Otimista: muda na tela antes de confirmar no banco
-    const previousItems = [...items];
+    const prev = [...items];
     setItems(items.map(i => i.id === item.id ? { ...i, completed: !i.completed } : i));
 
-    const { error } = await supabase
-      .from("checklist_items")
-      .update({ completed: !item.completed })
-      .eq("id", item.id);
-
-    if (error) {
-      setItems(previousItems); // Reverte se o banco falhar
-    }
+    const { error } = await supabase.from("checklist_items").update({ completed: !item.completed }).eq("id", item.id);
+    if (error) setItems(prev);
   }
 
   async function deleteItem(id: string) {
-    // Atualização Otimista: remove da tela antes de confirmar no banco
-    const previousItems = [...items];
+    if (!window.confirm("Deseja excluir este assunto e seus subtópicos?")) return;
+    const prev = [...items];
     setItems(items.filter(i => i.id !== id));
 
-    const { error } = await supabase
-      .from("checklist_items")
-      .delete()
-      .eq("id", id);
+    const { error } = await supabase.from("checklist_items").delete().eq("id", id);
+    if (error) setItems(prev);
+  }
 
-    if (error) {
-      setItems(previousItems); // Reverte se o banco falhar
+  function toggleExpand(id: string) {
+    setItems(items.map(i => i.id === id ? { ...i, expanded: !i.expanded } : i));
+  }
+
+  async function addSubtopic(parentId: string) {
+    const text = newSubtopics[parentId]?.trim();
+    if (!text || !user) return;
+    setNewSubtopics({ ...newSubtopics, [parentId]: "" });
+
+    const { data, error } = await supabase.from("checklist_subtopics").insert({
+      parent_item_id: parentId,
+      user_id: user.id,
+      title: text,
+      sort_order: items.find(i => i.id === parentId)?.subtopics.length ?? 0,
+    }).select().single();
+
+    if (!error && data) {
+      setItems(items.map(i =>
+        i.id === parentId
+          ? { ...i, subtopics: [...i.subtopics, { id: data.id, title: data.title, completed: false }], expanded: true }
+          : i
+      ));
     }
   }
 
-  const completed = items.filter((i) => i.completed).length;
-  const progress = items.length > 0 ? Math.round((completed / items.length) * 100) : 0;
+  async function toggleSubtopic(parentId: string, sub: Subtopic) {
+    setItems(items.map(i =>
+      i.id === parentId
+        ? { ...i, subtopics: i.subtopics.map(s => s.id === sub.id ? { ...s, completed: !s.completed } : s) }
+        : i
+    ));
+
+    await supabase.from("checklist_subtopics").update({ completed: !sub.completed }).eq("id", sub.id);
+  }
+
+  async function deleteSubtopic(parentId: string, subId: string) {
+    setItems(items.map(i =>
+      i.id === parentId
+        ? { ...i, subtopics: i.subtopics.filter(s => s.id !== subId) }
+        : i
+    ));
+
+    await supabase.from("checklist_subtopics").delete().eq("id", subId);
+  }
+
+  const allTasks = items.reduce((sum, i) => sum + 1 + i.subtopics.length, 0);
+  const completedTasks = items.reduce((sum, i) => sum + (i.completed ? 1 : 0) + i.subtopics.filter(s => s.completed).length, 0);
+  const progress = allTasks > 0 ? Math.round((completedTasks / allTasks) * 100) : 0;
 
   return (
     <Card className="glass-card">
@@ -92,13 +150,13 @@ export function DisciplineChecklist({ disciplineId }: { disciplineId: string }) 
         <CardTitle className="text-base">Assuntos para Estudar</CardTitle>
         <div className="flex items-center gap-3 mt-2">
           <Progress value={progress} className="flex-1" />
-          <span className="text-xs font-medium text-muted-foreground">{completed}/{items.length}</span>
+          <span className="text-xs font-medium text-muted-foreground">{completedTasks}/{allTasks}</span>
         </div>
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="flex gap-2">
           <Input
-            placeholder="Novo assunto..."
+            placeholder="Novo assunto principal..."
             value={newItem}
             onChange={(e) => setNewItem(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && addItem()}
@@ -109,22 +167,71 @@ export function DisciplineChecklist({ disciplineId }: { disciplineId: string }) 
         </div>
         <div className="space-y-1">
           {items.map((item) => (
-            <div key={item.id} className="flex items-center gap-3 rounded-lg p-2 hover:bg-muted/50 group">
-              <Checkbox 
-                checked={item.completed} 
-                onCheckedChange={() => toggleItem(item)} 
-              />
-              <span className={`flex-1 text-sm ${item.completed ? "line-through text-muted-foreground" : "text-foreground"}`}>
-                {item.title}
-              </span>
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-7 w-7 opacity-0 group-hover:opacity-100 text-destructive"
-                onClick={() => deleteItem(item.id)}
-              >
-                <Trash2 className="h-3 w-3" />
-              </Button>
+            <div key={item.id}>
+              <div className="flex items-center gap-2 rounded-lg p-2 hover:bg-muted/50 group">
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-6 w-6 shrink-0"
+                  onClick={() => toggleExpand(item.id)}
+                >
+                  {item.expanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                </Button>
+                <Checkbox checked={item.completed} onCheckedChange={() => toggleItem(item)} />
+                <span className={cn("flex-1 text-sm", item.completed && "line-through text-muted-foreground")}>
+                  {item.title}
+                </span>
+                {item.subtopics.length > 0 && (
+                  <span className="text-[10px] text-muted-foreground font-bold">
+                    {item.subtopics.filter(s => s.completed).length}/{item.subtopics.length}
+                  </span>
+                )}
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-7 w-7 opacity-0 group-hover:opacity-100 text-destructive"
+                  onClick={() => deleteItem(item.id)}
+                >
+                  <Trash2 className="h-3 w-3" />
+                </Button>
+              </div>
+
+              {item.expanded && (
+                <div className="ml-10 space-y-1 mt-1 mb-2">
+                  {item.subtopics.map(sub => (
+                    <div key={sub.id} className="flex items-center gap-2 rounded-md p-1.5 hover:bg-muted/30 group/sub">
+                      <Checkbox
+                        checked={sub.completed}
+                        onCheckedChange={() => toggleSubtopic(item.id, sub)}
+                        className="h-3.5 w-3.5"
+                      />
+                      <span className={cn("flex-1 text-xs", sub.completed && "line-through text-muted-foreground")}>
+                        {sub.title}
+                      </span>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-5 w-5 opacity-0 group-hover/sub:opacity-100 text-destructive"
+                        onClick={() => deleteSubtopic(item.id, sub.id)}
+                      >
+                        <Trash2 className="h-2.5 w-2.5" />
+                      </Button>
+                    </div>
+                  ))}
+                  <div className="flex gap-1.5 mt-1">
+                    <Input
+                      placeholder="Subtópico..."
+                      className="h-7 text-xs"
+                      value={newSubtopics[item.id] ?? ""}
+                      onChange={e => setNewSubtopics({ ...newSubtopics, [item.id]: e.target.value })}
+                      onKeyDown={e => e.key === "Enter" && addSubtopic(item.id)}
+                    />
+                    <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={() => addSubtopic(item.id)}>
+                      <Plus className="h-3 w-3" />
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           ))}
         </div>
