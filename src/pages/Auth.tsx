@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { Mail, Lock, User, GraduationCap, Loader2, Chrome, ArrowRight } from "lucide-react";
+import { Mail, Lock, User, GraduationCap, Loader2, Chrome, ArrowRight, Eye, EyeOff } from "lucide-react";
 
 export default function Auth() {
   const [loading, setLoading] = useState(false);
@@ -13,6 +13,10 @@ export default function Auth() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
+  
+  // NOVO ESTADO: Controla se a senha está visível ou oculta
+  const [showPassword, setShowPassword] = useState(false);
+  
   const { toast } = useToast();
 
   async function handleAuth(e: React.FormEvent) {
@@ -21,20 +25,16 @@ export default function Auth() {
 
     try {
       if (isSignUp) {
-        // Cadastro: Insere o nome completo nos metadados para o gatilho do Profile
         const { error } = await supabase.auth.signUp({
           email,
           password,
           options: {
-            data: {
-              full_name: fullName,
-            },
+            data: { full_name: fullName },
           },
         });
         if (error) throw error;
         toast({ title: "Quase lá!", description: "Verifique seu e-mail para confirmar a conta." });
       } else {
-        // Login: Acesso rápido
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
       }
@@ -49,7 +49,6 @@ export default function Auth() {
     }
   }
 
-  // Função para Login Social (Standard em Apps Modernos)
   const handleGoogleLogin = async () => {
     try {
       const { error } = await supabase.auth.signInWithOAuth({ provider: 'google' });
@@ -61,7 +60,6 @@ export default function Auth() {
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950 p-4 relative overflow-hidden">
-      {/* Efeito de iluminação de fundo (Ambiente BI) */}
       <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary/10 rounded-full blur-[120px] pointer-events-none" />
       <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-indigo-500/10 rounded-full blur-[120px] pointer-events-none" />
 
@@ -130,13 +128,21 @@ export default function Auth() {
               <div className="relative group">
                 <Lock className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-600 group-focus-within:text-primary transition-colors" />
                 <Input
-                  className="pl-12 h-14 bg-slate-950/60 border-white/5 text-white rounded-[20px] focus:ring-primary/40 focus:border-primary/40 text-base"
-                  type="password"
+                  className="pl-12 pr-12 h-14 bg-slate-950/60 border-white/5 text-white rounded-[20px] focus:ring-primary/40 focus:border-primary/40 text-base"
+                  type={showPassword ? "text" : "password"} // Alterna entre text e password
                   placeholder="Mínimo 6 dígitos"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
                 />
+                {/* BOTÃO DO OLHINHO */}
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-primary transition-colors focus:outline-none"
+                >
+                  {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                </button>
               </div>
             </div>
           </CardContent>
@@ -181,11 +187,6 @@ export default function Auth() {
           </CardFooter>
         </form>
       </Card>
-
-      <footer className="mt-8 flex items-center gap-2 text-slate-700 animate-pulse">
-        <span className="text-[9px] font-black uppercase tracking-[0.4em]">Criptografia de Ponta a Ponta v1.0</span>
-      </footer>
     </div>
   );
 }
-
