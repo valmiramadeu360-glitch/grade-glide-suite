@@ -7,8 +7,6 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "14.1"
   }
@@ -179,7 +177,8 @@ export type Database = {
           is_extra_course: boolean | null
           name: string
           professor: string | null
-          semester_number: number | null
+          // ATUALIZADO: semester mudou de number para string (ex: "2026.1")
+          semester: string | null 
           updated_at: string
           user_id: string
         }
@@ -192,7 +191,7 @@ export type Database = {
           is_extra_course?: boolean | null
           name: string
           professor?: string | null
-          semester_number?: number | null
+          semester?: string | null
           updated_at?: string
           user_id: string
         }
@@ -205,7 +204,7 @@ export type Database = {
           is_extra_course?: boolean | null
           name?: string
           professor?: string | null
-          semester_number?: number | null
+          semester?: string | null
           updated_at?: string
           user_id?: string
         }
@@ -296,7 +295,8 @@ export type Database = {
           created_at: string
           full_name: string | null
           id: string
-          semester: number | null
+          // ATUALIZADO: semester mudou de number para string (ex: "2026.1")
+          semester: string | null 
           semester_end: string | null
           semester_start: string | null
           university: string | null
@@ -308,7 +308,7 @@ export type Database = {
           created_at?: string
           full_name?: string | null
           id?: string
-          semester?: number | null
+          semester?: string | null
           semester_end?: string | null
           semester_start?: string | null
           university?: string | null
@@ -320,7 +320,7 @@ export type Database = {
           created_at?: string
           full_name?: string | null
           id?: string
-          semester?: number | null
+          semester?: string | null
           semester_end?: string | null
           semester_start?: string | null
           university?: string | null
