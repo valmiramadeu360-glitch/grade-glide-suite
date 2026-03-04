@@ -3,7 +3,8 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { AuthProvider, useAuth } from "@/hooks/useAuth";
+import { AuthProvider } from "@/hooks/useAuth";
+import { useAuth } from "@/hooks/useAuth";
 import { AppLayout } from "@/components/AppLayout";
 
 // Importação das páginas
@@ -15,6 +16,7 @@ import Reminders from "./pages/Reminders";
 import Settings from "./pages/Settings";
 import NotFound from "./pages/NotFound";
 
+// Configuração do cache e requisições
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -24,23 +26,26 @@ const queryClient = new QueryClient({
   },
 });
 
+// Componente de Splash Screen (Loading com visual de App Nativo)
+const AppSplashScreen = () => (
+  <div className="flex h-[100dvh] w-full items-center justify-center bg-slate-950">
+    <div className="flex flex-col items-center gap-6">
+      <div className="relative flex items-center justify-center">
+        <div className="absolute h-16 w-16 rounded-full border-4 border-primary/20 border-t-primary animate-spin" />
+        <div className="h-8 w-8 bg-primary/20 rounded-full animate-pulse" />
+      </div>
+      <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500 animate-pulse">
+        Iniciando EduFlow...
+      </p>
+    </div>
+  </div>
+);
+
 // Componente para rotas que exigem login
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
 
-  if (loading) {
-    return (
-      <div className="flex h-screen w-full items-center justify-center bg-slate-950">
-        <div className="flex flex-col items-center gap-4">
-          <div className="animate-spin h-10 w-10 border-4 border-primary border-t-transparent rounded-full shadow-lg shadow-primary/20" />
-          <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground animate-pulse">
-            Sincronizando EduFlow...
-          </p>
-        </div>
-      </div>
-    );
-  }
-
+  if (loading) return <AppSplashScreen />;
   if (!user) return <Navigate to="/auth" replace />;
 
   return <AppLayout>{children}</AppLayout>;
@@ -50,7 +55,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 function PublicRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   
-  if (loading) return null;
+  if (loading) return <AppSplashScreen />;
   if (user) return <Navigate to="/" replace />;
   
   return <>{children}</>;
@@ -70,7 +75,7 @@ const App = () => (
             <Route path="/disciplines" element={<ProtectedRoute><Disciplines /></ProtectedRoute>} />
             <Route path="/disciplines/:id" element={<ProtectedRoute><DisciplineDetail /></ProtectedRoute>} />
             
-            {/* Mesma página, filtro diferente para Matemática/Inglês */}
+            {/* Cursos Extras */}
             <Route path="/extra-courses" element={<ProtectedRoute><Disciplines extraOnly /></ProtectedRoute>} />
             
             <Route path="/reminders" element={<ProtectedRoute><Reminders /></ProtectedRoute>} />
@@ -80,9 +85,9 @@ const App = () => (
             <Route path="*" element={<NotFound />} />
           </Routes>
           
-          {/* Sistemas de Notificação (Toasts) */}
+          {/* Sistemas de Notificação (Toasts) - Otimizados para Celular */}
           <Toaster />
-          <Sonner position="top-right" closeButton richColors />
+          <Sonner position="top-center" closeButton richColors theme="dark" />
         </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
