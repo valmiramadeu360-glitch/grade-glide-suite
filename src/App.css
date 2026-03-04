@@ -1,20 +1,46 @@
-/* Reset de layout para o EduFlow */
-#root {
+/* Reset de layout App-like para o EduFlow */
+html, body {
   width: 100%;
   min-height: 100vh;
   margin: 0;
   padding: 0;
+  
+  /* 1. BLOQUEIOS MOBILE (Fim dos bugs de tela solta) */
+  overflow-x: hidden; /* Impede que o app balance para a direita/esquerda */
+  overscroll-behavior-y: none; /* Remove o efeito "elástico" chato no topo e fim da tela no iOS/Android */
+  -webkit-tap-highlight-color: transparent; /* Remove o quadrado cinza de clique nos botões */
+  touch-action: manipulation; /* Evita o zoom acidental de duplo clique */
 }
 
-/* Garante que o scroll seja suave entre as abas de Disciplinas */
+#root {
+  width: 100%;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 2. PREVENÇÃO DE SELEÇÃO ACIDENTAL */
+/* Impede que o usuário selecione a interface sem querer ao rolar a tela */
+body {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Mas permite selecionar o texto onde realmente importa (Inputs, Textos de Resumo) */
+input, textarea, p, h1, h2, h3, h4, span {
+  user-select: auto;
+  -webkit-user-select: auto;
+}
+
+/* 3. EXPERIÊNCIA E NAVEGAÇÃO */
 html {
   scroll-behavior: smooth;
 }
 
-/* Customização da barra de rolagem (Scrollbar) para o modo escuro */
+/* Customização da barra de rolagem (Fina como em apps nativos) */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 4px;
+  height: 4px;
 }
 
 ::-webkit-scrollbar-track {
@@ -22,27 +48,27 @@ html {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(100, 116, 139, 0.2);
+  background: rgba(100, 116, 139, 0.3);
   border-radius: 10px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(99, 102, 241, 0.4);
+  background: rgba(99, 102, 241, 0.6);
 }
 
-/* Animações globais para as páginas (usadas pelo animate-fade-in) */
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(4px); }
-  to { opacity: 1; transform: translateY(0); }
+/* Remove a setinha inútil de dentro dos inputs de número */
+input[type=number]::-webkit-inner-spin-button, 
+input[type=number]::-webkit-outer-spin-button { 
+  -webkit-appearance: none; 
+  margin: 0; 
 }
 
-.animate-fade-in {
-  animation: fadeIn 0.4s ease-out forwards;
+/* 4. CLASSE UTILITÁRIA MOBILE (Essencial para as abas) */
+/* Esconde a barra de rolagem visual, mas permite rolar com o dedo */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }
-
-/* Ajuste para garantir que o Dashboard ocupe a tela toda no Mobile */
-@media (max-width: 768px) {
-  #root {
-    padding: 0;
-  }
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
