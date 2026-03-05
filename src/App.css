@@ -1,20 +1,26 @@
-/* Reset de layout para o EduFlow */
+/* Reset e Base de Layout para o EduFlow Academy */
 #root {
   width: 100%;
   min-height: 100vh;
   margin: 0;
   padding: 0;
+  display: flex;
+  flex-direction: column;
 }
 
-/* Garante que o scroll seja suave entre as abas de Disciplinas */
+/* Suavização de scroll e renderização de texto (Legibilidade) */
 html {
   scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* Evita o comportamento de "elástico" que atrapalha no mobile */
+  overscroll-behavior-y: none; 
 }
 
-/* Customização da barra de rolagem (Scrollbar) para o modo escuro */
+/* Scrollbar Customizada: Adapta-se à cor do tema (Neon/Pastel) */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 
 ::-webkit-scrollbar-track {
@@ -22,27 +28,46 @@ html {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(100, 116, 139, 0.2);
-  border-radius: 10px;
+  /* Usa a cor primária do tema com transparência */
+  background: hsl(var(--primary) / 0.2);
+  border-radius: 20px;
+  transition: background 0.3s ease;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(99, 102, 241, 0.4);
+  background: hsl(var(--primary) / 0.5);
 }
 
-/* Animações globais para as páginas (usadas pelo animate-fade-in) */
+/* Animações de Transição de Página (Dashboards e Disciplinas) */
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(4px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { 
+    opacity: 0; 
+    transform: translateY(8px); 
+  }
+  to { 
+    opacity: 1; 
+    transform: translateY(0); 
+  }
 }
 
 .animate-fade-in {
-  animation: fadeIn 0.4s ease-out forwards;
+  animation: fadeIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
-/* Ajuste para garantir que o Dashboard ocupe a tela toda no Mobile */
+/* Ajustes Mobile: Garante que o Dashboard use 100% da largura */
 @media (max-width: 768px) {
   #root {
     padding: 0;
   }
+  
+  /* Melhora a área de toque global para botões no celular */
+  button, a {
+    touch-action: manipulation;
+  }
+}
+
+/* Estilo para o marcador de texto (Neon/Pastel) nos resumos */
+mark {
+  border-radius: 4px;
+  padding: 0 2px;
 }
