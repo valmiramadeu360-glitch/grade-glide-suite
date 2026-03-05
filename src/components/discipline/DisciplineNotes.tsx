@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Plus, Trash2, Save, FileText, Loader2, Check, Printer, Bold, Italic, Underline as UnderlineIcon, AlignLeft, AlignCenter, AlignRight, AlignJustify, Highlighter, List, ListOrdered, Heading2 } from "lucide-react";
+import { Plus, Trash2, Save, FileText, Loader2, Check, Printer, Bold, Italic, Underline as UnderlineIcon, AlignLeft, AlignCenter, AlignRight, AlignJustify, Highlighter, List, ListOrdered, Heading2, Cloud } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { useEditor, EditorContent } from "@tiptap/react";
@@ -23,63 +23,85 @@ interface Note {
   updated_at: string;
 }
 
+// Paleta expandida de cores para marca-texto (Pastéis e Neons)
 const HIGHLIGHT_COLORS = [
+  // Pastéis
+  { label: "Amarelo Pastel", color: "#fef08a" },
+  { label: "Verde Pastel", color: "#bbf7d0" },
+  { label: "Azul Pastel", color: "#bfdbfe" },
+  { label: "Rosa Pastel", color: "#fbcfe8" },
+  { label: "Lilás Pastel", color: "#e9d5ff" },
+  { label: "Pêssego", color: "#ffedd5" },
+  // Neons
   { label: "Amarelo Neon", color: "#faff00" },
-  { label: "Rosa Neon", color: "#ff6ec7" },
   { label: "Verde Neon", color: "#39ff14" },
-  { label: "Azul Pastel", color: "#a8d8ea" },
-  { label: "Amarelo Pastel", color: "#fffacd" },
+  { label: "Ciano Neon", color: "#00ffff" },
+  { label: "Rosa Neon", color: "#ff10f0" },
+  { label: "Roxo Neon", color: "#b026ff" },
+  { label: "Laranja Neon", color: "#ff6600" },
 ];
 
 function EditorToolbar({ editor }: { editor: any }) {
   if (!editor) return null;
 
   return (
-    <div className="flex flex-wrap gap-0.5 p-1.5 border-b border-border/50 bg-muted/20 rounded-t-lg">
+    <div className="flex flex-wrap gap-1 p-2 border-b border-border/50 bg-muted/20 rounded-t-lg items-center">
       <Toggle size="sm" pressed={editor.isActive("bold")} onPressedChange={() => editor.chain().focus().toggleBold().run()}>
-        <Bold className="h-3.5 w-3.5" />
+        <Bold className="h-4 w-4" />
       </Toggle>
       <Toggle size="sm" pressed={editor.isActive("italic")} onPressedChange={() => editor.chain().focus().toggleItalic().run()}>
-        <Italic className="h-3.5 w-3.5" />
+        <Italic className="h-4 w-4" />
       </Toggle>
       <Toggle size="sm" pressed={editor.isActive("underline")} onPressedChange={() => editor.chain().focus().toggleUnderline().run()}>
-        <UnderlineIcon className="h-3.5 w-3.5" />
+        <UnderlineIcon className="h-4 w-4" />
       </Toggle>
-      <div className="w-px bg-border mx-1" />
-      {/* Highlight colors */}
-      {HIGHLIGHT_COLORS.map((h) => (
+      <div className="w-px h-6 bg-border mx-1" />
+      
+      {/* Cores do Marca-Texto */}
+      <div className="flex flex-wrap gap-1 px-1">
+        {HIGHLIGHT_COLORS.map((h) => (
+          <button
+            key={h.color}
+            title={h.label}
+            className="h-6 w-6 rounded-md flex items-center justify-center hover:scale-110 hover:shadow-md transition-all border border-transparent hover:border-foreground/20"
+            style={{ backgroundColor: h.color }}
+            onClick={() => editor.chain().focus().toggleHighlight({ color: h.color }).run()}
+          >
+            <Highlighter className="h-3 w-3 opacity-60 mix-blend-multiply" />
+          </button>
+        ))}
+        {/* Botão para remover o marca texto */}
         <button
-          key={h.color}
-          title={h.label}
-          className="h-7 w-7 rounded-md flex items-center justify-center hover:ring-2 ring-primary/30 transition-all"
-          style={{ backgroundColor: h.color }}
-          onClick={() => editor.chain().focus().toggleHighlight({ color: h.color }).run()}
+          title="Remover Marca-texto"
+          className="h-6 w-6 rounded-md flex items-center justify-center bg-background border border-border hover:bg-muted transition-all"
+          onClick={() => editor.chain().focus().unsetHighlight().run()}
         >
-          <Highlighter className="h-3 w-3 text-foreground/70" />
+          <Highlighter className="h-3 w-3 text-muted-foreground" />
         </button>
-      ))}
-      <div className="w-px bg-border mx-1" />
+      </div>
+
+      <div className="w-px h-6 bg-border mx-1" />
       <Toggle size="sm" pressed={editor.isActive("heading", { level: 2 })} onPressedChange={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}>
-        <Heading2 className="h-3.5 w-3.5" />
+        <Heading2 className="h-4 w-4" />
       </Toggle>
       <Toggle size="sm" pressed={editor.isActive("bulletList")} onPressedChange={() => editor.chain().focus().toggleBulletList().run()}>
-        <List className="h-3.5 w-3.5" />
+        <List className="h-4 w-4" />
       </Toggle>
       <Toggle size="sm" pressed={editor.isActive("orderedList")} onPressedChange={() => editor.chain().focus().toggleOrderedList().run()}>
-        <ListOrdered className="h-3.5 w-3.5" />
+        <ListOrdered className="h-4 w-4" />
       </Toggle>
-      <div className="w-px bg-border mx-1" />
+      <div className="w-px h-6 bg-border mx-1" />
       <Toggle size="sm" pressed={editor.isActive({ textAlign: "left" })} onPressedChange={() => editor.chain().focus().setTextAlign("left").run()}>
-        <AlignLeft className="h-3.5 w-3.5" />
+        <AlignLeft className="h-4 w-4" />
       </Toggle>
       <Toggle size="sm" pressed={editor.isActive({ textAlign: "center" })} onPressedChange={() => editor.chain().focus().setTextAlign("center").run()}>
-        <AlignCenter className="h-3.5 w-3.5" />
+        <AlignCenter className="h-4 w-4" />
       </Toggle>
       <Toggle size="sm" pressed={editor.isActive({ textAlign: "right" })} onPressedChange={() => editor.chain().focus().setTextAlign("right").run()}>
-        <AlignRight className="h-3.5 w-3.5" />
+        <AlignRight className="h-4 w-4" />
       </Toggle>
       <Toggle size="sm" pressed={editor.isActive({ textAlign: "justify" })} onPressedChange={() => editor.chain().focus().setTextAlign("justify").run()}>
-        <AlignJustify className="h-3.5 w-3.5" />
+        <AlignJustify className="h-4 w-4" />
       </Toggle>
     </div>
   );
@@ -95,6 +117,16 @@ export function DisciplineNotes({ disciplineId, disciplineName }: { disciplineId
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [printDialogOpen, setPrintDialogOpen] = useState(false);
   const [printSubtitle, setPrintSubtitle] = useState("");
+  
+  // Controle de estado para o Auto-save
+  const [autoSaveStatus, setAutoSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Ref para garantir que o auto-save sempre pegue a nota correta
+  const selectedRef = useRef<Note | null>(null);
+  useEffect(() => {
+    selectedRef.current = selected;
+  }, [selected]);
 
   const editor = useEditor({
     extensions: [
@@ -106,13 +138,55 @@ export function DisciplineNotes({ disciplineId, disciplineName }: { disciplineId
     content: "",
     editorProps: {
       attributes: {
-        class: "focus:outline-none min-h-[400px]",
+        class: "focus:outline-none min-h-[400px] p-4",
       },
     },
+    onUpdate: ({ editor }) => {
+      const currentNote = selectedRef.current;
+      if (!currentNote || !user) return;
+
+      const htmlContent = editor.getHTML();
+      setAutoSaveStatus("saving");
+
+      // Limpa o timer anterior se o usuário continuar digitando
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+
+      // Configura um novo timer de 1.5 segundos
+      typingTimeoutRef.current = setTimeout(async () => {
+        const { error } = await supabase
+          .from("notes")
+          .update({
+            content: htmlContent,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", currentNote.id);
+
+        if (!error) {
+          setAutoSaveStatus("saved");
+          setLastSaved(new Date());
+          
+          // Atualiza a lista local silenciosamente
+          setNotes(prevNotes => prevNotes.map(n => 
+            n.id === currentNote.id ? { ...n, content: htmlContent, updated_at: new Date().toISOString() } : n
+          ));
+          
+          // Volta o status para idle depois de 2 segundos
+          setTimeout(() => setAutoSaveStatus("idle"), 2000);
+        } else {
+          setAutoSaveStatus("idle");
+        }
+      }, 1500);
+    }
   });
 
   useEffect(() => {
     loadNotes();
+    
+    return () => {
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    };
   }, [disciplineId]);
 
   async function loadNotes() {
@@ -129,7 +203,7 @@ export function DisciplineNotes({ disciplineId, disciplineName }: { disciplineId
     const { data, error } = await supabase.from("notes").insert({
       discipline_id: disciplineId,
       user_id: user.id,
-      title: "Nova anotação " + format(new Date(), "dd/MM"),
+      title: "Novo Resumo - " + format(new Date(), "dd/MM"),
       content: "",
     }).select().single();
 
@@ -146,12 +220,15 @@ export function DisciplineNotes({ disciplineId, disciplineName }: { disciplineId
   }
 
   function selectNote(note: Note) {
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    setAutoSaveStatus("idle");
     setSelected(note);
     setTitle(note.title);
     editor?.commands.setContent(note.content ?? "");
     setLastSaved(null);
   }
 
+  // Salvamento manual pelo botão "Salvar"
   async function saveNote() {
     if (!selected || !user || !editor) return;
     setSaving(true);
@@ -169,6 +246,7 @@ export function DisciplineNotes({ disciplineId, disciplineName }: { disciplineId
     if (!error) {
       setLastSaved(new Date());
       setNotes(notes.map(n => n.id === selected.id ? { ...n, title, content: htmlContent, updated_at: new Date().toISOString() } : n));
+      toast({ title: "Salvo com sucesso!" });
     }
     setSaving(false);
   }
@@ -181,7 +259,7 @@ export function DisciplineNotes({ disciplineId, disciplineName }: { disciplineId
   }
 
   async function deleteNote(id: string) {
-    if (!window.confirm("Deseja excluir esta nota?")) return;
+    if (!window.confirm("Deseja excluir esta nota permanentemente?")) return;
     const { error } = await supabase.from("notes").delete().eq("id", id);
     if (!error) {
       setNotes(notes.filter(n => n.id !== id));
@@ -190,7 +268,7 @@ export function DisciplineNotes({ disciplineId, disciplineName }: { disciplineId
         setTitle("");
         editor?.commands.setContent("");
       }
-      toast({ title: "Nota excluída" });
+      toast({ title: "Resumo excluído" });
     }
   }
 
@@ -245,62 +323,65 @@ export function DisciplineNotes({ disciplineId, disciplineName }: { disciplineId
   return (
     <>
       <Dialog open={printDialogOpen} onOpenChange={setPrintDialogOpen}>
-        <DialogContent className="sm:max-w-[400px]">
+        <DialogContent className="sm:max-w-[400px] rounded-[24px]">
           <DialogHeader>
-            <DialogTitle>Configuração de Impressão</DialogTitle>
+            <DialogTitle className="font-black">Configuração de Impressão</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pt-2">
             <div className="space-y-2">
-              <Label className="font-bold text-xs uppercase text-muted-foreground">Subtítulo / Cabeçalho do Documento</Label>
+              <Label className="font-bold text-[10px] uppercase tracking-widest text-muted-foreground ml-1">Subtítulo do Documento</Label>
               <Input
                 value={printSubtitle}
                 onChange={e => setPrintSubtitle(e.target.value)}
                 placeholder="Ex: Resumo para P1"
-                className="h-12"
+                className="h-12 rounded-xl"
                 onKeyDown={e => e.key === "Enter" && printNote()}
               />
             </div>
-            <Button onClick={printNote} className="w-full h-12 font-bold uppercase tracking-widest">
-              <Printer className="mr-2 h-4 w-4" /> Imprimir A4
+            <Button onClick={printNote} className="w-full h-12 rounded-xl font-black uppercase tracking-widest text-xs">
+              <Printer className="mr-2 h-4 w-4" /> Imprimir Documento
             </Button>
           </div>
         </DialogContent>
       </Dialog>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 h-full min-h-[500px]">
-        {/* Notes list */}
-        <Card className="glass-card lg:col-span-1 overflow-hidden flex flex-col">
-          <CardHeader className="pb-3 flex flex-row items-center justify-between shrink-0">
-            <CardTitle className="text-base">Meus Resumos</CardTitle>
-            <Button size="sm" variant="outline" onClick={createNote} className="h-8">
-              <Plus className="mr-1 h-3 w-3" /> Nova
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-full min-h-[600px]">
+        {/* Lista de Resumos */}
+        <Card className="glass-card border-none shadow-sm lg:col-span-1 overflow-hidden flex flex-col bg-card rounded-[32px]">
+          <CardHeader className="pb-4 pt-6 px-6 flex flex-row items-center justify-between shrink-0 border-b border-border/40">
+            <CardTitle className="text-sm font-black uppercase tracking-widest text-foreground">Meus Resumos</CardTitle>
+            <Button size="sm" onClick={createNote} className="h-8 rounded-lg shadow-sm font-bold text-[10px] uppercase tracking-widest">
+              <Plus className="mr-1 h-3 w-3" /> Novo
             </Button>
           </CardHeader>
-          <CardContent className="space-y-1 overflow-y-auto flex-1 pr-2">
+          <CardContent className="p-4 space-y-2 overflow-y-auto flex-1 custom-scrollbar">
             {notes.length === 0 && (
-              <p className="text-sm text-muted-foreground text-center py-8">Nenhuma nota por aqui.</p>
+              <div className="flex flex-col items-center justify-center py-10 text-center">
+                <FileText className="h-10 w-10 text-muted-foreground/30 mb-3" />
+                <p className="text-xs font-medium text-muted-foreground">Nenhuma anotação criada.</p>
+              </div>
             )}
             {notes.map((note) => (
               <div
                 key={note.id}
-                className={`flex items-center gap-3 rounded-lg p-3 cursor-pointer group transition-all border border-transparent ${
-                  selected?.id === note.id ? "bg-primary/10 border-primary/20" : "hover:bg-muted/50"
+                className={`flex items-center gap-4 rounded-2xl p-3 cursor-pointer group transition-all border ${
+                  selected?.id === note.id ? "bg-primary/5 border-primary/30 shadow-sm" : "border-transparent hover:bg-muted/50 hover:border-border/50"
                 }`}
                 onClick={() => selectNote(note)}
               >
-                <div className={`p-2 rounded-md ${selected?.id === note.id ? "bg-primary/20" : "bg-muted"}`}>
-                  <FileText className={`h-4 w-4 ${selected?.id === note.id ? "text-primary" : "text-muted-foreground"}`} />
+                <div className={`p-2.5 rounded-xl transition-colors ${selected?.id === note.id ? "bg-primary text-primary-foreground shadow-md" : "bg-muted text-muted-foreground group-hover:bg-background"}`}>
+                  <FileText className="h-4 w-4" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-foreground truncate">{note.title}</p>
-                  <p className="text-[10px] text-muted-foreground uppercase">
+                  <p className={`text-sm font-bold truncate transition-colors ${selected?.id === note.id ? "text-primary" : "text-foreground"}`}>{note.title}</p>
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-widest font-medium mt-0.5">
                     {format(new Date(note.updated_at), "dd MMM · HH:mm")}
                   </p>
                 </div>
                 <Button
                   size="icon"
                   variant="ghost"
-                  className="h-7 w-7 opacity-0 group-hover:opacity-100 text-destructive hover:bg-destructive/10"
+                  className="h-8 w-8 opacity-0 group-hover:opacity-100 text-destructive hover:bg-destructive/10 shrink-0"
                   onClick={(e) => { e.stopPropagation(); deleteNote(note.id); }}
                 >
                   <Trash2 className="h-4 w-4" />
@@ -310,54 +391,62 @@ export function DisciplineNotes({ disciplineId, disciplineName }: { disciplineId
           </CardContent>
         </Card>
 
-        {/* Editor */}
-        <Card className="glass-card lg:col-span-2 flex flex-col overflow-hidden">
-          <CardContent className="pt-6 flex-1 flex flex-col space-y-4">
+        {/* Editor de Texto */}
+        <Card className="glass-card border-none shadow-md lg:col-span-2 flex flex-col overflow-hidden bg-card rounded-[32px]">
+          <CardContent className="p-0 flex-1 flex flex-col">
             {selected ? (
-              <>
-                <div className="flex items-center justify-between shrink-0 flex-wrap gap-2">
+              <div className="flex-1 flex flex-col h-full">
+                {/* Header do Editor */}
+                <div className="flex items-center justify-between flex-wrap gap-4 p-6 border-b border-border/40 bg-muted/10">
                   <div className="flex-1 min-w-[200px]">
                     <Input
                       value={title}
                       onChange={(e) => setTitle(e.target.value)}
                       onBlur={saveTitleOnBlur}
                       onKeyDown={(e) => { if (e.key === "Enter") saveTitleOnBlur(); }}
-                      className="text-xl font-bold border-none bg-transparent px-0 focus-visible:ring-0 placeholder:opacity-30"
+                      className="text-2xl font-black border-none bg-transparent px-0 focus-visible:ring-0 placeholder:opacity-30 h-auto"
                       placeholder="Título do resumo..."
                     />
                   </div>
-                  <div className="flex items-center gap-2">
-                    {saving ? (
-                      <span className="text-[10px] flex items-center text-muted-foreground animate-pulse">
-                        <Loader2 className="mr-1 h-3 w-3 animate-spin" /> SALVANDO...
-                      </span>
-                    ) : lastSaved && (
-                      <span className="text-[10px] flex items-center text-emerald-500 font-medium">
-                        <Check className="mr-1 h-3 w-3" /> SALVO
-                      </span>
-                    )}
-                    <Button size="sm" variant="outline" onClick={openPrintDialog} title="Imprimir A4">
+                  <div className="flex items-center gap-3 shrink-0">
+                    {/* Indicadores de Salvamento Automático */}
+                    <div className="hidden sm:flex items-center mr-2">
+                      {autoSaveStatus === "saving" || saving ? (
+                        <span className="text-[10px] flex items-center gap-1.5 text-primary font-black uppercase tracking-widest animate-pulse">
+                          <Cloud className="h-3 w-3" /> Salvando...
+                        </span>
+                      ) : autoSaveStatus === "saved" || lastSaved ? (
+                        <span className="text-[10px] flex items-center gap-1.5 text-emerald-500 font-black uppercase tracking-widest">
+                          <Check className="h-3 w-3" /> Salvo na nuvem
+                        </span>
+                      ) : null}
+                    </div>
+
+                    <Button size="icon" variant="outline" className="h-10 w-10 rounded-xl" onClick={openPrintDialog} title="Imprimir Resumo">
                       <Printer className="h-4 w-4" />
                     </Button>
-                    <Button size="sm" onClick={saveNote} disabled={saving} className="shadow-md">
+                    <Button size="sm" onClick={saveNote} disabled={saving || autoSaveStatus === "saving"} className="h-10 px-5 rounded-xl font-bold text-xs uppercase tracking-widest shadow-lg shadow-primary/20">
                       <Save className="mr-2 h-4 w-4" /> Salvar
                     </Button>
                   </div>
                 </div>
 
-                <div className="flex-1 border border-border/50 rounded-lg overflow-hidden tiptap-editor bg-muted/10">
+                {/* Área do Editor */}
+                <div className="flex-1 flex flex-col overflow-hidden relative">
                   <EditorToolbar editor={editor} />
-                  <EditorContent editor={editor} />
+                  <div className="flex-1 overflow-y-auto custom-scrollbar bg-background/50">
+                    <EditorContent editor={editor} className="min-h-full" />
+                  </div>
                 </div>
-              </>
+              </div>
             ) : (
-              <div className="flex flex-col items-center justify-center h-full text-muted-foreground py-20">
-                <div className="bg-muted/30 p-6 rounded-full mb-4">
-                  <FileText className="h-12 w-12 opacity-20" />
+              <div className="flex flex-col items-center justify-center h-full text-muted-foreground py-20 bg-muted/5">
+                <div className="bg-card p-6 rounded-3xl mb-6 shadow-sm border border-border/50">
+                  <FileText className="h-12 w-12 text-muted-foreground/40" />
                 </div>
-                <h3 className="font-medium text-foreground">Editor de Resumos</h3>
-                <p className="text-sm max-w-[250px] text-center mt-1">
-                  Selecione uma nota ao lado ou crie uma nova para começar a estudar.
+                <h3 className="text-xl font-black text-foreground">Editor de Resumos</h3>
+                <p className="text-sm text-center mt-2 font-medium max-w-xs">
+                  Selecione uma anotação na lateral ou crie um novo resumo para começar a digitar.
                 </p>
               </div>
             )}
