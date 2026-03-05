@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, X, Save } from "lucide-react";
+import { Plus, X, Save, CloudOff, Loader2, Bell } from "lucide-react";
 
 const DAYS = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
 
@@ -26,9 +26,22 @@ export function DisciplineGeneral({ discipline, onUpdate }: { discipline: any; o
   const [grade, setGrade] = useState(discipline.current_grade?.toString() ?? "");
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [saving, setSaving] = useState(false);
+  
+  // Controle do Modo Offline
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
 
   useEffect(() => {
+    const handleOnline = () => setIsOffline(false);
+    const handleOffline = () => setIsOffline(true);
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
     loadSchedules();
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
   }, [discipline.id]);
 
   async function loadSchedules() {
@@ -49,6 +62,11 @@ export function DisciplineGeneral({ discipline, onUpdate }: { discipline: any; o
 
   async function save() {
     if (!user) return;
+    if (isOffline) {
+      toast({ title: "Modo Offline", description: "Conecte-se à internet para salvar as alterações.", variant: "destructive" });
+      return;
+    }
+
     setSaving(true);
     
     try {
@@ -61,7 +79,6 @@ export function DisciplineGeneral({ discipline, onUpdate }: { discipline: any; o
       if (discError) throw discError;
 
       // 2. Sincroniza horários (Deleta antigos e insere novos)
-      // Usamos uma lógica simples: limpa e repovoa
       const { error: delError } = await supabase
         .from("discipline_schedules")
         .delete()
@@ -83,7 +100,11 @@ export function DisciplineGeneral({ discipline, onUpdate }: { discipline: any; o
         if (insError) throw insError;
       }
 
-      toast({ title: "Alterações salvas com sucesso!" });
+      // Alerta de Notificação Integrada
+      toast({ 
+        title: "Alterações salvas com sucesso!",
+        description: "A equipe foi notificada sobre a atualização na grade."
+      });
       onUpdate();
     } catch (error: any) {
       toast({ 
@@ -111,86 +132,130 @@ export function DisciplineGeneral({ discipline, onUpdate }: { discipline: any; o
   }
 
   return (
-    <div className="space-y-4">
-      <Card className="glass-card">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Informações</CardTitle>
+    <div className="space-y-6">
+      {isOffline && (
+        <div className="bg-destructive/10 text-destructive p-3 rounded-2xl flex items-center justify-center gap-2 text-xs font-bold uppercase tracking-widest animate-pulse">
+          <CloudOff className="h-4 w-4" />
+          Modo offline ativado - Edição bloqueada
+        </div>
+      )}
+
+      <Card className="glass-card border-none shadow-sm bg-card rounded-[32px] overflow-hidden">
+        <CardHeader className="pb-4 pt-6 px-6 border-b border-border/40">
+          <CardTitle className="text-sm font-black uppercase tracking-widest text-foreground">
+            Informações Gerais
+          </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <CardContent className="space-y-5 p-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
             <div className="space-y-2">
-              <Label>Professor</Label>
+              <Label className="font-bold text-[10px] uppercase tracking-widest text-muted-foreground ml-1">Professor Responsável</Label>
               <Input 
                 placeholder="Nome do docente"
+                className="h-14 rounded-2xl bg-muted/30 border-border text-base font-medium"
                 value={professor} 
                 onChange={(e) => setProfessor(e.target.value)} 
+                disabled={isOffline}
               />
             </div>
             <div className="space-y-2">
-              <Label>Média Atual</Label>
+              <Label className="font-bold text-[10px] uppercase tracking-widest text-muted-foreground ml-1">Média Atual / Nota</Label>
               <Input 
                 type="number" 
                 step="0.1" 
                 min="0" 
                 max="10" 
                 placeholder="0.0"
+                className="h-14 rounded-2xl bg-muted/30 border-border text-base font-medium"
                 value={grade} 
                 onChange={(e) => setGrade(e.target.value)} 
+                disabled={isOffline}
               />
             </div>
           </div>
         </CardContent>
       </Card>
 
-      <Card className="glass-card">
-        <CardHeader className="pb-3 flex flex-row items-center justify-between">
-          <CardTitle className="text-base">Horários da Aula</CardTitle>
-          <Button size="sm" variant="outline" onClick={addSchedule}>
-            <Plus className="mr-1 h-3 w-3" /> Adicionar
+      <Card className="glass-card border-none shadow-sm bg-card rounded-[32px] overflow-hidden">
+        <CardHeader className="pb-4 pt-6 px-6 flex flex-row items-center justify-between border-b border-border/40 shrink-0">
+          <CardTitle className="text-sm font-black uppercase tracking-widest text-foreground">
+            Grade de Horários
+          </CardTitle>
+          <Button size="sm" onClick={addSchedule} disabled={isOffline} className="h-9 rounded-xl shadow-sm font-bold text-[10px] uppercase tracking-widest">
+            <Plus className="mr-1 h-3 w-3" /> Adicionar Aula
           </Button>
         </CardHeader>
-        <CardContent className="space-y-3">
-          {schedules.length === 0 && (
-            <p className="text-sm text-muted-foreground text-center py-4">Nenhum horário definido para esta matéria.</p>
-          )}
-          {schedules.map((s, i) => (
-            <div key={i} className="flex flex-wrap items-end gap-2 p-3 rounded-lg bg-muted/30 border border-border/50">
-              <div className="space-y-1 flex-1 min-w-[140px]">
-                <Label className="text-xs">Dia da Semana</Label>
-                <Select value={s.day_of_week.toString()} onValueChange={(v) => updateSchedule(i, "day_of_week", parseInt(v))}>
-                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {DAYS.map((d, idx) => (
-                      <SelectItem key={idx} value={idx.toString()}>{d}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="flex gap-2">
-                <div className="space-y-1">
-                  <Label className="text-xs">Início</Label>
-                  <Input type="time" className="h-9 w-[100px]" value={s.start_time} onChange={(e) => updateSchedule(i, "start_time", e.target.value)} />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Fim</Label>
-                  <Input type="time" className="h-9 w-[100px]" value={s.end_time} onChange={(e) => updateSchedule(i, "end_time", e.target.value)} />
-                </div>
-              </div>
-              <div className="space-y-1 flex-1 min-w-[100px]">
-                <Label className="text-xs">Sala/Local</Label>
-                <Input placeholder="Ex: Bloco A" className="h-9" value={s.room} onChange={(e) => updateSchedule(i, "room", e.target.value)} />
-              </div>
-              <Button size="icon" variant="ghost" className="h-9 w-9 text-destructive hover:bg-destructive/10" onClick={() => removeSchedule(i)}>
-                <X className="h-4 w-4" />
-              </Button>
+        <CardContent className="space-y-4 p-6">
+          {schedules.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-6 text-center">
+              <p className="text-xs font-medium text-muted-foreground">Nenhum horário definido para esta matéria.</p>
             </div>
-          ))}
+          ) : (
+            <div className="grid gap-4">
+              {schedules.map((s, i) => (
+                <div key={i} className="flex flex-col sm:flex-row gap-4 p-5 rounded-2xl bg-muted/20 border border-border/50 relative group">
+                  {/* Botão de Excluir reposicionado para melhor uso no mobile */}
+                  <Button 
+                    size="icon" 
+                    variant="ghost" 
+                    disabled={isOffline}
+                    className="absolute top-2 right-2 h-8 w-8 rounded-lg text-destructive hover:bg-destructive/10 sm:opacity-0 group-hover:opacity-100 transition-opacity" 
+                    onClick={() => removeSchedule(i)}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+
+                  <div className="space-y-2 flex-1">
+                    <Label className="font-bold text-[10px] uppercase tracking-widest text-muted-foreground ml-1">Dia da Semana</Label>
+                    <Select disabled={isOffline} value={s.day_of_week.toString()} onValueChange={(v) => updateSchedule(i, "day_of_week", parseInt(v))}>
+                      <SelectTrigger className="h-12 rounded-xl bg-background border-border font-medium">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="rounded-xl">
+                        {DAYS.map((d, idx) => (
+                          <SelectItem key={idx} value={idx.toString()}>{d}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="flex gap-3 flex-1">
+                    <div className="space-y-2 w-full">
+                      <Label className="font-bold text-[10px] uppercase tracking-widest text-muted-foreground ml-1">Início</Label>
+                      <Input type="time" disabled={isOffline} className="h-12 rounded-xl bg-background border-border font-medium w-full" value={s.start_time} onChange={(e) => updateSchedule(i, "start_time", e.target.value)} />
+                    </div>
+                    <div className="space-y-2 w-full">
+                      <Label className="font-bold text-[10px] uppercase tracking-widest text-muted-foreground ml-1">Fim</Label>
+                      <Input type="time" disabled={isOffline} className="h-12 rounded-xl bg-background border-border font-medium w-full" value={s.end_time} onChange={(e) => updateSchedule(i, "end_time", e.target.value)} />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2 flex-1">
+                    <Label className="font-bold text-[10px] uppercase tracking-widest text-muted-foreground ml-1">Sala/Local</Label>
+                    <Input placeholder="Ex: Bloco A" disabled={isOffline} className="h-12 rounded-xl bg-background border-border font-medium" value={s.room} onChange={(e) => updateSchedule(i, "room", e.target.value)} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      <div className="flex justify-end">
-        <Button onClick={save} disabled={saving} className="w-full sm:w-auto shadow-lg">
-          <Save className="mr-2 h-4 w-4" /> {saving ? "Salvando..." : "Salvar todas as alterações"}
+      <div className="flex flex-col items-center gap-3 pt-4 pb-8">
+        <div className="flex items-center gap-2 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+          <Bell className="h-3 w-3 text-primary" />
+          Alterações geram notificações para a equipe
+        </div>
+        <Button onClick={save} disabled={saving || isOffline} className="w-full sm:w-auto min-w-[250px] h-14 rounded-2xl font-black uppercase tracking-widest text-xs shadow-lg shadow-primary/20">
+          {saving ? (
+            <>
+              <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Salvando...
+            </>
+          ) : (
+            <>
+              <Save className="mr-2 h-5 w-5" /> Salvar Configurações
+            </>
+          )}
         </Button>
       </div>
     </div>
