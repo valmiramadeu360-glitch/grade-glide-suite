@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { Mail, Lock, User, GraduationCap, Loader2 } from "lucide-react";
+import { Mail, Lock, User, GraduationCap, Loader2, ArrowLeft } from "lucide-react";
 
 export default function Auth() {
   const [loading, setLoading] = useState(false);
@@ -40,8 +40,19 @@ export default function Auth() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4">
-      <div className="mb-8 text-center animate-in fade-in slide-in-from-top-4 duration-1000">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4 relative">
+      {/* Botão de voltar melhorado para usabilidade mobile */}
+      <Button 
+        variant="ghost" 
+        size="icon" 
+        className="absolute top-4 left-4 md:top-8 md:left-8 text-muted-foreground hover:text-foreground hover:bg-accent/10 transition-colors z-10"
+        onClick={() => window.history.back()}
+        title="Voltar"
+      >
+        <ArrowLeft className="h-6 w-6" />
+      </Button>
+
+      <div className="mb-8 text-center animate-in fade-in slide-in-from-top-4 duration-1000 mt-12 md:mt-0">
         <h1 className="text-5xl font-black text-foreground italic tracking-tighter flex items-center justify-center gap-2">
           EduFlow
         </h1>
@@ -51,7 +62,8 @@ export default function Auth() {
       </div>
 
       <Card className="w-full max-w-md border-border bg-card backdrop-blur-xl shadow-2xl rounded-[32px] overflow-hidden">
-        <div className="h-1.5 w-full bg-primary" />
+        {/* Esta barra superior usará a cor principal do tema (rosa, azul, etc) */}
+        <div className="h-1.5 w-full bg-primary transition-colors duration-300" />
         <CardHeader className="space-y-2 pt-8 text-center">
           <CardTitle className="text-3xl font-black text-foreground tracking-tight">
             {isSignUp ? "Criar Conta" : "Acessar Conta"}
@@ -69,9 +81,9 @@ export default function Auth() {
               <div className="space-y-2">
                 <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Nome Completo</Label>
                 <div className="relative group">
-                  <User className="absolute left-3 top-3 h-5 w-5 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                  <User className="absolute left-3 top-3 h-5 w-5 text-muted-foreground group-focus-within:text-primary transition-colors duration-300" />
                   <Input
-                    className="pl-11 h-12 bg-muted/30 border-border text-foreground rounded-2xl focus:ring-primary/20"
+                    className="pl-11 h-12 bg-muted/30 border-border text-foreground rounded-2xl focus:ring-primary/20 transition-all"
                     placeholder="Seu nome"
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
@@ -84,9 +96,9 @@ export default function Auth() {
             <div className="space-y-2">
               <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">E-mail acadêmico</Label>
               <div className="relative group">
-                <Mail className="absolute left-3 top-3 h-5 w-5 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                <Mail className="absolute left-3 top-3 h-5 w-5 text-muted-foreground group-focus-within:text-primary transition-colors duration-300" />
                 <Input
-                  className="pl-11 h-12 bg-muted/30 border-border text-foreground rounded-2xl focus:ring-primary/20"
+                  className="pl-11 h-12 bg-muted/30 border-border text-foreground rounded-2xl focus:ring-primary/20 transition-all"
                   type="email"
                   placeholder="seu@email.com"
                   value={email}
@@ -99,9 +111,9 @@ export default function Auth() {
             <div className="space-y-2">
               <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Senha</Label>
               <div className="relative group">
-                <Lock className="absolute left-3 top-3 h-5 w-5 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                <Lock className="absolute left-3 top-3 h-5 w-5 text-muted-foreground group-focus-within:text-primary transition-colors duration-300" />
                 <Input
-                  className="pl-11 h-12 bg-muted/30 border-border text-foreground rounded-2xl focus:ring-primary/20"
+                  className="pl-11 h-12 bg-muted/30 border-border text-foreground rounded-2xl focus:ring-primary/20 transition-all"
                   type="password"
                   placeholder="No mínimo 6 caracteres"
                   value={password}
@@ -114,7 +126,7 @@ export default function Auth() {
 
           <CardFooter className="flex flex-col gap-4 pb-8 pt-4">
             <Button
-              className="w-full h-12 rounded-2xl font-black uppercase tracking-widest text-xs shadow-lg shadow-primary/20 transition-all hover:scale-[1.02]"
+              className="w-full h-12 rounded-2xl font-black uppercase tracking-widest text-xs shadow-lg shadow-primary/20 transition-all hover:scale-[1.02] bg-primary text-primary-foreground hover:bg-primary/90"
               type="submit"
               disabled={loading}
             >
