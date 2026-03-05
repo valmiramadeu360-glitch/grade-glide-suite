@@ -190,7 +190,7 @@ export default function Settings() {
                         "h-10 w-10 rounded-xl transition-all hover:scale-110 shadow-sm border-2",
                         isSelected ? "border-foreground ring-2 ring-offset-2 ring-offset-background scale-110" : "border-transparent"
                       )}
-                      style={{ backgroundColor: `hsl(${c.hue}, ${c.saturation}%, ${c.lightness}%)`, ringColor: `hsl(${c.hue}, ${c.saturation}%, ${c.lightness}%)` }}
+                      style={{ backgroundColor: `hsl(${c.hue}, ${c.saturation}%, ${c.lightness}%)` }}
                     />
                   );
                 })}
