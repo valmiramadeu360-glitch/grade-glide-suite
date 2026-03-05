@@ -26,6 +26,14 @@ interface Reminder {
   disciplines?: { name: string } | null;
 }
 
+const typeLabels: Record<string, string> = {
+  exam: "Prova",
+  assignment: "Trabalho",
+  seminar: "Seminário",
+  presentation: "Apresentação",
+  other: "Outro",
+};
+
 export default function Reminders() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -35,7 +43,8 @@ export default function Reminders() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
-  // Estados do formulário
+  // Form state
+  const [editId, setEditId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [type, setType] = useState("exam");
   const [dueDate, setDueDate] = useState("");
@@ -47,72 +56,83 @@ export default function Reminders() {
 
   async function load() {
     const [remRes, discRes] = await Promise.all([
-      supabase
-        .from("reminders")
-        .select("*, disciplines(name)")
-        .eq("user_id", user?.id)
-        .order("due_date", { ascending: true }),
-      supabase
-        .from("disciplines")
-        .select("id, name")
-        .eq("user_id", user?.id)
-        .order("name"),
+      supabase.from("reminders").select("*, disciplines(name)").eq("user_id", user?.id).order("due_date", { ascending: true }),
+      supabase.from("disciplines").select("id, name").eq("user_id", user?.id).order("name"),
     ]);
     setReminders(remRes.data ?? []);
     setDisciplines(discRes.data ?? []);
     setLoading(false);
   }
 
-  async function create() {
+  function openNew() {
+    setEditId(null);
+    setTitle("");
+    setType("exam");
+    setDueDate("");
+    setDiscId("none");
+    setOpen(true);
+  }
+
+  function openEdit(r: Reminder) {
+    setEditId(r.id);
+    setTitle(r.title);
+    setType(r.type);
+    setDueDate(format(new Date(r.due_date), "yyyy-MM-dd'T'HH:mm"));
+    setDiscId(r.discipline_id || "none");
+    setOpen(true);
+  }
+
+  async function save() {
     if (!title.trim() || !dueDate || !user) {
       toast({ title: "Preencha o título e a data", variant: "destructive" });
       return;
     }
 
     setSubmitting(true);
-    const { error } = await supabase.from("reminders").insert({
-      user_id: user.id,
+    const payload = {
       title: title.trim(),
       type,
       due_date: new Date(dueDate).toISOString(),
       discipline_id: discId === "none" ? null : discId,
-    });
+    };
 
-    if (error) {
-      toast({ title: "Erro ao criar", description: error.message, variant: "destructive" });
+    // TODO: Web Push - schedule notification for this due_date
+
+    if (editId) {
+      const { error } = await supabase.from("reminders").update(payload).eq("id", editId);
+      if (error) {
+        toast({ title: "Erro ao atualizar", description: error.message, variant: "destructive" });
+      } else {
+        toast({ title: "Lembrete atualizado!" });
+        setOpen(false);
+        load();
+      }
     } else {
-      toast({ title: "Lembrete criado!" });
-      setTitle("");
-      setDueDate("");
-      setDiscId("none");
-      setOpen(false);
-      load();
+      const { error } = await supabase.from("reminders").insert({ ...payload, user_id: user.id });
+      if (error) {
+        toast({ title: "Erro ao criar", description: error.message, variant: "destructive" });
+      } else {
+        toast({ title: "Lembrete criado!" });
+        setOpen(false);
+        load();
+      }
     }
     setSubmitting(false);
   }
 
   async function toggle(r: Reminder) {
-    const { error } = await supabase
-      .from("reminders")
-      .update({ completed: !r.completed })
-      .eq("id", r.id);
-    
+    const { error } = await supabase.from("reminders").update({ completed: !r.completed }).eq("id", r.id);
     if (!error) load();
   }
 
   async function remove(id: string) {
+    if (!window.confirm("Deseja excluir este lembrete?")) return;
     const { error } = await supabase.from("reminders").delete().eq("id", id);
     if (!error) {
       toast({ title: "Lembrete removido" });
       load();
     }
   }
-
-  const typeLabels: Record<string, string> = { 
-    exam: "Prova", 
-    assignment: "Trabalho", 
-    other: "Outro" 
-  };
 
   if (loading) {
     return (
@@ -133,70 +153,70 @@ export default function Reminders() {
           <h1 className="text-3xl font-black text-foreground tracking-tight">Cronograma de Prazos</h1>
           <p className="text-muted-foreground font-medium">Gestão de entregas e avaliações</p>
         </div>
-        
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button className="shadow-lg shadow-primary/20 font-bold uppercase text-xs tracking-widest h-12 px-6">
-              <Plus className="mr-2 h-4 w-4" /> Novo Lembrete
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-[425px]">
-            <DialogHeader>
-              <DialogTitle className="text-xl font-bold">Novo Lembrete</DialogTitle>
-              <DialogDescription>Agende um novo prazo para suas disciplinas.</DialogDescription>
-            </DialogHeader>
-            <div className="space-y-5 pt-4">
-              <div className="space-y-2">
-                <Label className="font-bold text-xs uppercase text-muted-foreground">Título do Evento</Label>
-                <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Ex: P1 de Microeconomia" className="h-12" />
-              </div>
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label className="font-bold text-xs uppercase text-muted-foreground">Categoria</Label>
-                  <Select value={type} onValueChange={setType}>
-                    <SelectTrigger className="h-12"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="exam">Prova 📝</SelectItem>
-                      <SelectItem value="assignment">Trabalho 📚</SelectItem>
-                      <SelectItem value="other">Outro 📍</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label className="font-bold text-xs uppercase text-muted-foreground">Disciplina</Label>
-                  <Select value={discId} onValueChange={setDiscId}>
-                    <SelectTrigger className="h-12"><SelectValue placeholder="Escolha..." /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">Geral / Extra</SelectItem>
-                      {disciplines.map((d) => (
-                        <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
 
-              <div className="space-y-2">
-                <Label className="font-bold text-xs uppercase text-muted-foreground">Data e Horário Limite</Label>
-                <Input type="datetime-local" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="h-12" />
-              </div>
-
-              <Button onClick={create} disabled={submitting} className="w-full h-12 font-bold uppercase tracking-widest shadow-lg">
-                {submitting ? <Loader2 className="h-5 w-5 animate-spin" /> : "Agendar Lembrete"}
-              </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+        <Button onClick={openNew} className="shadow-lg shadow-primary/20 font-bold uppercase text-xs tracking-widest h-12 px-6">
+          <Plus className="mr-2 h-4 w-4" /> Novo Lembrete
+        </Button>
       </div>
 
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold">{editId ? "Editar Lembrete" : "Novo Lembrete"}</DialogTitle>
+            <DialogDescription>Agende um prazo para suas disciplinas.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-5 pt-4">
+            <div className="space-y-2">
+              <Label className="font-bold text-xs uppercase text-muted-foreground">Título do Evento</Label>
+              <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Ex: P1 de Microeconomia" className="h-12" />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label className="font-bold text-xs uppercase text-muted-foreground">Categoria</Label>
+                <Select value={type} onValueChange={setType}>
+                  <SelectTrigger className="h-12"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="exam">Prova 📝</SelectItem>
+                    <SelectItem value="assignment">Trabalho 📚</SelectItem>
+                    <SelectItem value="seminar">Seminário 🎤</SelectItem>
+                    <SelectItem value="presentation">Apresentação 🖥️</SelectItem>
+                    <SelectItem value="other">Outro 📍</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label className="font-bold text-xs uppercase text-muted-foreground">Disciplina</Label>
+                <Select value={discId} onValueChange={setDiscId}>
+                  <SelectTrigger className="h-12"><SelectValue placeholder="Escolha..." /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Geral / Extra</SelectItem>
+                    {disciplines.map((d) => (
+                      <SelectItem key={d.id} value={d.id}>{d.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="font-bold text-xs uppercase text-muted-foreground">Data de Entrega</Label>
+              <Input type="datetime-local" value={dueDate} onChange={(e) => setDueDate(e.target.value)} className="h-12" />
+            </div>
+
+            <Button onClick={save} disabled={submitting} className="w-full h-12 font-bold uppercase tracking-widest shadow-lg">
+              {submitting ? <Loader2 className="h-5 w-5 animate-spin" /> : editId ? "Salvar Alterações" : "Agendar Lembrete"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <div className="space-y-8">
-        {/* Seção de Pendentes */}
         <section className="space-y-4">
           <h3 className="text-sm font-black uppercase tracking-widest text-primary flex items-center gap-2">
             <AlertCircle className="h-4 w-4" /> Pendentes ({pending.length})
           </h3>
-          
+
           {pending.length === 0 ? (
             <div className="p-12 text-center border-2 border-dashed rounded-[32px] bg-muted/10">
               <CheckCircle2 className="h-10 w-10 text-emerald-500 mx-auto mb-3 opacity-50" />
@@ -207,17 +227,28 @@ export default function Reminders() {
               {pending.map((r) => {
                 const date = new Date(r.due_date);
                 const overdue = isPast(date) && !isToday(date);
-                const isUrgent = differenceInDays(date, new Date()) <= 2;
-                
+                const daysDiff = differenceInDays(date, new Date());
+                const isUrgent = daysDiff <= 2 && !overdue;
+                const typeLabel = typeLabels[r.type] || r.type;
+
                 return (
-                  <div key={r.id} className={cn(
-                    "flex items-center gap-4 rounded-2xl p-4 transition-all border group",
-                    overdue ? "bg-rose-500/5 border-rose-500/20" : "bg-card border-border/50 hover:border-primary/40 shadow-sm"
-                  )}>
-                    <Checkbox checked={r.completed} onCheckedChange={() => toggle(r)} className="h-5 w-5 rounded-md border-primary/30" />
-                    
+                  <div
+                    key={r.id}
+                    className={cn(
+                      "flex items-center gap-4 rounded-2xl p-4 transition-all border group cursor-pointer",
+                      overdue ? "bg-destructive/5 border-destructive/20" : "bg-card border-border/50 hover:border-primary/40 shadow-sm"
+                    )}
+                    onClick={() => openEdit(r)}
+                  >
+                    <Checkbox
+                      checked={r.completed}
+                      onCheckedChange={(e) => { e; toggle(r); }}
+                      onClick={(e) => e.stopPropagation()}
+                      className="h-5 w-5 rounded-md border-primary/30"
+                    />
+
                     <div className="flex-1 min-w-0">
-                      <p className={cn("font-bold text-sm text-foreground", overdue && "text-rose-600")}>{r.title}</p>
+                      <p className={cn("font-bold text-sm text-foreground", overdue && "text-destructive")}>{r.title}</p>
                       <div className="flex flex-wrap items-center gap-2 mt-1">
                         <span className="text-[10px] font-bold text-muted-foreground uppercase flex items-center gap-1">
                           <Calendar className="h-3 w-3" />
@@ -231,11 +262,23 @@ export default function Reminders() {
                       </div>
                     </div>
 
-                    <Badge variant={overdue ? "destructive" : isUrgent ? "default" : "secondary"} className="text-[10px] font-bold shrink-0">
-                      {overdue ? "ATRASADO" : isUrgent ? "URGENTE" : typeLabels[r.type]}
+                    <Badge
+                      variant={overdue ? "destructive" : isUrgent ? "default" : "secondary"}
+                      className="text-[10px] font-bold shrink-0"
+                    >
+                      {overdue
+                        ? `ATRASADO • ${typeLabel.toUpperCase()}`
+                        : isUrgent
+                          ? `URGENTE • ${typeLabel.toUpperCase()}`
+                          : typeLabel.toUpperCase()}
                     </Badge>
 
-                    <Button size="icon" variant="ghost" className="h-9 w-9 text-destructive opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive/10" onClick={() => remove(r.id)}>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-9 w-9 text-destructive opacity-0 group-hover:opacity-100 transition-opacity hover:bg-destructive/10"
+                      onClick={(e) => { e.stopPropagation(); remove(r.id); }}
+                    >
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
@@ -245,7 +288,6 @@ export default function Reminders() {
           )}
         </section>
 
-        {/* Seção de Concluídos */}
         {done.length > 0 && (
           <section className="space-y-4 pt-4">
             <h3 className="text-sm font-black uppercase tracking-widest text-muted-foreground flex items-center gap-2">

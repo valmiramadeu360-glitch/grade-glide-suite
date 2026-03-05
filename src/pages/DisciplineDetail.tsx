@@ -77,17 +77,22 @@ export default function DisciplineDetail() {
   return (
     <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in duration-500 px-2">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-card p-6 rounded-3xl border border-border/40 shadow-sm">
-        <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate("/disciplines")} className="rounded-full hover:bg-muted transition-colors">
-            <ArrowLeft className="h-5 w-5" />
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-card p-4 sm:p-6 rounded-3xl border border-border/40 shadow-sm">
+        <div className="flex items-center gap-3 sm:gap-4">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => navigate("/disciplines")}
+            className="rounded-full hover:bg-muted transition-colors min-h-14 min-w-14 h-14 w-14"
+          >
+            <ArrowLeft className="h-6 w-6" />
           </Button>
-          <div className="flex items-center gap-4">
-            <div className="h-14 w-14 rounded-2xl flex items-center justify-center shadow-lg shadow-primary/5" style={{ backgroundColor: `${disciplineColor}15` }}>
-              <BookOpen className="h-7 w-7" style={{ color: disciplineColor }} />
+          <div className="flex items-center gap-3 sm:gap-4">
+            <div className="h-12 w-12 sm:h-14 sm:w-14 rounded-2xl flex items-center justify-center shadow-lg shadow-primary/5" style={{ backgroundColor: `${disciplineColor}15` }}>
+              <BookOpen className="h-6 sm:h-7 w-6 sm:w-7" style={{ color: disciplineColor }} />
             </div>
             <div className="min-w-0">
-              <h1 className="text-2xl font-black text-foreground tracking-tight truncate">{discipline.name}</h1>
+              <h1 className="text-xl sm:text-2xl font-black text-foreground tracking-tight truncate">{discipline.name}</h1>
               <div className="flex items-center gap-2">
                 <div className="h-2 w-2 rounded-full" style={{ backgroundColor: disciplineColor }} />
                 <p className="text-sm font-medium text-muted-foreground truncate italic">{discipline.professor || "Professor não informado"}</p>
@@ -98,7 +103,7 @@ export default function DisciplineDetail() {
 
         <Button variant="ghost" size="sm" disabled={deleting} onClick={deleteDiscipline} className="text-destructive hover:bg-destructive/10 font-bold text-xs uppercase tracking-widest gap-2">
           {deleting ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-          Excluir Matéria
+          Excluir
         </Button>
       </div>
 
