@@ -1,4 +1,6 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 
 type ThemeMode = "light" | "dark";
 
@@ -9,6 +11,7 @@ interface ThemeColors {
   lightness: number;
 }
 
+// Lista oficial de 20 cores do EduFlow (incluindo tons Neon e Pastel)
 const THEME_COLORS: ThemeColors[] = [
   { label: "Azul", hue: 221, saturation: 83, lightness: 53 },
   { label: "Vermelho", hue: 0, saturation: 72, lightness: 51 },
@@ -43,54 +46,64 @@ interface ThemeContextType {
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
 function applyPrimaryColor(color: ThemeColors, mode: ThemeMode) {
+  if (typeof window === "undefined") return;
+  
   const root = document.documentElement;
   const { hue, saturation, lightness } = color;
 
+  // Aplica as variáveis HSL ao CSS Global
   if (mode === "dark") {
-    // In dark mode, lighten primary for visibility
-    root.style.setProperty("--primary", `${hue} ${Math.min(saturation + 10, 100)}% ${Math.min(lightness + 15, 80)}%`);
-    root.style.setProperty("--ring", `${hue} ${Math.min(saturation + 10, 100)}% ${Math.min(lightness + 15, 80)}%`);
-    root.style.setProperty("--accent", `${hue} ${saturation}% ${Math.min(lightness + 10, 75)}%`);
-    root.style.setProperty("--sidebar-primary", `${hue} ${saturation}% ${Math.min(lightness + 15, 80)}%`);
-    root.style.setProperty("--sidebar-ring", `${hue} ${saturation}% ${Math.min(lightness + 10, 75)}%`);
+    // No modo escuro, aumentamos um pouco a luminosidade para a cor não sumir
+    const safeLightness = Math.min(lightness + 15, 80);
+    root.style.setProperty("--primary", `${hue} ${saturation}% ${safeLightness}%`);
+    root.style.setProperty("--ring", `${hue} ${saturation}% ${safeLightness}%`);
   } else {
     root.style.setProperty("--primary", `${hue} ${saturation}% ${lightness}%`);
     root.style.setProperty("--ring", `${hue} ${saturation}% ${lightness}%`);
-    root.style.setProperty("--accent", `${hue} ${saturation}% ${lightness}%`);
-    root.style.setProperty("--sidebar-primary", `${hue} ${saturation}% ${Math.min(lightness + 13, 80)}%`);
-    root.style.setProperty("--sidebar-ring", `${hue} ${saturation}% ${lightness}%`);
   }
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
+  
   const [mode, setModeState] = useState<ThemeMode>(() => {
+    if (typeof window === "undefined") return "light";
     const saved = localStorage.getItem("eduflow-theme-mode");
     return (saved as ThemeMode) || "light";
   });
 
   const [primaryColor, setPrimaryColorState] = useState<ThemeColors>(() => {
+    if (typeof window === "undefined") return THEME_COLORS[0];
     const saved = localStorage.getItem("eduflow-primary-color");
     if (saved) {
-      try { return JSON.parse(saved); } catch { /* ignore */ }
+      try { return JSON.parse(saved); } catch { return THEME_COLORS[0]; }
     }
-    return THEME_COLORS[0]; // Default blue
+    return THEME_COLORS[0];
   });
 
-  function setMode(m: ThemeMode) {
+  // Salva no LocalStorage e no Perfil do Usuário (Autosave)
+  async function setMode(m: ThemeMode) {
     setModeState(m);
     localStorage.setItem("eduflow-theme-mode", m);
+    if (user) {
+      await supabase.from("profiles").update({ theme_mode: m }).eq("user_id", user.id);
+    }
   }
 
-  function setPrimaryColor(c: ThemeColors) {
+  async function setPrimaryColor(c: ThemeColors) {
     setPrimaryColorState(c);
     localStorage.setItem("eduflow-primary-color", JSON.stringify(c));
+    if (user) {
+      await supabase.from("profiles").update({ primary_color_label: c.label }).eq("user_id", user.id);
+    }
   }
 
   useEffect(() => {
+    const root = document.documentElement;
     if (mode === "dark") {
-      document.documentElement.classList.add("dark");
+      root.classList.add("dark");
     } else {
-      document.documentElement.classList.remove("dark");
+      root.classList.remove("dark");
     }
     applyPrimaryColor(primaryColor, mode);
   }, [mode, primaryColor]);
@@ -104,6 +117,6 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
 export function useTheme() {
   const ctx = useContext(ThemeContext);
-  if (!ctx) throw new Error("useTheme must be used within ThemeProvider");
+  if (!ctx) throw new Error("useTheme deve ser usado dentro de um ThemeProvider");
   return ctx;
 }
