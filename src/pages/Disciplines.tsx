@@ -31,16 +31,28 @@ export default function Disciplines({ extraOnly = false }: { extraOnly?: boolean
   const { toast } = useToast();
   const [allDisciplines, setAllDisciplines] = useState<Discipline[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  // Controles de modais
   const [open, setOpen] = useState(false);
+  const [showNewSemesterPrompt, setShowNewSemesterPrompt] = useState(false);
+  
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [currentSemester, setCurrentSemester] = useState<number>(1);
   const [closingSemester, setClosingSemester] = useState(false);
 
   const [newName, setNewName] = useState("");
   const [newProfessor, setNewProfessor] = useState("");
-  const [newColor, setNewColor] = useState("#3b82f6");
+  const [newColor, setNewColor] = useState("#FFB3BA");
 
-  const colors = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#06b6d4", "#f97316"];
+  // Paleta expandida com 20 opções (focada em tons Pastéis e Neon)
+  const colors = [
+    // Pastéis
+    "#FFB3BA", "#FFDFBA", "#FFFFBA", "#BAFFC9", "#BAE1FF", "#E8BAFF", "#FFC4E1", "#D5AAFF",
+    // Neons
+    "#FF10F0", "#39FF14", "#00FFFF", "#B026FF", "#FF2A2A", "#FFFF00", "#FF6600", "#00FF66",
+    // Base/Sólidas
+    "#3B82F6", "#10B981", "#F59E0B", "#8B5CF6"
+  ];
 
   useEffect(() => {
     if (user) loadAll();
@@ -60,6 +72,7 @@ export default function Disciplines({ extraOnly = false }: { extraOnly?: boolean
   const activeDisciplines = allDisciplines.filter(d => !d.archived);
   const archivedDisciplines = allDisciplines.filter(d => d.archived);
   const archivedBySemester: Record<number, Discipline[]> = {};
+  
   archivedDisciplines.forEach(d => {
     const sem = d.semester_number ?? 0;
     if (!archivedBySemester[sem]) archivedBySemester[sem] = [];
@@ -98,7 +111,7 @@ export default function Disciplines({ extraOnly = false }: { extraOnly?: boolean
     if (!user) return;
     setClosingSemester(true);
 
-    // Archive all active disciplines
+    // Arquiva as disciplinas ativas
     const { error } = await supabase.from("disciplines")
       .update({ archived: true })
       .eq("user_id", user.id)
@@ -111,16 +124,17 @@ export default function Disciplines({ extraOnly = false }: { extraOnly?: boolean
       return;
     }
 
-    // Increment semester in profile
+    // Avança o número do semestre
     const newSem = currentSemester + 1;
     await supabase.from("profiles").update({ semester: newSem }).eq("user_id", user.id);
     setCurrentSemester(newSem);
 
-    toast({ title: `Semestre ${currentSemester} encerrado!`, description: `Agora você está no ${newSem}º semestre.` });
+    toast({ title: "Sucesso!", description: `Disciplinas arquivadas no histórico.` });
     setClosingSemester(false);
     await loadAll();
-    // Open add new discipline dialog
-    setOpen(true);
+    
+    // Abre a pergunta se quer iniciar o novo semestre agora
+    setShowNewSemesterPrompt(true);
   }
 
   if (loading && allDisciplines.length === 0) {
@@ -135,123 +149,80 @@ export default function Disciplines({ extraOnly = false }: { extraOnly?: boolean
   const addDialog = (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button className="shadow-lg shadow-primary/20 font-bold uppercase text-xs tracking-widest">
-          <Plus className="mr-2 h-4 w-4" /> Adicionar {extraOnly ? "Curso" : "Matéria"}
+        <Button className="shadow-lg shadow-primary/20 font-bold uppercase text-xs tracking-widest h-12 px-6 rounded-2xl">
+          <Plus className="mr-2 h-5 w-5" /> Adicionar {extraOnly ? "Curso" : "Matéria"}
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-[425px] rounded-[32px]">
         <DialogHeader>
-          <DialogTitle className="text-xl font-bold">Novo Registro</DialogTitle>
-          <DialogDescription>Preencha os dados abaixo para organizar seu novo conteúdo.</DialogDescription>
+          <DialogTitle className="text-2xl font-black">Novo Registro</DialogTitle>
+          <DialogDescription className="font-medium text-muted-foreground">Preencha os dados abaixo para organizar seu novo conteúdo.</DialogDescription>
         </DialogHeader>
-        <div className="space-y-5 pt-4">
+        <div className="space-y-6 pt-4">
           <div className="space-y-2">
-            <Label className="font-bold text-xs uppercase text-muted-foreground">Nome da Disciplina</Label>
-            <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Ex: Econometria ou BI" className="h-12" />
+            <Label className="font-bold text-[10px] uppercase tracking-widest text-muted-foreground ml-1">Nome da Disciplina</Label>
+            <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Ex: Econometria ou BI" className="h-14 rounded-2xl bg-muted/30 border-border text-lg font-bold" />
           </div>
           <div className="space-y-2">
-            <Label className="font-bold text-xs uppercase text-muted-foreground">Professor Responsável</Label>
-            <Input value={newProfessor} onChange={(e) => setNewProfessor(e.target.value)} placeholder="Nome do docente" className="h-12" />
+            <Label className="font-bold text-[10px] uppercase tracking-widest text-muted-foreground ml-1">Professor Responsável</Label>
+            <Input value={newProfessor} onChange={(e) => setNewProfessor(e.target.value)} placeholder="Nome do docente" className="h-14 rounded-2xl bg-muted/30 border-border font-medium" />
           </div>
-          <div className="space-y-2">
-            <Label className="font-bold text-xs uppercase text-muted-foreground">Identidade Visual (Cor)</Label>
-            <div className="flex flex-wrap gap-3 pt-1">
+          <div className="space-y-3">
+            <Label className="font-bold text-[10px] uppercase tracking-widest text-muted-foreground ml-1">Cor Principal (Neon / Pastel)</Label>
+            <div className="grid grid-cols-5 gap-3 pt-1">
               {colors.map((c) => (
                 <button
                   key={c}
                   onClick={() => setNewColor(c)}
                   className={cn(
-                    "h-8 w-8 rounded-full border-4 transition-all hover:scale-110 shadow-sm",
-                    newColor === c ? "border-foreground/20 ring-2 ring-primary scale-110" : "border-transparent"
+                    "h-10 w-full rounded-xl border-4 transition-all hover:scale-110 shadow-sm",
+                    newColor === c ? "border-foreground/30 ring-2 ring-primary scale-110" : "border-transparent"
                   )}
                   style={{ backgroundColor: c }}
+                  title={c}
                 />
               ))}
             </div>
           </div>
-          <Button onClick={createDiscipline} disabled={isSubmitting} className="w-full h-12 font-bold uppercase tracking-widest">
-            {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : "Salvar no Semestre"}
+          <Button onClick={createDiscipline} disabled={isSubmitting} className="w-full h-14 rounded-2xl font-black uppercase tracking-widest text-xs mt-4">
+            {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : "Salvar Matéria"}
           </Button>
         </div>
       </DialogContent>
     </Dialog>
   );
 
-  function DisciplineGrid({ items }: { items: Discipline[] }) {
-    if (items.length === 0) {
-      return (
-        <div className="flex flex-col items-center justify-center py-20 bg-muted/20 rounded-[40px] border-2 border-dashed border-border/50">
-          <div className="h-20 w-20 rounded-3xl bg-background flex items-center justify-center shadow-inner mb-6">
-            <GraduationCap className="h-10 w-10 text-muted-foreground/30" />
-          </div>
-          <h3 className="text-lg font-bold text-foreground">Sua lista está vazia</h3>
-          <p className="text-muted-foreground text-sm max-w-xs text-center mt-2 mb-8 italic">
-            Comece cadastrando as disciplinas do seu curso.
-          </p>
-          <Button variant="outline" onClick={() => setOpen(true)} className="rounded-full px-8">
-            <Plus className="mr-2 h-4 w-4" /> Cadastrar agora
-          </Button>
-        </div>
-      );
-    }
-
-    return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {items.map((d) => (
-          <Card
-            key={d.id}
-            className="group overflow-hidden border-none transition-all cursor-pointer shadow-md hover:shadow-2xl hover:-translate-y-1 rounded-[24px] bg-card hover:bg-muted/30"
-            onClick={() => navigate(`/disciplines/${d.id}`)}
-          >
-            <div className="h-2 w-full" style={{ backgroundColor: d.color }} />
-            <CardContent className="p-6">
-              <div className="flex items-start justify-between gap-4">
-                <div className="flex items-center gap-4">
-                  <div
-                    className="h-12 w-12 rounded-2xl flex items-center justify-center shadow-inner transition-transform group-hover:rotate-6"
-                    style={{ backgroundColor: `${d.color}15` }}
-                  >
-                    <BookOpen className="h-6 w-6" style={{ color: d.color }} />
-                  </div>
-                  <div className="min-w-0">
-                    <h3 className="font-black text-lg text-foreground leading-tight truncate">{d.name}</h3>
-                    <p className="text-xs font-medium text-muted-foreground truncate uppercase tracking-tighter italic">
-                      {d.professor || "Sem docente atribuído"}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-1">
-                  {d.semester_number && (
-                    <Badge variant="secondary" className="text-[9px] font-bold">{d.semester_number}º Sem</Badge>
-                  )}
-                  <div className="h-8 w-8 rounded-full bg-muted/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                    <ChevronRight className="h-4 w-4 text-foreground" />
-                  </div>
-                </div>
-              </div>
-
-              {d.current_grade !== null && (
-                <div className="mt-4">
-                  <Badge variant="outline" className="font-bold text-sm bg-background/50" style={{ borderColor: `${d.color}40`, color: d.color }}>
-                    {d.current_grade.toFixed(1)}
-                  </Badge>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-    );
-  }
-
   return (
-    <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in duration-500">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+    <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in duration-500 pb-12">
+      {/* Alerta de Novo Semestre */}
+      <AlertDialog open={showNewSemesterPrompt} onOpenChange={setShowNewSemesterPrompt}>
+        <AlertDialogContent className="rounded-[32px]">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-2xl font-black">Tudo Arquivado! 🎉</AlertDialogTitle>
+            <AlertDialogDescription className="text-base font-medium">
+              O semestre anterior foi salvo no histórico. Você deseja configurar o novo semestre letivo ({currentSemester}º Semestre) adicionando novas matérias agora?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="mt-6 flex gap-3">
+            <AlertDialogCancel onClick={() => setShowNewSemesterPrompt(false)} className="h-12 rounded-2xl font-bold uppercase tracking-widest text-xs">
+              Não, faço depois
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={() => {
+              setShowNewSemesterPrompt(false);
+              setOpen(true); // Abre a tela de adicionar disciplina
+            }} className="h-12 rounded-2xl font-black uppercase tracking-widest text-xs">
+              Sim, adicionar matérias
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
         <div>
-          <h1 className="text-3xl font-black text-foreground tracking-tight">
+          <h1 className="text-4xl font-black text-foreground tracking-tight">
             {extraOnly ? "Cursos Extras" : "Minhas Disciplinas"}
           </h1>
-          <p className="text-muted-foreground font-medium">
+          <p className="text-muted-foreground font-medium mt-1">
             {extraOnly
               ? "Aprimoramento e nivelamento fora da grade."
               : `${currentSemester}º Semestre · ${activeDisciplines.length} matérias ativas`}
@@ -261,24 +232,22 @@ export default function Disciplines({ extraOnly = false }: { extraOnly?: boolean
           {!extraOnly && activeDisciplines.length > 0 && (
             <AlertDialog>
               <AlertDialogTrigger asChild>
-                <Button variant="outline" className="font-bold text-xs uppercase tracking-widest" disabled={closingSemester}>
-                  <History className="mr-2 h-4 w-4" /> Encerrar Período Letivo
+                <Button variant="outline" className="font-bold text-xs uppercase tracking-widest h-12 rounded-2xl border-border/50 hover:bg-destructive/5 hover:text-destructive hover:border-destructive/30 transition-colors" disabled={closingSemester}>
+                  <History className="mr-2 h-4 w-4" /> Arquivar Semestre
                 </Button>
               </AlertDialogTrigger>
-              <AlertDialogContent>
+              <AlertDialogContent className="rounded-[32px]">
                 <AlertDialogHeader>
-                  <AlertDialogTitle>Encerrar {currentSemester}º Semestre?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Todas as {activeDisciplines.length} disciplinas atuais serão movidas para o histórico.
-                    Você poderá consultá-las a qualquer momento na aba "Histórico".
-                    Deseja encerrar este semestre e iniciar um novo?
+                  <AlertDialogTitle className="text-2xl font-black">Encerrar o {currentSemester}º Semestre?</AlertDialogTitle>
+                  <AlertDialogDescription className="text-base font-medium">
+                    Todas as <strong>{activeDisciplines.length} disciplinas atuais</strong> serão arquivadas e movidas para o histórico. Deseja encerrar este semestre?
                   </AlertDialogDescription>
                 </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                  <AlertDialogAction onClick={closeSemester}>
+                <AlertDialogFooter className="mt-6">
+                  <AlertDialogCancel className="h-12 rounded-2xl font-bold uppercase tracking-widest text-xs">Cancelar</AlertDialogCancel>
+                  <AlertDialogAction onClick={closeSemester} className="h-12 rounded-2xl font-black uppercase tracking-widest text-xs bg-destructive text-destructive-foreground hover:bg-destructive/90">
                     {closingSemester ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-                    Sim, Encerrar
+                    Sim, Arquivar Tudo
                   </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
@@ -289,56 +258,142 @@ export default function Disciplines({ extraOnly = false }: { extraOnly?: boolean
       </div>
 
       {extraOnly ? (
-        <DisciplineGrid items={activeDisciplines} />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {/* Componente de grade reutilizado do original */}
+          {activeDisciplines.length === 0 ? (
+             <div className="col-span-full flex flex-col items-center justify-center py-20 bg-card rounded-[40px] border border-border/40 shadow-sm">
+             <div className="h-20 w-20 rounded-3xl bg-muted/30 flex items-center justify-center shadow-inner mb-6">
+               <GraduationCap className="h-10 w-10 text-muted-foreground/50" />
+             </div>
+             <h3 className="text-xl font-black text-foreground">Sua lista está vazia</h3>
+             <p className="text-muted-foreground text-sm max-w-xs text-center mt-2 mb-8 font-medium">
+               Comece cadastrando os cursos fora da grade curricular.
+             </p>
+             <Button variant="outline" onClick={() => setOpen(true)} className="rounded-2xl px-8 h-12 font-bold uppercase tracking-widest text-xs border-border/50">
+               <Plus className="mr-2 h-4 w-4" /> Cadastrar Curso
+             </Button>
+           </div>
+          ) : (
+            activeDisciplines.map((d) => (
+              <Card key={d.id} className="group overflow-hidden border border-border/40 transition-all cursor-pointer shadow-sm hover:shadow-xl hover:border-primary/30 rounded-[32px] bg-card hover:-translate-y-1" onClick={() => navigate(`/disciplines/${d.id}`)}>
+                 <div className="h-2 w-full transition-all duration-500 group-hover:h-3" style={{ backgroundColor: d.color }} />
+                 <CardContent className="p-6">
+                   <div className="flex items-start justify-between gap-4">
+                     <div className="flex items-center gap-4 min-w-0">
+                       <div className="h-14 w-14 rounded-2xl flex items-center justify-center shadow-inner transition-transform group-hover:scale-110 shrink-0" style={{ backgroundColor: `${d.color}15` }}>
+                         <BookOpen className="h-7 w-7" style={{ color: d.color }} />
+                       </div>
+                       <div className="min-w-0">
+                         <h3 className="font-black text-xl text-foreground leading-tight truncate">{d.name}</h3>
+                         <p className="text-[11px] mt-1 font-bold text-muted-foreground truncate uppercase tracking-widest">
+                           {d.professor || "Sem docente atribuído"}
+                         </p>
+                       </div>
+                     </div>
+                     <div className="h-10 w-10 shrink-0 rounded-full bg-muted/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all group-hover:bg-primary/10 group-hover:text-primary">
+                       <ChevronRight className="h-5 w-5" />
+                     </div>
+                   </div>
+                 </CardContent>
+               </Card>
+            ))
+          )}
+        </div>
       ) : (
         <Tabs defaultValue="current" className="w-full">
-          <TabsList className="w-full bg-muted/50 p-1 rounded-xl h-12 grid grid-cols-2 shadow-inner">
-            <TabsTrigger value="current" className="rounded-lg font-bold text-xs uppercase tracking-wider">
+          <TabsList className="w-full bg-card border border-border/40 p-1.5 rounded-2xl h-auto grid grid-cols-2 shadow-sm">
+            <TabsTrigger value="current" className="rounded-xl font-bold text-xs uppercase tracking-widest py-3 data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-none transition-all">
               Grade Atual ({activeDisciplines.length})
             </TabsTrigger>
-            <TabsTrigger value="history" className="rounded-lg font-bold text-xs uppercase tracking-wider">
+            <TabsTrigger value="history" className="rounded-xl font-bold text-xs uppercase tracking-widest py-3 data-[state=active]:bg-muted data-[state=active]:shadow-none transition-all">
               Histórico ({archivedDisciplines.length})
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="current" className="mt-6">
-            <DisciplineGrid items={activeDisciplines} />
+          <TabsContent value="current" className="mt-8 animate-in slide-in-from-bottom-2 duration-300">
+             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {activeDisciplines.length === 0 ? (
+                  <div className="col-span-full flex flex-col items-center justify-center py-20 bg-card rounded-[40px] border border-border/40 shadow-sm">
+                    <div className="h-20 w-20 rounded-3xl bg-muted/30 flex items-center justify-center shadow-inner mb-6">
+                      <GraduationCap className="h-10 w-10 text-muted-foreground/50" />
+                    </div>
+                    <h3 className="text-xl font-black text-foreground">Sua lista está vazia</h3>
+                    <p className="text-muted-foreground text-sm max-w-xs text-center mt-2 mb-8 font-medium">
+                      Comece cadastrando as disciplinas do seu {currentSemester}º semestre.
+                    </p>
+                    <Button variant="outline" onClick={() => setOpen(true)} className="rounded-2xl px-8 h-12 font-bold uppercase tracking-widest text-xs border-border/50">
+                      <Plus className="mr-2 h-4 w-4" /> Cadastrar agora
+                    </Button>
+                  </div>
+                ) : (
+                  activeDisciplines.map((d) => (
+                    <Card key={d.id} className="group overflow-hidden border border-border/40 transition-all cursor-pointer shadow-sm hover:shadow-xl hover:border-primary/30 rounded-[32px] bg-card hover:-translate-y-1" onClick={() => navigate(`/disciplines/${d.id}`)}>
+                      <div className="h-2 w-full transition-all duration-500 group-hover:h-3" style={{ backgroundColor: d.color }} />
+                      <CardContent className="p-6">
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex items-center gap-4 min-w-0">
+                            <div className="h-14 w-14 rounded-2xl flex items-center justify-center shadow-inner transition-transform group-hover:scale-110 shrink-0" style={{ backgroundColor: `${d.color}15` }}>
+                              <BookOpen className="h-7 w-7" style={{ color: d.color }} />
+                            </div>
+                            <div className="min-w-0">
+                              <h3 className="font-black text-xl text-foreground leading-tight truncate">{d.name}</h3>
+                              <p className="text-[11px] mt-1 font-bold text-muted-foreground truncate uppercase tracking-widest">
+                                {d.professor || "Sem docente atribuído"}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex flex-col items-end gap-2 shrink-0">
+                            {d.semester_number && (
+                              <Badge variant="secondary" className="text-[9px] font-black px-2 py-0.5 tracking-widest bg-muted/80">{d.semester_number}º SEM</Badge>
+                            )}
+                            <div className="h-8 w-8 rounded-full bg-muted/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all group-hover:bg-primary/10 group-hover:text-primary">
+                              <ChevronRight className="h-4 w-4" />
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))
+                )}
+             </div>
           </TabsContent>
 
-          <TabsContent value="history" className="mt-6 space-y-8">
+          <TabsContent value="history" className="mt-8 space-y-10 animate-in slide-in-from-bottom-2 duration-300">
             {archivedDisciplines.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-20 bg-muted/20 rounded-[40px] border-2 border-dashed border-border/50">
-                <History className="h-10 w-10 text-muted-foreground/30 mb-4" />
-                <h3 className="text-lg font-bold text-foreground">Nenhum histórico</h3>
-                <p className="text-muted-foreground text-sm max-w-xs text-center mt-2 italic">
-                  As disciplinas de semestres anteriores aparecerão aqui quando você encerrar um período.
+              <div className="flex flex-col items-center justify-center py-20 bg-card rounded-[40px] border border-border/40 shadow-sm">
+                <div className="h-20 w-20 rounded-3xl bg-muted/30 flex items-center justify-center shadow-inner mb-6">
+                  <History className="h-10 w-10 text-muted-foreground/50" />
+                </div>
+                <h3 className="text-xl font-black text-foreground">Nenhum histórico</h3>
+                <p className="text-muted-foreground text-sm max-w-xs text-center mt-2 font-medium">
+                  As disciplinas arquivadas de semestres anteriores aparecerão aqui.
                 </p>
               </div>
             ) : (
               Object.entries(archivedBySemester).sort(([a], [b]) => Number(b) - Number(a)).map(([sem, items]) => (
-                <div key={sem}>
-                  <h3 className="text-sm font-black uppercase tracking-widest text-muted-foreground mb-4 flex items-center gap-2">
-                    <GraduationCap className="h-4 w-4" />
-                    {Number(sem) > 0 ? `${sem}º Semestre` : "Período Indefinido"}
-                  </h3>
+                <div key={sem} className="space-y-4">
+                  <div className="flex items-center gap-3">
+                    <div className="h-8 w-8 rounded-xl bg-muted flex items-center justify-center">
+                      <GraduationCap className="h-4 w-4 text-muted-foreground" />
+                    </div>
+                    <h3 className="text-sm font-black uppercase tracking-[0.2em] text-muted-foreground">
+                      {Number(sem) > 0 ? `${sem}º Semestre` : "Período Indefinido"}
+                    </h3>
+                    <div className="flex-1 h-px bg-border/50 ml-2" />
+                  </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {items.map(d => (
-                      <Card key={d.id} className="cursor-pointer border-border/30 bg-card hover:bg-muted/30 transition-all rounded-2xl" onClick={() => navigate(`/disciplines/${d.id}`)}>
-                        <div className="h-1.5 w-full rounded-t-2xl" style={{ backgroundColor: d.color }} />
-                        <CardContent className="p-4">
-                          <div className="flex items-center gap-3">
-                            <div className="h-10 w-10 rounded-xl flex items-center justify-center" style={{ backgroundColor: `${d.color}15` }}>
-                              <BookOpen className="h-5 w-5" style={{ color: d.color }} />
+                      <Card key={d.id} className="cursor-pointer border border-border/40 bg-card hover:bg-muted/50 transition-all rounded-[24px] shadow-sm hover:shadow-md" onClick={() => navigate(`/disciplines/${d.id}`)}>
+                        <div className="h-1.5 w-full rounded-t-[24px]" style={{ backgroundColor: d.color }} />
+                        <CardContent className="p-5">
+                          <div className="flex items-center gap-4">
+                            <div className="h-12 w-12 rounded-2xl flex items-center justify-center shrink-0" style={{ backgroundColor: `${d.color}15` }}>
+                              <BookOpen className="h-6 w-6" style={{ color: d.color }} />
                             </div>
-                            <div className="min-w-0">
-                              <p className="font-bold text-sm text-foreground truncate">{d.name}</p>
-                              <p className="text-[10px] text-muted-foreground italic truncate">{d.professor || "Sem professor"}</p>
+                            <div className="min-w-0 flex-1">
+                              <p className="font-black text-base text-foreground truncate">{d.name}</p>
+                              <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest truncate mt-0.5">{d.professor || "Sem professor"}</p>
                             </div>
-                            {d.current_grade !== null && (
-                              <Badge variant="outline" className="ml-auto text-xs font-bold" style={{ color: d.color, borderColor: `${d.color}40` }}>
-                                {d.current_grade.toFixed(1)}
-                              </Badge>
-                            )}
                           </div>
                         </CardContent>
                       </Card>
