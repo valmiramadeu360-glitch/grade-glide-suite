@@ -26,6 +26,14 @@
     --input: 214 20% 90%;
     --ring: 221 83% 53%;
     --radius: 1rem;
+    --sidebar-background: 222 47% 11%;
+    --sidebar-foreground: 214 25% 91%;
+    --sidebar-primary: 210 100% 66%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 217 33% 17%;
+    --sidebar-accent-foreground: 210 40% 96%;
+    --sidebar-border: 217 33% 20%;
+    --sidebar-ring: 210 100% 52%;
   }
 
   .dark {
@@ -48,6 +56,14 @@
     --border: 216 34% 17%;
     --input: 216 34% 17%;
     --ring: 210 100% 66%;
+    --sidebar-background: 224 71% 4%;
+    --sidebar-foreground: 213 31% 91%;
+    --sidebar-primary: 210 100% 66%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 216 34% 17%;
+    --sidebar-accent-foreground: 210 40% 96%;
+    --sidebar-border: 216 34% 17%;
+    --sidebar-ring: 210 100% 52%;
   }
 }
 
@@ -56,18 +72,14 @@
     @apply border-border;
   }
 
-  /* 1. TRAVAS DE APP (Resolve o bug de tela solta) */
-  html, body {
+  body {
     @apply bg-background text-foreground font-sans antialiased selection:bg-primary/20;
     font-family: 'Plus Jakarta Sans', sans-serif;
-    
-    overflow-x: hidden; /* Trava a tela nas laterais */
-    overscroll-behavior-y: none; /* Remove o efeito elástico no iOS */
-    -webkit-tap-highlight-color: transparent; /* Tira o fundo cinza ao tocar */
+    -webkit-tap-highlight-color: transparent;
     -webkit-touch-callout: none;
   }
 
-  /* 2. PREVENÇÃO DE ZOOM EM INPUTS (iOS) */
+  /* Prevent zoom on input focus (iOS) */
   input, select, textarea {
     font-size: 16px !important;
   }
@@ -77,134 +89,117 @@
   .glass-card {
     @apply bg-card/60 backdrop-blur-xl border border-white/5 shadow-2xl;
   }
-
-  /* 3. CLASSE ESSENCIAL PARA O APP (Usada nas Abas) */
-  .no-scrollbar::-webkit-scrollbar {
-    display: none;
-  }
-  .no-scrollbar {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
-  }
 }
 
-/* =========================================
-   EDITOR DE TEXTO (TIPTAP - Estilo Excel/Notion)
-   ========================================= */
+/* Tiptap editor styles */
 .tiptap-editor .ProseMirror {
   outline: none;
   min-height: 400px;
-  padding: 1.5rem;
+  padding: 1rem;
   line-height: 1.8;
-  font-size: 1.05rem;
+  font-size: 1rem;
 }
 
 .tiptap-editor .ProseMirror p {
+  margin-bottom: 0.5rem;
+}
+
+.tiptap-editor .ProseMirror h1 {
+  font-size: 1.75rem;
+  font-weight: 800;
   margin-bottom: 0.75rem;
 }
 
-/* Títulos do Resumo */
-.tiptap-editor .ProseMirror h1 { font-size: 1.8rem; font-weight: 900; margin-bottom: 1rem; color: hsl(var(--foreground)); }
-.tiptap-editor .ProseMirror h2 { font-size: 1.5rem; font-weight: 800; margin-bottom: 0.75rem; color: hsl(var(--foreground)); }
-.tiptap-editor .ProseMirror h3 { font-size: 1.25rem; font-weight: 700; margin-bottom: 0.5rem; color: hsl(var(--foreground)); }
-
-/* Listas e Marcações */
-.tiptap-editor .ProseMirror ul,
-.tiptap-editor .ProseMirror ol { padding-left: 1.5rem; margin-bottom: 1rem; }
-.tiptap-editor .ProseMirror ul { list-style: disc; }
-.tiptap-editor .ProseMirror ol { list-style: decimal; }
-
-.tiptap-editor .ProseMirror blockquote {
-  border-left: 4px solid hsl(var(--primary));
-  padding-left: 1.25rem;
-  margin: 1rem 0;
-  color: hsl(var(--muted-foreground));
-  font-style: italic;
-  background-color: hsl(var(--muted) / 0.3);
-  padding-top: 0.5rem;
-  padding-bottom: 0.5rem;
-  border-radius: 0 0.5rem 0.5rem 0;
+.tiptap-editor .ProseMirror h2 {
+  font-size: 1.375rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
 }
 
-/* Marcador de Texto (Highlight) */
+.tiptap-editor .ProseMirror h3 {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.tiptap-editor .ProseMirror ul,
+.tiptap-editor .ProseMirror ol {
+  padding-left: 1.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.tiptap-editor .ProseMirror ul {
+  list-style: disc;
+}
+
+.tiptap-editor .ProseMirror ol {
+  list-style: decimal;
+}
+
+.tiptap-editor .ProseMirror blockquote {
+  border-left: 3px solid hsl(var(--primary));
+  padding-left: 1rem;
+  margin: 0.75rem 0;
+  color: hsl(var(--muted-foreground));
+  font-style: italic;
+}
+
 .tiptap-editor .ProseMirror mark {
-  background-color: rgba(250, 204, 21, 0.4); /* Amarelo translúcido elegante */
-  color: inherit;
+  background-color: hsl(50 100% 70%);
   padding: 0.125rem 0.25rem;
+  border-radius: 0.125rem;
+}
+
+.tiptap-editor .ProseMirror code {
+  background-color: hsl(var(--muted));
+  padding: 0.125rem 0.375rem;
   border-radius: 0.25rem;
+  font-family: monospace;
+  font-size: 0.875em;
 }
 
 .tiptap-editor .ProseMirror hr {
   border: none;
-  border-top: 2px dashed hsl(var(--border));
-  margin: 2rem 0;
+  border-top: 1px solid hsl(var(--border));
+  margin: 1rem 0;
 }
 
-/* Suporte visual para Alinhamento e Justificar */
-.tiptap-editor .ProseMirror[style*="text-align: justify"] {
-  text-justify: inter-word;
-}
-
-/* =========================================
-   MODO IMPRESSÃO PROFISSIONAL (A4)
-   ========================================= */
+/* Print styles */
 @media print {
   @page {
     size: A4;
-    margin: 20mm;
+    margin: 2cm;
   }
 
-  /* Oculta tudo que é interface de App (Botões, Menus, Fundo escuro) */
-  body {
-    background: white !important;
-    color: black !important;
+  body * {
+    visibility: hidden;
   }
 
-  body > :not(.print-area) {
-    display: none !important; /* Usar display none evita páginas em branco */
+  .print-area, .print-area * {
+    visibility: visible;
   }
 
   .print-area {
-    display: block !important;
-    position: relative;
-    width: 100%;
+    position: absolute;
     left: 0;
     top: 0;
+    width: 100%;
   }
 
-  .print-header {
-    display: flex !important;
-    flex-direction: column;
-    margin-bottom: 2rem;
+  .print-area .print-header {
+    display: block !important;
+    margin-bottom: 1.5rem;
     padding-bottom: 1rem;
-    border-bottom: 2px solid #000;
+    border-bottom: 2px solid #333;
   }
 
-  .print-header h1 {
-    font-size: 24pt;
-    font-weight: 900;
-    margin: 0 0 5px 0;
-    color: #000;
+  .print-area .print-header h1 {
+    font-size: 18pt;
+    font-weight: 800;
   }
 
-  .print-header p {
-    font-size: 11pt;
-    color: #444;
-    margin: 0;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-  }
-
-  /* Ajustes do Tiptap para o Papel Físico */
-  .tiptap-editor .ProseMirror {
-    padding: 0 !important;
-    font-size: 11pt;
-    line-height: 1.5;
-    color: black !important;
-  }
-  
-  .tiptap-editor .ProseMirror mark {
-    background-color: transparent !important;
-    border-bottom: 2px solid #eab308; /* Imprime um sublinhado amarelo em vez de fundo */
+  .print-area .print-header p {
+    font-size: 10pt;
+    color: #666;
   }
 }
