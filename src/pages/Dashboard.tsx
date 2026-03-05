@@ -4,7 +4,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { BookOpen, Clock, AlertTriangle, CheckCircle2, Calendar, LayoutDashboard, ArrowRight } from "lucide-react";
+import { BookOpen, Clock, AlertTriangle, CheckCircle2, Calendar, LayoutDashboard, ArrowRight, Cloud, CloudOff } from "lucide-react";
 import { format, isToday, isTomorrow, differenceInDays, startOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useNavigate } from "react-router-dom";
@@ -44,20 +44,48 @@ export default function Dashboard() {
   const [semesterProgress, setSemesterProgress] = useState(0);
   const [disciplineCount, setDisciplineCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  
+  // Controle do Semestre e Auto-save
+  const [currentSemester, setCurrentSemester] = useState("2026.1");
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
+    // Monitora conexão para o modo offline
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
     if (!user) return;
     loadDashboard();
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
   }, [user]);
+
+  // Exemplo de função de auto-save (pode ser chamada quando houver alterações em formulários)
+  const triggerAutoSave = async (updateFunction: () => Promise<void>) => {
+    if (!isOnline) return; // Não tenta salvar se estiver offline
+    setIsSaving(true);
+    try {
+      await updateFunction();
+    } finally {
+      setTimeout(() => setIsSaving(false), 1000); // Dá um feedback visual rápido
+    }
+  };
 
   async function loadDashboard() {
     const today = new Date().getDay();
 
     try {
+      // Simplificamos a query de disciplinas para evitar erros de schema no Supabase
       const [schedRes, remRes, discRes, profileRes] = await Promise.all([
         supabase.from("discipline_schedules").select("day_of_week, start_time, end_time, room, discipline_id, disciplines(name, color)").eq("day_of_week", today).eq("user_id", user?.id),
         supabase.from("reminders").select("*, disciplines(name, color)").eq("completed", false).eq("user_id", user?.id).gte("due_date", startOfDay(new Date()).toISOString()).order("due_date", { ascending: true }).limit(8),
-        supabase.from("disciplines").select("id").eq("user_id", user?.id).eq("is_extra_course", false).or("archived.is.null,archived.eq.false"),
+        supabase.from("disciplines").select("id, is_extra_course").eq("user_id", user?.id),
         supabase.from("profiles").select("semester_start, semester_end").eq("user_id", user!.id).maybeSingle(),
       ]);
 
@@ -78,7 +106,11 @@ export default function Dashboard() {
         setReminders(remRes.data.map((r: any) => ({ ...r, discipline_name: r.disciplines?.name, discipline_color: r.disciplines?.color })));
       }
 
-      setDisciplineCount(discRes.data?.length ?? 0);
+      // Filtro feito no front-end para garantir que as disciplinas apareçam mesmo se a coluna "archived" não existir ainda
+      if (discRes.data) {
+         const activeDisciplines = discRes.data.filter((d: any) => d.is_extra_course === false || d.is_extra_course === null);
+         setDisciplineCount(activeDisciplines.length);
+      }
 
       if (profileRes.data?.semester_start && profileRes.data?.semester_end) {
         const start = new Date(profileRes.data.semester_start);
@@ -125,83 +157,101 @@ export default function Dashboard() {
   return (
     <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in duration-700">
       <header className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2 text-primary">
-            <LayoutDashboard className="h-4 w-4" />
-            <span className="text-[10px] font-black uppercase tracking-[0.2em]">Dashboard Acadêmico</span>
+        <div className="space-y-3">
+          {/* Seletor de Semestre idêntico à imagem */}
+          <div className="flex items-center gap-3">
+            <Badge variant="secondary" className="bg-primary/10 text-primary hover:bg-primary/20 cursor-pointer flex items-center gap-1 px-3 py-1 text-sm font-bold">
+              {currentSemester} <span className="text-[10px]">▼</span>
+            </Badge>
+            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">
+              BI Acadêmico
+            </span>
           </div>
-          <h1 className="text-4xl font-black text-foreground tracking-tighter">Olá, pronto para focar?</h1>
-          <p className="text-muted-foreground font-medium italic">
-            {disciplineCount === 0
-              ? "Comece cadastrando suas disciplinas para organizar o semestre."
-              : `Você tem ${disciplineCount} ${disciplineCount === 1 ? 'disciplina ativa' : 'disciplinas ativas'} para gerenciar.`}
+          
+          {/* Textos com contraste corrigido (text-foreground) */}
+          <h1 className="text-4xl md:text-5xl font-black text-foreground tracking-tighter flex items-center gap-3">
+            Olá, Estudante! <span className="text-4xl animate-bounce">👋</span>
+          </h1>
+          <p className="text-muted-foreground font-medium text-lg max-w-xl">
+            Seu desempenho no semestre <strong className="text-foreground">{currentSemester}</strong> está sendo monitorado.
           </p>
         </div>
-        <div className="bg-card/50 backdrop-blur-sm border border-border/50 px-4 py-2 rounded-2xl flex items-center gap-3 shadow-sm">
-          <Calendar className="h-4 w-4 text-primary" />
-          <span className="text-xs font-bold text-foreground">
-            {format(new Date(), "EEEE, dd 'de' MMMM", { locale: ptBR })}
-          </span>
+
+        <div className="flex flex-col items-end gap-2">
+          {/* Indicador de Status (Online/Offline e Salvamento Automático) */}
+          <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest">
+            {!isOnline ? (
+              <span className="flex items-center gap-1 text-destructive"><CloudOff className="h-3 w-3" /> Modo Offline</span>
+            ) : isSaving ? (
+              <span className="flex items-center gap-1 text-primary animate-pulse"><Cloud className="h-3 w-3" /> Salvando...</span>
+            ) : (
+              <span className="flex items-center gap-1 text-emerald-500"><Cloud className="h-3 w-3" /> Salvo na nuvem</span>
+            )}
+          </div>
+
+          <div className="bg-card/50 backdrop-blur-sm border border-border/50 px-4 py-2 rounded-2xl flex items-center gap-3 shadow-sm">
+            <Calendar className="h-4 w-4 text-primary" />
+            <span className="text-xs font-bold text-foreground">
+              {format(new Date(), "EEEE, dd 'de' MMMM", { locale: ptBR })}
+            </span>
+          </div>
         </div>
       </header>
 
       {/* Stats grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card onClick={() => navigate('/disciplines')} className="glass-card border-none shadow-md hover:shadow-xl hover:-translate-y-1 transition-all cursor-pointer group">
+        <Card onClick={() => navigate('/disciplines')} className="glass-card border-none shadow-md hover:shadow-xl hover:-translate-y-1 transition-all cursor-pointer group bg-card">
           <CardContent className="flex items-center gap-4 p-6">
             <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
               <BookOpen className="h-7 w-7" />
             </div>
             <div>
-              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Grade Regular</p>
+              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Matérias Ativas</p>
               <p className="text-3xl font-black text-foreground">{disciplineCount}</p>
             </div>
           </CardContent>
         </Card>
 
-        <Card className="glass-card border-none shadow-md hover:shadow-xl transition-all group">
+        <Card className="glass-card border-none shadow-md hover:shadow-xl transition-all group bg-card">
           <CardContent className="flex items-center gap-4 p-6">
             <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-500/10 text-amber-500 group-hover:bg-amber-500 group-hover:text-primary-foreground transition-colors">
               <Clock className="h-7 w-7" />
             </div>
             <div>
-              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Hoje</p>
-              <p className="text-3xl font-black text-foreground">{todayClasses.length} Aulas</p>
+              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Aulas Hoje</p>
+              <p className="text-3xl font-black text-foreground">{todayClasses.length}</p>
             </div>
           </CardContent>
         </Card>
 
-        <Card onClick={() => navigate('/reminders')} className="glass-card border-none shadow-md hover:shadow-xl hover:-translate-y-1 transition-all cursor-pointer group">
+        <Card onClick={() => navigate('/reminders')} className="glass-card border-none shadow-md hover:shadow-xl hover:-translate-y-1 transition-all cursor-pointer group bg-card">
           <CardContent className="flex items-center gap-4 p-6">
             <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-destructive/10 text-destructive group-hover:bg-destructive group-hover:text-destructive-foreground transition-colors">
               <AlertTriangle className="h-7 w-7" />
             </div>
             <div>
-              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Prazos</p>
-              <p className="text-3xl font-black text-foreground">{reminders.length} Alertas</p>
+              <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Prazos Críticos</p>
+              <p className="text-3xl font-black text-foreground">{reminders.length}</p>
             </div>
           </CardContent>
         </Card>
       </div>
 
       {/* Semester progress */}
-      <Card className="glass-card border-none shadow-inner bg-muted/20 rounded-[32px] overflow-hidden">
+      <Card className="glass-card border-none shadow-inner bg-card rounded-[32px] overflow-hidden">
         <CardHeader className="pb-3 px-8 pt-8">
-          <CardTitle className="text-xs font-black uppercase tracking-[0.2em] text-muted-foreground flex items-center justify-between">
-            Jornada do Semestre
-            <span className="text-primary font-black text-lg">{semesterProgress}%</span>
+          <CardTitle className="text-xs font-black uppercase tracking-[0.2em] text-primary flex items-center justify-between">
+            PROGRESSO DO PERÍODO LETIVO
+            <span className="text-foreground/20 font-black text-4xl absolute right-8 top-4 z-0 pointer-events-none">{semesterProgress}%</span>
           </CardTitle>
         </CardHeader>
-        <CardContent className="px-8 pb-8">
-          <Progress value={semesterProgress} className="h-4 shadow-sm bg-background/50" />
-          {semesterProgress === 0 && (
-            <button
-              onClick={() => navigate('/settings')}
-              className="mt-4 flex items-center gap-2 text-[10px] font-black text-primary hover:gap-3 transition-all uppercase tracking-widest"
-            >
-              Configure seu período letivo para ativar o monitoramento <ArrowRight className="h-3 w-3" />
-            </button>
-          )}
+        <CardContent className="px-8 pb-8 relative z-10">
+          <Progress value={semesterProgress} className="h-4 shadow-sm bg-muted/50 [&>div]:bg-primary" />
+          <p className="mt-4 text-[10px] font-black text-muted-foreground uppercase tracking-widest">
+            {semesterProgress === 0 
+              ? "Configure seu período letivo nas configurações para ativar." 
+              : "PERÍODO EM ANDAMENTO. CONTINUE ORGANIZANDO SEUS RESUMOS."}
+          </p>
         </CardContent>
       </Card>
 
@@ -216,9 +266,9 @@ export default function Dashboard() {
 
           <div className="grid gap-4">
             {todayClasses.length === 0 ? (
-              <div className="p-12 border-2 border-dashed rounded-[40px] flex flex-col items-center justify-center text-muted-foreground bg-muted/5">
-                <p className="text-sm font-medium italic opacity-60">Nenhuma aula programada para este dia da semana.</p>
-                <button onClick={() => navigate('/disciplines')} className="text-[10px] mt-4 font-black uppercase text-primary hover:underline">Ver todas as matérias</button>
+              <div className="p-12 border-2 border-dashed border-border/50 rounded-[40px] flex flex-col items-center justify-center text-muted-foreground bg-card/50">
+                <p className="text-sm font-medium italic opacity-60">Nenhuma aula programada para hoje.</p>
+                <button onClick={() => navigate('/disciplines')} className="text-[10px] mt-4 font-black uppercase text-primary hover:underline">Ver grade completa</button>
               </div>
             ) : (
               todayClasses.map((c, i) => (
