@@ -21,6 +21,8 @@ export type Database = {
           discipline_id: string
           end_date: string | null
           id: string
+          material_format: string
+          reading_status: string
           start_date: string | null
           title: string
           user_id: string
@@ -31,6 +33,8 @@ export type Database = {
           discipline_id: string
           end_date?: string | null
           id?: string
+          material_format?: string
+          reading_status?: string
           start_date?: string | null
           title: string
           user_id: string
@@ -41,6 +45,8 @@ export type Database = {
           discipline_id?: string
           end_date?: string | null
           id?: string
+          material_format?: string
+          reading_status?: string
           start_date?: string | null
           title?: string
           user_id?: string
