@@ -10,8 +10,6 @@
     --foreground: 220 30% 10%;
     --card: 0 0% 100%;
     --card-foreground: 220 30% 10%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 220 30% 10%;
     --primary: 221 83% 53%;
     --primary-foreground: 210 40% 98%;
     --secondary: 214 25% 93%;
@@ -87,7 +85,11 @@
 
 @layer utilities {
   .glass-card {
-    @apply bg-card/60 backdrop-blur-xl border border-white/5 shadow-2xl;
+    @apply bg-card/80 backdrop-blur-xl border border-border/30 shadow-xl;
+  }
+
+  .safe-bottom {
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 5rem);
   }
 }
 
@@ -145,9 +147,27 @@
 }
 
 .tiptap-editor .ProseMirror mark {
-  background-color: hsl(50 100% 70%);
   padding: 0.125rem 0.25rem;
   border-radius: 0.125rem;
+}
+
+.tiptap-editor .ProseMirror mark[data-color="yellow"] {
+  background-color: #faff00;
+}
+.tiptap-editor .ProseMirror mark[data-color="pink"] {
+  background-color: #ff6ec7;
+}
+.tiptap-editor .ProseMirror mark[data-color="green"] {
+  background-color: #39ff14;
+}
+.tiptap-editor .ProseMirror mark[data-color="blue-pastel"] {
+  background-color: #a8d8ea;
+}
+.tiptap-editor .ProseMirror mark[data-color="yellow-pastel"] {
+  background-color: #fffacd;
+}
+.tiptap-editor .ProseMirror mark:not([data-color]) {
+  background-color: hsl(50 100% 70%);
 }
 
 .tiptap-editor .ProseMirror code {
@@ -164,42 +184,9 @@
   margin: 1rem 0;
 }
 
-/* Print styles */
-@media print {
-  @page {
-    size: A4;
-    margin: 2cm;
-  }
-
-  body * {
-    visibility: hidden;
-  }
-
-  .print-area, .print-area * {
-    visibility: visible;
-  }
-
-  .print-area {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
-  }
-
-  .print-area .print-header {
-    display: block !important;
-    margin-bottom: 1.5rem;
-    padding-bottom: 1rem;
-    border-bottom: 2px solid #333;
-  }
-
-  .print-area .print-header h1 {
-    font-size: 18pt;
-    font-weight: 800;
-  }
-
-  .print-area .print-header p {
-    font-size: 10pt;
-    color: #666;
+/* PWA standalone mode */
+@media (display-mode: standalone) {
+  body {
+    padding-top: env(safe-area-inset-top, 0px);
   }
 }

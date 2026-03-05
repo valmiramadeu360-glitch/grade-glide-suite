@@ -28,6 +28,14 @@ interface Reminder {
   discipline_color?: string;
 }
 
+const typeLabels: Record<string, string> = {
+  exam: "Prova",
+  assignment: "Trabalho",
+  seminar: "Seminário",
+  presentation: "Apresentação",
+  other: "Outro",
+};
+
 export default function Dashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -47,20 +55,9 @@ export default function Dashboard() {
 
     try {
       const [schedRes, remRes, discRes, profileRes] = await Promise.all([
-        supabase
-          .from("discipline_schedules")
-          .select("day_of_week, start_time, end_time, room, discipline_id, disciplines(name, color)")
-          .eq("day_of_week", today)
-          .eq("user_id", user?.id),
-        supabase
-          .from("reminders")
-          .select("*, disciplines(name, color)")
-          .eq("completed", false)
-          .eq("user_id", user?.id)
-          .gte("due_date", startOfDay(new Date()).toISOString())
-          .order("due_date", { ascending: true })
-          .limit(8),
-        supabase.from("disciplines").select("id").eq("user_id", user?.id).eq("is_extra_course", false),
+        supabase.from("discipline_schedules").select("day_of_week, start_time, end_time, room, discipline_id, disciplines(name, color)").eq("day_of_week", today).eq("user_id", user?.id),
+        supabase.from("reminders").select("*, disciplines(name, color)").eq("completed", false).eq("user_id", user?.id).gte("due_date", startOfDay(new Date()).toISOString()).order("due_date", { ascending: true }).limit(8),
+        supabase.from("disciplines").select("id").eq("user_id", user?.id).eq("is_extra_course", false).or("archived.is.null,archived.eq.false"),
         supabase.from("profiles").select("semester_start, semester_end").eq("user_id", user!.id).maybeSingle(),
       ]);
 
@@ -78,13 +75,7 @@ export default function Dashboard() {
       }
 
       if (remRes.data) {
-        setReminders(
-          remRes.data.map((r: any) => ({
-            ...r,
-            discipline_name: r.disciplines?.name,
-            discipline_color: r.disciplines?.color,
-          }))
-        );
+        setReminders(remRes.data.map((r: any) => ({ ...r, discipline_name: r.disciplines?.name, discipline_color: r.disciplines?.color })));
       }
 
       setDisciplineCount(discRes.data?.length ?? 0);
@@ -93,12 +84,10 @@ export default function Dashboard() {
         const start = new Date(profileRes.data.semester_start);
         const end = new Date(profileRes.data.semester_end);
         const now = new Date();
-        
         const totalDays = differenceInDays(end, start);
         if (totalDays > 0) {
           const elapsedDays = differenceInDays(now, start);
-          const percentage = Math.round((elapsedDays / totalDays) * 100);
-          setSemesterProgress(Math.min(100, Math.max(0, percentage)));
+          setSemesterProgress(Math.min(100, Math.max(0, Math.round((elapsedDays / totalDays) * 100))));
         }
       }
     } catch (error) {
@@ -108,17 +97,18 @@ export default function Dashboard() {
     }
   }
 
-  function getUrgencyLabel(dateStr: string) {
+  function getUrgencyLabel(dateStr: string, rType: string) {
     const d = new Date(dateStr);
     const today = startOfDay(new Date());
     const target = startOfDay(d);
-    
-    if (isToday(d)) return { label: "HOJE", variant: "destructive" as const };
-    if (isTomorrow(d)) return { label: "AMANHÃ", variant: "default" as const };
-    
+    const tLabel = typeLabels[rType] || rType;
+
+    if (isToday(d)) return { label: `HOJE • ${tLabel.toUpperCase()}`, variant: "destructive" as const };
+    if (isTomorrow(d)) return { label: `AMANHÃ • ${tLabel.toUpperCase()}`, variant: "default" as const };
+
     const diff = differenceInDays(target, today);
-    if (diff <= 3) return { label: `EM ${diff} DIAS`, variant: "secondary" as const };
-    return { label: format(d, "dd/MM", { locale: ptBR }), variant: "outline" as const };
+    if (diff <= 3) return { label: `URGENTE • ${tLabel.toUpperCase()}`, variant: "secondary" as const };
+    return { label: tLabel.toUpperCase(), variant: "outline" as const };
   }
 
   if (loading) {
@@ -142,24 +132,24 @@ export default function Dashboard() {
           </div>
           <h1 className="text-4xl font-black text-foreground tracking-tighter">Olá, pronto para focar?</h1>
           <p className="text-muted-foreground font-medium italic">
-            {disciplineCount === 0 
+            {disciplineCount === 0
               ? "Comece cadastrando suas disciplinas para organizar o semestre."
               : `Você tem ${disciplineCount} ${disciplineCount === 1 ? 'disciplina ativa' : 'disciplinas ativas'} para gerenciar.`}
           </p>
         </div>
         <div className="bg-card/50 backdrop-blur-sm border border-border/50 px-4 py-2 rounded-2xl flex items-center gap-3 shadow-sm">
-           <Calendar className="h-4 w-4 text-primary" />
-           <span className="text-xs font-bold text-foreground">
-              {format(new Date(), "EEEE, dd 'de' MMMM", { locale: ptBR })}
-           </span>
+          <Calendar className="h-4 w-4 text-primary" />
+          <span className="text-xs font-bold text-foreground">
+            {format(new Date(), "EEEE, dd 'de' MMMM", { locale: ptBR })}
+          </span>
         </div>
       </header>
 
-      {/* Grid de estatísticas */}
+      {/* Stats grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <Card onClick={() => navigate('/disciplines')} className="glass-card border-none shadow-md hover:shadow-xl hover:-translate-y-1 transition-all cursor-pointer group">
           <CardContent className="flex items-center gap-4 p-6">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-500/10 text-indigo-500 group-hover:bg-indigo-500 group-hover:text-white transition-colors">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
               <BookOpen className="h-7 w-7" />
             </div>
             <div>
@@ -171,7 +161,7 @@ export default function Dashboard() {
 
         <Card className="glass-card border-none shadow-md hover:shadow-xl transition-all group">
           <CardContent className="flex items-center gap-4 p-6">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-500/10 text-amber-500 group-hover:bg-amber-500 group-hover:text-white transition-colors">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-500/10 text-amber-500 group-hover:bg-amber-500 group-hover:text-primary-foreground transition-colors">
               <Clock className="h-7 w-7" />
             </div>
             <div>
@@ -183,7 +173,7 @@ export default function Dashboard() {
 
         <Card onClick={() => navigate('/reminders')} className="glass-card border-none shadow-md hover:shadow-xl hover:-translate-y-1 transition-all cursor-pointer group">
           <CardContent className="flex items-center gap-4 p-6">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-rose-500/10 text-rose-500 group-hover:bg-rose-500 group-hover:text-white transition-colors">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-destructive/10 text-destructive group-hover:bg-destructive group-hover:text-destructive-foreground transition-colors">
               <AlertTriangle className="h-7 w-7" />
             </div>
             <div>
@@ -194,7 +184,7 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      {/* Progresso do Semestre */}
+      {/* Semester progress */}
       <Card className="glass-card border-none shadow-inner bg-muted/20 rounded-[32px] overflow-hidden">
         <CardHeader className="pb-3 px-8 pt-8">
           <CardTitle className="text-xs font-black uppercase tracking-[0.2em] text-muted-foreground flex items-center justify-between">
@@ -205,7 +195,7 @@ export default function Dashboard() {
         <CardContent className="px-8 pb-8">
           <Progress value={semesterProgress} className="h-4 shadow-sm bg-background/50" />
           {semesterProgress === 0 && (
-            <button 
+            <button
               onClick={() => navigate('/settings')}
               className="mt-4 flex items-center gap-2 text-[10px] font-black text-primary hover:gap-3 transition-all uppercase tracking-widest"
             >
@@ -223,7 +213,7 @@ export default function Dashboard() {
               Sessões de Hoje
             </h3>
           </div>
-          
+
           <div className="grid gap-4">
             {todayClasses.length === 0 ? (
               <div className="p-12 border-2 border-dashed rounded-[40px] flex flex-col items-center justify-center text-muted-foreground bg-muted/5">
@@ -237,7 +227,7 @@ export default function Dashboard() {
                   onClick={() => navigate(`/disciplines/${c.discipline_id}`)}
                   className="group flex items-center gap-5 w-full rounded-[28px] p-5 bg-card border border-border/40 hover:border-primary/40 hover:shadow-2xl hover:shadow-primary/10 transition-all text-left"
                 >
-                  <div className="h-14 w-14 rounded-2xl flex items-center justify-center text-white font-black shadow-lg group-hover:scale-110 transition-transform" style={{ backgroundColor: c.color }}>
+                  <div className="h-14 w-14 rounded-2xl flex items-center justify-center text-primary-foreground font-black shadow-lg group-hover:scale-110 transition-transform" style={{ backgroundColor: c.color }}>
                     {c.discipline_name.slice(0, 1).toUpperCase()}
                   </div>
                   <div className="flex-1 min-w-0">
@@ -257,7 +247,7 @@ export default function Dashboard() {
         </div>
 
         <div className="lg:col-span-2 space-y-6">
-          <h3 className="text-sm font-black uppercase tracking-widest flex items-center gap-2 text-rose-500">
+          <h3 className="text-sm font-black uppercase tracking-widest flex items-center gap-2 text-destructive">
             <AlertTriangle className="h-4 w-4" />
             Prazos Críticos
           </h3>
@@ -272,17 +262,17 @@ export default function Dashboard() {
               </div>
             ) : (
               reminders.map((r) => {
-                const urgency = getUrgencyLabel(r.due_date);
+                const urgency = getUrgencyLabel(r.due_date, r.type);
                 return (
-                  <div key={r.id} onClick={() => navigate('/reminders')} className="cursor-pointer group flex flex-col gap-3 rounded-[28px] p-5 bg-card border border-border/40 hover:border-rose-500/40 transition-all shadow-sm">
+                  <div key={r.id} onClick={() => navigate('/reminders')} className="cursor-pointer group flex flex-col gap-3 rounded-[28px] p-5 bg-card border border-border/40 hover:border-destructive/40 transition-all shadow-sm">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <p className="font-black text-sm text-foreground leading-tight group-hover:text-rose-500 transition-colors">{r.title}</p>
+                        <p className="font-black text-sm text-foreground leading-tight group-hover:text-destructive transition-colors">{r.title}</p>
                         <div className="flex items-center gap-2 mt-2">
-                           <div className="h-2 w-2 rounded-full" style={{ backgroundColor: r.discipline_color }} />
-                           <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest truncate max-w-[140px]">
-                              {r.discipline_name || "Geral"}
-                           </span>
+                          <div className="h-2 w-2 rounded-full" style={{ backgroundColor: r.discipline_color }} />
+                          <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest truncate max-w-[140px]">
+                            {r.discipline_name || "Geral"}
+                          </span>
                         </div>
                       </div>
                       <Badge variant={urgency.variant} className="shrink-0 text-[9px] font-black px-2 py-1 tracking-widest">{urgency.label}</Badge>
