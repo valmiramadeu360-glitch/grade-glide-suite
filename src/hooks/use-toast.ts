@@ -3,7 +3,8 @@ import * as React from "react";
 import type { ToastActionElement, ToastProps } from "@/components/ui/toast";
 
 const TOAST_LIMIT = 1;
-const TOAST_REMOVE_DELAY = 1000000;
+// CORREÇÃO: Reduzido de 1000000 (16 minutos) para 5000 (5 segundos) para não travar a tela do usuário
+const TOAST_REMOVE_DELAY = 5000;
 
 type ToasterToast = ToastProps & {
   id: string;
@@ -172,7 +173,7 @@ function useToast() {
         listeners.splice(index, 1);
       }
     };
-  }, []); // Corrigido para array vazio para estabilidade de performance
+  }, []); 
 
   return {
     ...state,
