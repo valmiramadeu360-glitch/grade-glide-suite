@@ -1,6 +1,4 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/hooks/useAuth";
 
 type ThemeMode = "light" | "dark";
 
@@ -11,7 +9,6 @@ interface ThemeColors {
   lightness: number;
 }
 
-// Lista oficial de 20 cores do EduFlow (incluindo tons Neon e Pastel)
 const THEME_COLORS: ThemeColors[] = [
   { label: "Azul", hue: 221, saturation: 83, lightness: 53 },
   { label: "Vermelho", hue: 0, saturation: 72, lightness: 51 },
@@ -51,9 +48,7 @@ function applyPrimaryColor(color: ThemeColors, mode: ThemeMode) {
   const root = document.documentElement;
   const { hue, saturation, lightness } = color;
 
-  // Aplica as variáveis HSL ao CSS Global
   if (mode === "dark") {
-    // No modo escuro, aumentamos um pouco a luminosidade para a cor não sumir
     const safeLightness = Math.min(lightness + 15, 80);
     root.style.setProperty("--primary", `${hue} ${saturation}% ${safeLightness}%`);
     root.style.setProperty("--ring", `${hue} ${saturation}% ${safeLightness}%`);
@@ -64,8 +59,6 @@ function applyPrimaryColor(color: ThemeColors, mode: ThemeMode) {
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
-  
   const [mode, setModeState] = useState<ThemeMode>(() => {
     if (typeof window === "undefined") return "light";
     const saved = localStorage.getItem("eduflow-theme-mode");
@@ -81,21 +74,14 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     return THEME_COLORS[0];
   });
 
-  // Salva no LocalStorage e no Perfil do Usuário (Autosave)
-  async function setMode(m: ThemeMode) {
+  function setMode(m: ThemeMode) {
     setModeState(m);
     localStorage.setItem("eduflow-theme-mode", m);
-    if (user) {
-      await supabase.from("profiles").update({ theme_mode: m }).eq("user_id", user.id);
-    }
   }
 
-  async function setPrimaryColor(c: ThemeColors) {
+  function setPrimaryColor(c: ThemeColors) {
     setPrimaryColorState(c);
     localStorage.setItem("eduflow-primary-color", JSON.stringify(c));
-    if (user) {
-      await supabase.from("profiles").update({ primary_color_label: c.label }).eq("user_id", user.id);
-    }
   }
 
   useEffect(() => {
