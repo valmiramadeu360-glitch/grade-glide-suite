@@ -1,37 +1,43 @@
 import * as React from "react";
 
+// O breakpoint de 768px é o padrão do Tailwind (md)
 const MOBILE_BREAKPOINT = 768;
 
 export function useIsMobile() {
-  // 1. Estado inicial inteligente: já verifica a tela logo na primeira renderização
-  // e inclui a trava de segurança (typeof window) caso rode fora do navegador.
   const [isMobile, setIsMobile] = React.useState<boolean>(() => {
     if (typeof window !== "undefined") {
-      return window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT - 1}px)`).matches;
+      return window.innerWidth < MOBILE_BREAKPOINT;
     }
     return false;
   });
 
   React.useEffect(() => {
-    // Trava de segurança adicional
     if (typeof window === "undefined") return;
 
     const mql = window.matchMedia(`(max-width: ${MOBILE_BREAKPOINT - 1}px)`);
     
-    // Função otimizada: usa o evento do navegador diretamente
-    const onChange = (e: MediaQueryListEvent | MediaQueryList) => {
-      setIsMobile(e.matches);
+    const onChange = () => {
+      setIsMobile(window.innerWidth < MOBILE_BREAKPOINT);
     };
 
-    // Adiciona o ouvinte de evento (usando o padrão moderno do React/Navegadores)
-    mql.addEventListener("change", onChange);
+    // Suporte híbrido: addEventListener (moderno) e addListener (Safari antigo)
+    if (mql.addEventListener) {
+      mql.addEventListener("change", onChange);
+    } else {
+      (mql as any).addListener(onChange);
+    }
     
-    // Checagem de segurança pós-montagem
+    // Sincronização imediata
     setIsMobile(mql.matches);
 
-    // Limpeza da memória quando o componente for desmontado
-    return () => mql.removeEventListener("change", onChange);
+    return () => {
+      if (mql.removeEventListener) {
+        mql.removeEventListener("change", onChange);
+      } else {
+        (mql as any).removeListener(onChange);
+      }
+    };
   }, []);
 
-  return isMobile;
+  return !!isMobile;
 }
