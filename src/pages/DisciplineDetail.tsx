@@ -115,9 +115,9 @@ export default function DisciplineDetail() {
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center h-[60vh] gap-4">
-        <Loader2 className="h-10 w-10 animate-spin text-primary" />
-        <p className="text-xs font-bold uppercase tracking-tighter text-muted-foreground">Carregando conteúdo...</p>
+      <div className="flex flex-col items-center justify-center h-[70vh] gap-4">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+        <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground animate-pulse">Carregando conteúdo...</p>
       </div>
     );
   }
@@ -125,96 +125,121 @@ export default function DisciplineDetail() {
   const disciplineColor = discipline.color || "#6366f1";
 
   return (
-    <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in duration-500 px-2 pb-12">
+    // pb-24 ou pb-[env(safe-area-inset-bottom)] adicionado para garantir clique no iPhone
+    <div className="max-w-5xl mx-auto space-y-6 sm:space-y-8 animate-in fade-in duration-500 px-4 sm:px-6 pb-24">
       {isOffline && (
-        <div className="bg-destructive/10 text-destructive p-3 rounded-xl flex items-center justify-center gap-2 text-xs font-bold uppercase tracking-widest animate-pulse">
+        <div className="bg-destructive/10 text-destructive p-3 rounded-2xl flex items-center justify-center gap-2 text-xs font-black uppercase tracking-widest animate-pulse border border-destructive/20 mt-4">
           <CloudOff className="h-4 w-4" />
-          Modo Offline Ativado
+          Modo Offline (Sincronizando)
         </div>
       )}
 
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-card p-4 sm:p-6 rounded-3xl border border-border/40 shadow-sm transition-colors duration-300">
-        <div className="flex items-start sm:items-center gap-3 sm:gap-4 w-full sm:w-auto">
-          {/* Botão de voltar maior para mobile */}
+      {/* Header Principal da Disciplina */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-5 bg-card p-5 sm:p-6 rounded-[32px] border border-border/50 shadow-sm mt-4 sm:mt-8">
+        <div className="flex items-start sm:items-center gap-4 w-full sm:w-auto">
+          {/* Botão de voltar robusto (Hitbox grande para polegar) */}
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => navigate("/disciplines")}
-            className="rounded-full hover:bg-muted transition-colors min-h-16 min-w-16 h-16 w-16 sm:h-14 sm:w-14 shrink-0 flex items-center justify-center"
+            onClick={() => navigate(-1)} // Volta para a tela exata anterior (Dashboard ou Grade)
+            className="rounded-[20px] bg-muted/30 hover:bg-muted transition-colors h-14 w-14 sm:h-16 sm:w-16 shrink-0 flex items-center justify-center border border-border/40"
           >
-            <ArrowLeft className="h-7 w-7 sm:h-6 sm:w-6" />
+            <ArrowLeft className="h-6 w-6 sm:h-7 sm:w-7 text-foreground" />
           </Button>
           
-          <div className="flex items-center gap-3 sm:gap-4 flex-1 min-w-0">
-            <div className="h-12 w-12 sm:h-14 sm:w-14 shrink-0 rounded-2xl flex items-center justify-center shadow-lg shadow-primary/5 transition-colors duration-300" style={{ backgroundColor: `${disciplineColor}15` }}>
-              <BookOpen className="h-6 sm:h-7 w-6 sm:w-7" style={{ color: disciplineColor }} />
+          <div className="flex items-center gap-4 flex-1 min-w-0">
+            {/* Ícone da Matéria Dinâmico */}
+            <div 
+              className="h-14 w-14 sm:h-16 sm:w-16 shrink-0 rounded-2xl flex items-center justify-center shadow-lg transition-colors duration-300" 
+              style={{ backgroundColor: `${disciplineColor}15`, border: `1px solid ${disciplineColor}30` }}
+            >
+              <BookOpen className="h-7 w-7 sm:h-8 sm:w-8" style={{ color: disciplineColor }} />
             </div>
             
             <div className="min-w-0 flex-1">
               {isEditingTitle ? (
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 w-full max-w-sm">
                   <Input 
                     value={newTitle}
                     onChange={(e) => setNewTitle(e.target.value)}
-                    className="h-9 text-lg font-black"
+                    className="h-12 text-lg sm:text-xl font-black bg-background border-border rounded-xl"
                     autoFocus
                     onKeyDown={(e) => e.key === 'Enter' && saveTitle()}
                   />
-                  <Button size="icon" variant="ghost" className="h-8 w-8 text-emerald-500" onClick={saveTitle} disabled={isSavingTitle}>
-                    {isSavingTitle ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                  <Button size="icon" variant="ghost" className="h-12 w-12 rounded-xl bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20" onClick={saveTitle} disabled={isSavingTitle}>
+                    {isSavingTitle ? <Loader2 className="h-5 w-5 animate-spin" /> : <Check className="h-5 w-5" />}
                   </Button>
-                  <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive" onClick={() => {setIsEditingTitle(false); setNewTitle(discipline.name);}} disabled={isSavingTitle}>
-                    <X className="h-4 w-4" />
+                  <Button size="icon" variant="ghost" className="h-12 w-12 rounded-xl bg-destructive/10 text-destructive hover:bg-destructive/20" onClick={() => {setIsEditingTitle(false); setNewTitle(discipline.name);}} disabled={isSavingTitle}>
+                    <X className="h-5 w-5" />
                   </Button>
                 </div>
               ) : (
-                <div className="flex items-center gap-2 group">
-                  <h1 className="text-xl sm:text-2xl font-black text-foreground tracking-tight truncate">{discipline.name}</h1>
-                  <Button size="icon" variant="ghost" className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" onClick={() => setIsEditingTitle(true)}>
-                    <Edit2 className="h-3 w-3 text-muted-foreground" />
+                <div className="flex items-center gap-3 group w-full">
+                  <h1 className="text-xl sm:text-2xl lg:text-3xl font-black text-foreground tracking-tight truncate cursor-pointer hover:opacity-80 transition-opacity" onClick={() => setIsEditingTitle(true)}>
+                    {discipline.name}
+                  </h1>
+                  <Button size="icon" variant="ghost" className="h-8 w-8 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity shrink-0 bg-muted/50" onClick={() => setIsEditingTitle(true)}>
+                    <Edit2 className="h-4 w-4 text-muted-foreground" />
                   </Button>
                 </div>
               )}
               
-              <div className="flex items-center gap-2 mt-1">
-                <div className="h-2 w-2 rounded-full shrink-0 transition-colors duration-300" style={{ backgroundColor: disciplineColor }} />
-                <p className="text-sm font-medium text-muted-foreground truncate italic">{discipline.professor || "Professor não informado"}</p>
+              <div className="flex items-center gap-2 mt-1.5 bg-background border border-border/50 px-2.5 py-1 rounded-md w-fit max-w-full">
+                <div className="h-2 w-2 rounded-full shrink-0 transition-colors duration-300 shadow-sm" style={{ backgroundColor: disciplineColor }} />
+                <p className="text-xs font-bold text-muted-foreground truncate uppercase tracking-widest">
+                  {discipline.professor || "Professor não informado"}
+                </p>
               </div>
             </div>
           </div>
         </div>
 
-        <Button variant="ghost" size="sm" disabled={deleting} onClick={deleteDiscipline} className="text-destructive hover:bg-destructive/10 font-bold text-xs uppercase tracking-widest gap-2 w-full sm:w-auto mt-4 sm:mt-0 py-6 sm:py-2">
-          {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-5 w-5 sm:h-4 sm:w-4" />}
+        {/* Botão de Excluir Redesenhado */}
+        <Button 
+          variant="outline" 
+          disabled={deleting} 
+          onClick={deleteDiscipline} 
+          className="text-destructive border-destructive/20 hover:bg-destructive/10 hover:border-destructive/40 font-black text-[10px] uppercase tracking-widest gap-2 w-full sm:w-auto h-14 sm:h-12 rounded-xl transition-all"
+        >
+          {deleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
           Excluir Disciplina
         </Button>
       </div>
 
-      {/* Tabs */}
+      {/* Navegação por Abas (Tabs) - Rolagem horizontal suave no celular */}
       <Tabs defaultValue="general" className="w-full">
-        <TabsList className="w-full bg-muted/50 p-1 rounded-xl h-auto flex flex-wrap sm:grid sm:grid-cols-5 shadow-inner gap-1 sm:gap-0">
-          <TabsTrigger value="general" className="flex-1 rounded-lg font-bold text-[10px] sm:text-[10px] uppercase tracking-wider py-3 sm:py-2">Início</TabsTrigger>
-          <TabsTrigger value="checklist" className="flex-1 rounded-lg font-bold text-[10px] sm:text-[10px] uppercase tracking-wider py-3 sm:py-2">Estudos</TabsTrigger>
-          <TabsTrigger value="materials" className="flex-1 rounded-lg font-bold text-[10px] sm:text-[10px] uppercase tracking-wider py-3 sm:py-2">Mídia</TabsTrigger>
-          <TabsTrigger value="books" className="flex-1 rounded-lg font-bold text-[10px] sm:text-[10px] uppercase tracking-wider py-3 sm:py-2">Livros</TabsTrigger>
-          <TabsTrigger value="notes" className="flex-1 rounded-lg font-bold text-[10px] sm:text-[10px] uppercase tracking-wider py-3 sm:py-2">Resumos</TabsTrigger>
+        <TabsList className="w-full bg-card border border-border/50 p-1.5 rounded-2xl flex overflow-x-auto no-scrollbar shadow-sm sm:grid sm:grid-cols-5 gap-1">
+          <TabsTrigger value="general" className="flex-shrink-0 sm:flex-1 rounded-xl font-black text-[11px] uppercase tracking-wider py-3.5 px-6 sm:px-0 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all">
+            Painel Geral
+          </TabsTrigger>
+          <TabsTrigger value="checklist" className="flex-shrink-0 sm:flex-1 rounded-xl font-black text-[11px] uppercase tracking-wider py-3.5 px-6 sm:px-0 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all">
+            Plano de Estudos
+          </TabsTrigger>
+          <TabsTrigger value="materials" className="flex-shrink-0 sm:flex-1 rounded-xl font-black text-[11px] uppercase tracking-wider py-3.5 px-6 sm:px-0 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all">
+            Mídias e Links
+          </TabsTrigger>
+          <TabsTrigger value="books" className="flex-shrink-0 sm:flex-1 rounded-xl font-black text-[11px] uppercase tracking-wider py-3.5 px-6 sm:px-0 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all">
+            Livros Cadastrados
+          </TabsTrigger>
+          <TabsTrigger value="notes" className="flex-shrink-0 sm:flex-1 rounded-xl font-black text-[11px] uppercase tracking-wider py-3.5 px-6 sm:px-0 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all">
+            Resumos (Caderno)
+          </TabsTrigger>
         </TabsList>
 
-        <div className="mt-8 transition-all">
-          <TabsContent value="general" className="animate-in slide-in-from-bottom-2 duration-300">
+        <div className="mt-6 sm:mt-8 transition-all">
+          <TabsContent value="general" className="animate-in fade-in slide-in-from-bottom-4 duration-500 m-0">
             <DisciplineGeneral discipline={discipline} onUpdate={loadDiscipline} />
           </TabsContent>
-          <TabsContent value="checklist" className="animate-in slide-in-from-bottom-2 duration-300">
+          <TabsContent value="checklist" className="animate-in fade-in slide-in-from-bottom-4 duration-500 m-0">
             <DisciplineChecklist disciplineId={discipline.id} />
           </TabsContent>
-          <TabsContent value="materials" className="animate-in slide-in-from-bottom-2 duration-300">
+          <TabsContent value="materials" className="animate-in fade-in slide-in-from-bottom-4 duration-500 m-0">
             <DisciplineMaterials disciplineId={discipline.id} />
           </TabsContent>
-          <TabsContent value="books" className="animate-in slide-in-from-bottom-2 duration-300">
+          <TabsContent value="books" className="animate-in fade-in slide-in-from-bottom-4 duration-500 m-0">
             <DisciplineBooks disciplineId={discipline.id} />
           </TabsContent>
-          <TabsContent value="notes" className="animate-in slide-in-from-bottom-2 duration-300">
+          <TabsContent value="notes" className="animate-in fade-in slide-in-from-bottom-4 duration-500 m-0">
             <DisciplineNotes disciplineId={discipline.id} disciplineName={discipline.name} />
           </TabsContent>
         </div>
@@ -222,3 +247,4 @@ export default function DisciplineDetail() {
     </div>
   );
 }
+
