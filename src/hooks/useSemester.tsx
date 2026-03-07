@@ -13,45 +13,68 @@ const SemesterContext = createContext<SemesterContextType | undefined>(undefined
 
 export function SemesterProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
+  
+  // Estado inicial: Tenta pegar do cache local ou usa o ano atual como fallback
   const [currentLabel, setCurrentLabelState] = useState<string>(() => {
     if (typeof window === "undefined") return "2026.1";
     return localStorage.getItem("eduflow-semester") || "2026.1";
   });
+  
   const [allSemesters, setAllSemesters] = useState<string[]>([]);
 
+  // Função para trocar o semestre em todo o app
   function setCurrentLabel(label: string) {
     setCurrentLabelState(label);
     localStorage.setItem("eduflow-semester", label);
+    
+    // Dispara um evento para componentes que não estão no contexto saberem da troca
+    window.dispatchEvent(new CustomEvent("semesterChanged", { detail: label }));
   }
 
   async function loadSemesters() {
     if (!user) return;
 
-    // Get current semester label from profile
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("current_semester_label")
-      .eq("user_id", user.id)
-      .maybeSingle();
+    try {
+      // 1. Busca o semestre "oficial" definido no perfil do aluno
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("semester") // Padronizado conforme as telas anteriores
+        .eq("user_id", user.id)
+        .maybeSingle();
 
-    if (profile?.current_semester_label) {
-      setCurrentLabel(profile.current_semester_label);
+      // 2. Busca todos os semestres únicos presentes nas disciplinas (Histórico)
+      const { data: disciplines } = await supabase
+        .from("disciplines")
+        .select("semester")
+        .eq("user_id", user.id);
+
+      const labels = new Set<string>();
+      
+      // Adiciona o semestre do perfil
+      if (profile?.semester) {
+        labels.add(profile.semester.toString());
+      }
+
+      // Adiciona os semestres das matérias (mesmo as arquivadas)
+      disciplines?.forEach((d: any) => {
+        if (d.semester) labels.add(d.semester.toString());
+      });
+
+      // Fallback: se não houver nada, usa o padrão do app
+      if (labels.size === 0) labels.add("2026.1");
+
+      // Ordenação: Do mais recente para o mais antigo (ex: 2026.2, 2026.1, 2025.2...)
+      const sortedLabels = Array.from(labels).sort((a, b) => b.localeCompare(a));
+      
+      setAllSemesters(sortedLabels);
+
+      // Se o semestre atual não estiver na lista (ex: reset de conta), ajusta para o mais recente
+      if (profile?.semester) {
+        setCurrentLabel(profile.semester.toString());
+      }
+    } catch (error) {
+      console.error("Erro ao carregar semestres:", error);
     }
-
-    // Get all distinct semester labels from disciplines
-    const { data: disciplines } = await supabase
-      .from("disciplines")
-      .select("semester_label")
-      .eq("user_id", user.id);
-
-    const labels = new Set<string>();
-    if (profile?.current_semester_label) labels.add(profile.current_semester_label);
-    disciplines?.forEach((d: any) => {
-      if (d.semester_label) labels.add(d.semester_label);
-    });
-
-    if (labels.size === 0) labels.add("2026.1");
-    setAllSemesters(Array.from(labels).sort());
   }
 
   useEffect(() => {
@@ -67,6 +90,8 @@ export function SemesterProvider({ children }: { children: ReactNode }) {
 
 export function useSemester() {
   const ctx = useContext(SemesterContext);
-  if (!ctx) throw new Error("useSemester deve ser usado dentro de um SemesterProvider");
+  if (!ctx) {
+    throw new Error("useSemester deve ser usado dentro de um SemesterProvider");
+  }
   return ctx;
 }
