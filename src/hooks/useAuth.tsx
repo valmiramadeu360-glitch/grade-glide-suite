@@ -10,12 +10,7 @@ interface AuthContextType {
   signOut: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextType>({
-  user: null,
-  session: null,
-  loading: true,
-  signOut: async () => {},
-});
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
@@ -24,17 +19,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const { toast } = useToast();
 
   useEffect(() => {
-    // 1. Função para buscar a sessão inicial de forma segura
+    // 1. Inicialização veloz e segura
     const initializeAuth = async () => {
       try {
+        // Buscamos a sessão atual (o Supabase checa o LocalStorage automaticamente)
         const { data: { session: initialSession }, error } = await supabase.auth.getSession();
         
-        if (error) throw error;
+        if (error) {
+          // Erros de rede não devem impedir o app de abrir em modo offline
+          if (error.message.includes("fetch")) {
+             console.warn("Auth: Modo offline detectado na inicialização.");
+          } else {
+             throw error;
+          }
+        }
         
         setSession(initialSession);
         setUser(initialSession?.user ?? null);
       } catch (error) {
-        console.error("Erro ao recuperar sessão inicial:", error);
+        console.error("Auth: Erro fatal na inicialização:", error);
       } finally {
         setLoading(false);
       }
@@ -42,16 +45,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     initializeAuth();
 
-    // 2. Escuta mudanças no estado (Login, Logout, Token renovado)
+    // 2. Ouvinte de estado global (Crucial para multi-abas e renovação de token)
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, currentSession) => {
       setSession(currentSession);
       setUser(currentSession?.user ?? null);
       setLoading(false);
 
-      // Limpeza de segurança caso o evento seja de logout disparado por outra aba
       if (_event === 'SIGNED_OUT') {
         setSession(null);
         setUser(null);
+      }
+      
+      // Se o token expirar e falhar ao renovar, avisamos o usuário
+      if (_event === 'USER_UPDATED' && !currentSession) {
+        toast({
+          title: "Sessão Expirada",
+          description: "Por favor, faça login novamente para sincronizar.",
+          variant: "destructive"
+        });
       }
     });
 
@@ -64,30 +75,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       setLoading(true);
       
-      // Aviso se estiver tentando deslogar sem internet
+      // Sincronização offline: avisamos o usuário se o logout for apenas local
       if (!navigator.onLine) {
         toast({ 
-          title: "Modo Offline", 
-          description: "Você foi deslogado localmente do aplicativo.", 
-          variant: "destructive" 
+          title: "Logout Local", 
+          description: "Você saiu do dispositivo, mas a sessão no servidor permanece até você conectar.", 
+          variant: "default" 
         });
       } else {
         toast({ 
-          title: "Deslogado com sucesso", 
-          description: "Até logo! Suas anotações estão seguras." 
+          title: "Até logo!", 
+          description: "Sua sessão foi encerrada com segurança." 
         });
       }
 
+      // Tentamos avisar o servidor
       await supabase.auth.signOut();
       
     } catch (error) {
-      console.error("Erro ao deslogar no servidor:", error);
+      console.error("Auth: Erro ao comunicar saída ao servidor:", error);
     } finally {
-      // GARANTIA: Limpa os estados locais imediatamente, 
-      // mesmo se o Supabase falhar por falta de rede
+      // GARANTIA TOTAL: Limpamos o estado local não importa o que aconteça
       setSession(null);
       setUser(null);
       setLoading(false);
+      // Redirecionamento forçado para a home para limpar rotas protegidas
+      window.location.href = "/auth";
     }
   };
 
@@ -100,8 +113,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (context === undefined) {
+  if (!context) {
     throw new Error("useAuth deve ser usado dentro de um AuthProvider");
   }
   return context;
 };
+
