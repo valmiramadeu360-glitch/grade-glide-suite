@@ -1,11 +1,15 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useToast } from "@/hooks/use-toast";
 
 interface SemesterContextType {
   currentLabel: string;
-  setCurrentLabel: (label: string) => void;
   allSemesters: string[];
+  isLoading: boolean;
+  setCurrentLabel: (label: string) => Promise<void>;
+  endSemester: (nextLabel: string) => Promise<void>;
+  restoreSemester: (targetLabel: string) => Promise<void>;
   loadSemesters: () => Promise<void>;
 }
 
@@ -13,76 +17,143 @@ const SemesterContext = createContext<SemesterContextType | undefined>(undefined
 
 export function SemesterProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
-  
-  // Estado inicial: Tenta pegar do cache local ou usa o ano atual como fallback
-  const [currentLabel, setCurrentLabelState] = useState<string>(() => {
-    if (typeof window === "undefined") return "2026.1";
-    return localStorage.getItem("eduflow-semester") || "2026.1";
-  });
-  
+  const { toast } = useToast();
+  const [isLoading, setIsLoading] = useState(false);
   const [allSemesters, setAllSemesters] = useState<string[]>([]);
+  
+  // Cache PWA: Tenta recuperar o último semestre acessado antes mesmo do login
+  const [currentLabel, setCurrentLabelState] = useState<string>(() => {
+    return localStorage.getItem("eduflow-active-semester") || "2026.1";
+  });
 
-  // Função para trocar o semestre em todo o app
-  function setCurrentLabel(label: string) {
+  // 1. Troca Simples de Contexto (Visual)
+  async function setCurrentLabel(label: string) {
     setCurrentLabelState(label);
-    localStorage.setItem("eduflow-semester", label);
+    localStorage.setItem("eduflow-active-semester", label);
     
-    // Dispara um evento para componentes que não estão no contexto saberem da troca
+    if (user) {
+      await supabase.from("profiles").update({ semester: label }).eq("user_id", user.id);
+    }
+    
     window.dispatchEvent(new CustomEvent("semesterChanged", { detail: label }));
+  }
+
+  // 2. Encerrar Semestre (Arquivamento em Massa)
+  // Ex: Transforma "Anatomia" (Ativa em 2026.1) em "Anatomia" (Arquivada em 2026.1)
+  async function endSemester(nextLabel: string) {
+    if (!user) return;
+    setIsLoading(true);
+
+    try {
+      // Arquiva todas as disciplinas que estão 'active' no semestre que acaba de fechar
+      const { error: archiveError } = await supabase
+        .from("disciplines")
+        .update({ status: "archived" })
+        .eq("user_id", user.id)
+        .eq("status", "active");
+
+      if (archiveError) throw archiveError;
+
+      // Define o novo semestre no perfil e no estado local
+      await setCurrentLabel(nextLabel);
+      await loadSemesters();
+
+      toast({
+        title: "Período Encerrado!",
+        description: `O semestre foi arquivado. Bem-vindo ao ${nextLabel}.`,
+      });
+    } catch (error) {
+      toast({ title: "Erro ao encerrar", variant: "destructive" });
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  // 3. Restaurar Semestre (Swap de Status)
+  // Reativa disciplinas de um semestre antigo e arquiva as do atual
+  async function restoreSemester(targetLabel: string) {
+    if (!user) return;
+    setIsLoading(true);
+
+    try {
+      const activeLabel = currentLabel;
+
+      // Passo A: Arquivar as matérias do semestre atual (que será substituído)
+      await supabase
+        .from("disciplines")
+        .update({ status: "archived" })
+        .eq("user_id", user.id)
+        .eq("status", "active");
+
+      // Passo B: Ativar as matérias do semestre alvo
+      const { error: restoreError } = await supabase
+        .from("disciplines")
+        .update({ status: "active" })
+        .eq("user_id", user.id)
+        .eq("semester", targetLabel);
+
+      if (restoreError) throw restoreError;
+
+      await setCurrentLabel(targetLabel);
+      await loadSemesters();
+
+      toast({
+        title: "Semestre Restaurado",
+        description: `Agora você está visualizando ${targetLabel} como período ativo.`,
+      });
+    } catch (error) {
+      toast({ title: "Erro na restauração", variant: "destructive" });
+    } finally {
+      setIsLoading(false);
+    }
   }
 
   async function loadSemesters() {
     if (!user) return;
 
     try {
-      // 1. Busca o semestre "oficial" definido no perfil do aluno
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("semester") // Padronizado conforme as telas anteriores
-        .eq("user_id", user.id)
-        .maybeSingle();
-
-      // 2. Busca todos os semestres únicos presentes nas disciplinas (Histórico)
+      // Busca semestres únicos para popular o Histórico e o Seletor
       const { data: disciplines } = await supabase
         .from("disciplines")
         .select("semester")
         .eq("user_id", user.id);
 
       const labels = new Set<string>();
+      labels.add(currentLabel); // Garante que o atual apareça
       
-      // Adiciona o semestre do perfil
-      if (profile?.semester) {
-        labels.add(profile.semester.toString());
-      }
-
-      // Adiciona os semestres das matérias (mesmo as arquivadas)
       disciplines?.forEach((d: any) => {
         if (d.semester) labels.add(d.semester.toString());
       });
 
-      // Fallback: se não houver nada, usa o padrão do app
-      if (labels.size === 0) labels.add("2026.1");
-
-      // Ordenação: Do mais recente para o mais antigo (ex: 2026.2, 2026.1, 2025.2...)
-      const sortedLabels = Array.from(labels).sort((a, b) => b.localeCompare(a));
-      
-      setAllSemesters(sortedLabels);
-
-      // Se o semestre atual não estiver na lista (ex: reset de conta), ajusta para o mais recente
-      if (profile?.semester) {
-        setCurrentLabel(profile.semester.toString());
-      }
+      // Ordenação decrescente: 2026.2 > 2026.1 > 2025.2...
+      const sorted = Array.from(labels).sort((a, b) => b.localeCompare(a));
+      setAllSemesters(sorted);
     } catch (error) {
-      console.error("Erro ao carregar semestres:", error);
+      console.error("Erro ao carregar lista de semestres:", error);
     }
   }
 
   useEffect(() => {
-    if (user) loadSemesters();
+    if (user) {
+      loadSemesters();
+      // Sincroniza estado inicial com o banco
+      supabase.from("profiles").select("semester").eq("user_id", user.id).maybeSingle()
+        .then(({ data }) => {
+          if (data?.semester) setCurrentLabelState(data.semester);
+        });
+    }
   }, [user]);
 
   return (
-    <SemesterContext.Provider value={{ currentLabel, setCurrentLabel, allSemesters, loadSemesters }}>
+    <SemesterContext.Provider value={{ 
+      currentLabel, 
+      setCurrentLabel, 
+      allSemesters, 
+      loadSemesters, 
+      endSemester, 
+      restoreSemester,
+      isLoading 
+    }}>
       {children}
     </SemesterContext.Provider>
   );
@@ -90,8 +161,7 @@ export function SemesterProvider({ children }: { children: ReactNode }) {
 
 export function useSemester() {
   const ctx = useContext(SemesterContext);
-  if (!ctx) {
-    throw new Error("useSemester deve ser usado dentro de um SemesterProvider");
-  }
+  if (!ctx) throw new Error("useSemester deve ser usado dentro de um SemesterProvider");
   return ctx;
 }
+
