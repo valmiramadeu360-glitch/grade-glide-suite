@@ -73,3 +73,4 @@ describe("Cálculos Acadêmicos do EduFlow (Motor de Progresso)", () => {
     expect(progress).toBe(0);
   });
 });
+
