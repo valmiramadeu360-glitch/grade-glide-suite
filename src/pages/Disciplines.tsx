@@ -328,4 +328,3 @@ export default function Disciplines({ extraOnly = false }: { extraOnly?: boolean
     </div>
   );
 }
-
