@@ -430,4 +430,3 @@ export function DisciplineBooks({ disciplineId }: { disciplineId: string }) {
     </Card>
   );
 }
-
