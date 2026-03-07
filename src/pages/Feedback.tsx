@@ -37,7 +37,7 @@ export default function Feedback() {
     setSubmitting(true);
 
     try {
-      // Save to feedbacks table
+      // 1. Salva no banco de dados do Supabase (Histórico)
       const payload: any = {
         category,
         message: message.trim(),
@@ -52,107 +52,144 @@ export default function Feedback() {
       const { error: dbError } = await supabase.from("feedbacks").insert(payload);
       if (dbError) throw dbError;
 
-      // Send email to admin via edge function
-      // TODO: Web Push - notify admin of new feedback
-      try {
-        await supabase.functions.invoke("send-feedback-email", {
-          body: {
-            category: CATEGORIES.find(c => c.value === category)?.label ?? category,
-            message: message.trim(),
-            is_anonymous: isAnonymous,
-            user_email: isAnonymous ? null : user?.email,
-          },
-        });
-      } catch {
-        // Email send failure is non-blocking
-        console.warn("Feedback email dispatch failed, but data was saved.");
+      // 2. Dispara o E-mail real via Web3Forms para o Administrador
+      const categoryLabel = CATEGORIES.find(c => c.value === category)?.label ?? category;
+      const userName = isAnonymous ? "Aluno Anônimo" : (user?.email || "Aluno EduFlow");
+      
+      const emailResponse = await fetch("https://api.web3forms.com/submit", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({
+          // IMPORTANTE: Cole a sua chave do Web3Forms aqui dentro das aspas!
+          access_key: "COLE_SUA_CHAVE_AQUI", 
+          subject: `EduFlow App - Novo Feedback: ${categoryLabel}`,
+          from_name: "Sistema EduFlow",
+          to: "eduflow.adm.academy@gmail.com",
+          message: `
+Você recebeu uma nova mensagem através do aplicativo EduFlow:
+
+📝 Categoria: ${categoryLabel}
+👤 Estudante: ${userName}
+🔒 Anônimo: ${isAnonymous ? "Sim" : "Não"}
+
+Mensagem:
+-------------------------------------------
+${message.trim()}
+-------------------------------------------
+          `,
+        }),
+      });
+
+      const emailResult = await emailResponse.json();
+
+      if (!emailResult.success) {
+        throw new Error("Falha ao entregar o e-mail no servidor.");
       }
 
       toast({
         title: "Obrigado pelo seu feedback! 💙",
-        description: "Sua mensagem foi enviada à equipe do EduFlow.",
+        description: "Sua mensagem foi entregue diretamente à administração do EduFlow.",
       });
 
       setMessage("");
       setCategory("improvement");
       setIsAnonymous(false);
     } catch (error: any) {
-      toast({ title: "Erro ao enviar", description: error.message, variant: "destructive" });
+      toast({ title: "Erro ao enviar", description: "Sua mensagem foi salva, mas o e-mail falhou. Verifique a configuração.", variant: "destructive" });
+      console.error(error);
     } finally {
       setSubmitting(false);
     }
   }
 
   return (
-    <div className="max-w-2xl mx-auto space-y-8 animate-in fade-in duration-500 pb-24">
-      <div className="flex items-center gap-4">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => navigate(-1)}
-          className="min-h-14 min-w-14 h-14 w-14 rounded-full hover:bg-muted shrink-0"
-        >
-          <ArrowLeft className="h-6 w-6" />
-        </Button>
-        <div>
-          <h1 className="text-3xl font-black text-foreground tracking-tight">Feedback & Suporte</h1>
-          <p className="text-muted-foreground font-medium text-sm">Ajude-nos a melhorar o EduFlow</p>
+    <div className="max-w-2xl mx-auto space-y-8 animate-in fade-in duration-700 pb-24 px-4 sm:px-6">
+      
+      {/* Header Mobile-First */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 pt-6">
+        <div className="flex items-center gap-4 w-full sm:w-auto">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => navigate(-1)}
+            className="h-14 w-14 sm:h-16 sm:w-16 rounded-2xl bg-muted/30 border border-border/50 hover:bg-muted shrink-0 transition-all"
+          >
+            <ArrowLeft className="h-6 w-6 text-foreground" />
+          </Button>
+          <div className="flex-1 min-w-0">
+            <h1 className="text-3xl sm:text-4xl font-black text-foreground tracking-tight truncate">
+              Central de Apoio
+            </h1>
+            <p className="text-muted-foreground font-medium text-xs sm:text-sm mt-1 uppercase tracking-wider">
+              Feedback & Suporte EduFlow
+            </p>
+          </div>
         </div>
       </div>
 
-      <Card className="glass-card border-none shadow-md overflow-hidden bg-card rounded-[32px]">
-        <div className="h-1 w-full bg-primary/40" />
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base font-bold flex items-center gap-2">
-            <MessageSquare className="h-4 w-4 text-primary" /> Enviar Mensagem
+      <Card className="glass-card border-none shadow-2xl overflow-hidden bg-card rounded-[32px]">
+        <div className="h-2 w-full bg-primary/80" />
+        <CardHeader className="pb-4 pt-8 px-6 sm:px-8">
+          <CardTitle className="text-xl font-black flex items-center gap-3 text-foreground">
+            <MessageSquare className="h-6 w-6 text-primary" /> Fale com a Administração
           </CardTitle>
-          <CardDescription className="text-xs">Escolha uma categoria e descreva sua experiência.</CardDescription>
+          <CardDescription className="text-xs font-bold text-muted-foreground uppercase tracking-widest mt-1">
+            Escolha uma categoria e descreva sua experiência ou problema.
+          </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6 pt-2">
+        <CardContent className="space-y-6 pt-2 px-6 sm:px-8 pb-8">
+          
           <div className="space-y-2">
-            <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Categoria</Label>
+            <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Assunto do Contato</Label>
             <Select value={category} onValueChange={setCategory}>
-              <SelectTrigger className="h-12 rounded-2xl bg-muted/30 border-border font-medium">
+              <SelectTrigger className="h-14 rounded-2xl bg-background border border-border/50 font-bold text-foreground focus:ring-primary/20">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent className="rounded-2xl bg-popover border border-border shadow-xl">
+              {/* bg-popover sólido para corrigir o bug de transparência */}
+              <SelectContent className="rounded-2xl bg-popover border border-border shadow-2xl">
                 {CATEGORIES.map(c => (
-                  <SelectItem key={c.value} value={c.value}>{c.label}</SelectItem>
+                  <SelectItem key={c.value} value={c.value} className="font-medium cursor-pointer py-3">{c.label}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </div>
 
           <div className="space-y-2">
-            <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Sua Mensagem</Label>
+            <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Sua Mensagem</Label>
             <Textarea
               value={message}
               onChange={e => setMessage(e.target.value)}
-              placeholder="Descreva sua sugestão, bug encontrado ou comentário..."
-              className="min-h-[180px] bg-muted/30 focus:bg-background resize-none rounded-2xl text-base"
+              placeholder="Descreva sua sugestão, informe um erro que encontrou ou deixe seu comentário para a equipe..."
+              className="min-h-[200px] bg-background border border-border/50 focus:ring-primary/20 resize-none rounded-2xl text-base p-4"
             />
           </div>
 
-          <div className="flex items-center justify-between p-4 bg-muted/30 rounded-2xl">
-            <div className="flex items-center gap-3">
-              <ShieldCheck className="h-5 w-5 text-primary" />
+          <div className="flex items-center justify-between p-5 bg-background border border-border/50 rounded-2xl">
+            <div className="flex items-center gap-4">
+              <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                <ShieldCheck className="h-5 w-5 text-primary" />
+              </div>
               <div>
-                <p className="text-sm font-bold text-foreground">Enviar Anônimo</p>
-                <p className="text-[10px] text-muted-foreground uppercase">Seu nome e e-mail não serão incluídos</p>
+                <p className="text-sm font-black text-foreground">Modo Anônimo</p>
+                <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest mt-0.5">Seu e-mail será ocultado do envio</p>
               </div>
             </div>
-            <Switch checked={isAnonymous} onCheckedChange={setIsAnonymous} />
+            <Switch checked={isAnonymous} onCheckedChange={setIsAnonymous} className="data-[state=checked]:bg-primary" />
           </div>
 
           <Button
             onClick={handleSubmit}
             disabled={submitting || !message.trim()}
-            className="w-full h-14 rounded-2xl font-black uppercase tracking-widest text-xs shadow-lg shadow-primary/20"
+            className="w-full h-14 rounded-2xl font-black uppercase tracking-widest text-xs shadow-xl shadow-primary/20 bg-primary text-primary-foreground hover:bg-primary/90 mt-4 transition-all active:scale-[0.98]"
           >
-            {submitting ? <Loader2 className="h-5 w-5 animate-spin" /> : <><Send className="mr-2 h-4 w-4" /> Enviar Feedback</>}
+            {submitting ? <Loader2 className="h-5 w-5 animate-spin" /> : <><Send className="mr-2 h-4 w-4" /> Enviar para a Equipe</>}
           </Button>
         </CardContent>
       </Card>
     </div>
   );
 }
+
