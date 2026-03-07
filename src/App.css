@@ -1,73 +1,140 @@
-/* Reset e Base de Layout para o EduFlow Academy */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Base Shadcn - Light Mode */
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary: 221.2 83.2% 53.3%; /* Será sobrescrito pelo ThemeProvider */
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 221.2 83.2% 53.3%;
+    --radius: 1rem;
+  }
+
+  .dark {
+    /* Base Shadcn - Dark Mode (Fundo ultra-dark para economia de bateria OLED) */
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    --card: 222.2 84% 6.9%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222.2 84% 6.9%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 217.2 91.2% 59.8%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 224.3 76.3% 48%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    /* Suporte a Safe Areas do iPhone (Preenche até o entalhe e a barra de gestos) */
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    overscroll-behavior-y: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
 #root {
   width: 100%;
-  min-height: 100vh;
-  margin: 0;
-  padding: 0;
+  min-height: 100dvh; /* Dynamic Viewport Height para evitar pulos no Safari */
   display: flex;
   flex-direction: column;
 }
 
-/* Suavização de scroll e renderização de texto (Legibilidade) */
-html {
-  scroll-behavior: smooth;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  /* Evita o comportamento de "elástico" que atrapalha no mobile */
-  overscroll-behavior-y: none; 
-}
-
-/* Scrollbar Customizada: Adapta-se à cor do tema (Neon/Pastel) */
+/* Scrollbar Customizada Estilo "Glass" */
 ::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: transparent;
+  @apply bg-transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-  /* Usa a cor primária do tema com transparência */
-  background: hsl(var(--primary) / 0.2);
-  border-radius: 20px;
-  transition: background 0.3s ease;
+  background: hsl(var(--primary) / 0.15);
+  @apply rounded-full;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: hsl(var(--primary) / 0.5);
+  background: hsl(var(--primary) / 0.4);
 }
 
-/* Animações de Transição de Página (Dashboards e Disciplinas) */
-@keyframes fadeIn {
-  from { 
-    opacity: 0; 
-    transform: translateY(8px); 
-  }
-  to { 
-    opacity: 1; 
-    transform: translateY(0); 
-  }
+/* Estilos para o Editor Tiptap (Resumos) */
+.ProseMirror {
+  outline: none !important;
 }
 
-.animate-fade-in {
-  animation: fadeIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+/* Garante que o texto justificado funcione no editor e na impressão */
+.text-justify {
+  text-align: justify !important;
+  text-justify: inter-word;
 }
 
-/* Ajustes Mobile: Garante que o Dashboard use 100% da largura */
-@media (max-width: 768px) {
-  #root {
-    padding: 0;
-  }
-  
-  /* Melhora a área de toque global para botões no celular */
-  button, a {
-    touch-action: manipulation;
-  }
-}
-
-/* Estilo para o marcador de texto (Neon/Pastel) nos resumos */
+/* Estilo para o Marca-texto (Neon e Pastel) */
 mark {
-  border-radius: 4px;
-  padding: 0 2px;
+  background-color: #fef08a; /* Amarelo pastel padrão */
+  color: inherit;
+  @apply rounded-sm px-1 font-medium;
+}
+
+/* Animações de Sistema Premium */
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-in {
+  animation: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Utilitário para remover scrollbars visuais mantendo a rolagem (Tabs e Toolbars) */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Glassmorphism Utility */
+.glass-card {
+  @apply bg-card/70 backdrop-blur-xl border border-border/40;
+}
+
+/* Correção para Inputs no Mobile (Evita zoom automático no iOS) */
+@media screen and (max-width: 768px) {
+  input, select, textarea {
+    font-size: 16px !important;
+  }
 }
