@@ -1,14 +1,18 @@
 import { useEffect, useState, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft, User, Camera, Loader2, Cloud, Link2, GraduationCap, Target, BookOpen, CheckCircle2 } from "lucide-react";
+import { 
+  ArrowLeft, User, Camera, Loader2, Cloud, 
+  Link2, GraduationCap, Target, BookOpen, 
+  CheckCircle2, Globe, ShieldCheck
+} from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 export default function Profile() {
@@ -19,13 +23,15 @@ export default function Profile() {
   const [loading, setLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
   const [avatarUrl, setAvatarUrl] = useState("");
-  const [fullName, setFullName] = useState("");
-  const [bio, setBio] = useState("");
-  const [careerGoal, setCareerGoal] = useState("");
-  const [studyPlans, setStudyPlans] = useState("");
-  const [portfolioUrl, setPortfolioUrl] = useState("");
-  const [university, setUniversity] = useState("");
-  const [course, setCourse] = useState("");
+  const [profileData, setProfileData] = useState({
+    full_name: "",
+    bio: "",
+    career_goal: "",
+    study_plans: "",
+    portfolio_url: "",
+    university: "",
+    course: ""
+  });
 
   const [autoSaveStatus, setAutoSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
@@ -36,23 +42,28 @@ export default function Profile() {
   }, [user]);
 
   async function loadProfile() {
-    const { data } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("user_id", user!.id)
-      .maybeSingle();
+    try {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("user_id", user!.id)
+        .maybeSingle();
 
-    if (data) {
-      setFullName(data.full_name ?? "");
-      setBio(data.bio ?? "");
-      setCareerGoal(data.career_goal ?? "");
-      setStudyPlans(data.study_plans ?? "");
-      setPortfolioUrl(data.portfolio_url ?? "");
-      setAvatarUrl(data.avatar_url ?? "");
-      setUniversity(data.university ?? "");
-      setCourse(data.course ?? "");
+      if (data) {
+        setProfileData({
+          full_name: data.full_name ?? "",
+          bio: data.bio ?? "",
+          career_goal: data.career_goal ?? "",
+          study_plans: data.study_plans ?? "",
+          portfolio_url: data.portfolio_url ?? "",
+          university: data.university ?? "",
+          course: data.course ?? ""
+        });
+        setAvatarUrl(data.avatar_url ?? "");
+      }
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }
 
   const triggerAutoSave = useCallback((field: string, value: string) => {
@@ -72,206 +83,234 @@ export default function Profile() {
         setTimeout(() => setAutoSaveStatus("idle"), 2000);
       } else {
         setAutoSaveStatus("idle");
+        toast({ title: "Erro ao sincronizar", variant: "destructive" });
       }
-    }, 800);
-  }, [user]);
+    }, 1000);
+  }, [user, toast]);
 
-  function handleChange(setter: (v: string) => void, field: string) {
-    return (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-      const val = e.target.value;
-      setter(val);
-      triggerAutoSave(field, val);
-    };
-  }
+  const handleChange = (field: keyof typeof profileData) => (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+  ) => {
+    const value = e.target.value;
+    setProfileData(prev => ({ ...prev, [field]: value }));
+    triggerAutoSave(field, value);
+  };
 
   async function uploadAvatar(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file || !user) return;
 
-    setIsUploading(true);
-    toast({ title: "Atualizando foto...", description: "Aguarde um instante." });
-
-    // Truque mestre: Adicionar Date.now() no nome do arquivo para o navegador não usar o cache antigo
-    const ext = file.name.split(".").pop();
-    const fileName = `${user.id}-${Date.now()}.${ext}`;
-    const filePath = `avatars/${fileName}`;
-
-    // Vamos tentar salvar no bucket 'avatars'. Se você não tiver criado, ele tenta no 'materials'
-    let bucketName = "avatars";
-    let { error: uploadError } = await supabase.storage.from(bucketName).upload(filePath, file, { upsert: true });
-
-    if (uploadError) {
-      bucketName = "materials"; // Fallback caso o bucket avatars não exista
-      const fallbackUpload = await supabase.storage.from(bucketName).upload(filePath, file, { upsert: true });
-      uploadError = fallbackUpload.error;
-    }
-
-    if (uploadError) {
-      toast({ title: "Erro no upload", description: uploadError.message, variant: "destructive" });
-      setIsUploading(false);
+    // Validação de tamanho para mobile (limite 2MB)
+    if (file.size > 2 * 1024 * 1024) {
+      toast({ title: "Arquivo muito grande", description: "O limite é 2MB.", variant: "destructive" });
       return;
     }
 
-    const { data: urlData } = supabase.storage.from(bucketName).getPublicUrl(filePath);
-    const url = urlData.publicUrl;
+    setIsUploading(true);
+    setAutoSaveStatus("saving");
 
-    await supabase.from("profiles").update({ avatar_url: url }).eq("user_id", user.id);
-    
-    setAvatarUrl(url);
-    setIsUploading(false);
-    toast({ title: "Foto atualizada com sucesso! 📸" });
+    try {
+      const fileExt = file.name.split(".").pop();
+      const filePath = `${user.id}/${Date.now()}.${fileExt}`;
 
-    // Dispara um evento global para que o Menu inferior (Navigation) saiba que a foto mudou e atualize sozinho!
-    window.dispatchEvent(new CustomEvent("avatarUpdated", { detail: url }));
+      // Upload para o Bucket 'avatars' (Certifique-se que é PÚBLICO no Supabase)
+      const { error: uploadError } = await supabase.storage
+        .from("avatars")
+        .upload(filePath, file, { upsert: true });
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage.from("avatars").getPublicUrl(filePath);
+
+      const { error: updateError } = await supabase
+        .from("profiles")
+        .update({ avatar_url: publicUrl })
+        .eq("user_id", user.id);
+
+      if (updateError) throw updateError;
+
+      setAvatarUrl(publicUrl);
+      setAutoSaveStatus("saved");
+      toast({ title: "Foto atualizada!", description: "Sua identidade foi sincronizada." });
+      
+      // Evento global para atualizar a Sidebar/BottomNav
+      window.dispatchEvent(new CustomEvent("avatarUpdated", { detail: publicUrl }));
+    } catch (error: any) {
+      toast({ title: "Erro no upload", description: error.message, variant: "destructive" });
+    } finally {
+      setIsUploading(false);
+      setTimeout(() => setAutoSaveStatus("idle"), 2000);
+    }
   }
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center h-[70vh] gap-4">
-        <Loader2 className="h-12 w-12 animate-spin text-primary" />
-        <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground animate-pulse">Sincronizando Identidade...</p>
+      <div className="flex h-[80vh] flex-col items-center justify-center gap-4">
+        <Loader2 className="h-10 w-10 animate-spin text-primary" />
+        <span className="text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground">Sincronizando Perfil...</span>
       </div>
     );
   }
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6 sm:space-y-8 animate-in fade-in duration-700 pb-24 px-4 sm:px-6">
+    <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in duration-700 pb-safe px-4 sm:px-6">
       
-      {/* Header Mobile-First */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 pt-6">
-        <div className="flex items-center gap-4 w-full sm:w-auto">
+      {/* 1. Header BI-Style */}
+      <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 pt-6">
+        <div className="flex items-center gap-4">
           <Button
             variant="ghost"
             size="icon"
             onClick={() => navigate(-1)}
-            className="h-14 w-14 sm:h-16 sm:w-16 rounded-2xl bg-muted/30 border border-border/50 hover:bg-muted shrink-0 transition-all"
+            className="h-12 w-12 rounded-xl bg-card border border-border/40 shrink-0"
           >
-            <ArrowLeft className="h-6 w-6 text-foreground" />
+            <ArrowLeft className="h-5 w-5" />
           </Button>
-          <div className="flex-1 min-w-0">
-            <h1 className="text-3xl sm:text-4xl font-black text-foreground tracking-tight truncate">
-              Perfil Acadêmico
-            </h1>
-            <p className="text-muted-foreground font-medium text-xs sm:text-sm mt-1 uppercase tracking-wider">
-              Sua identidade no EduFlow
-            </p>
+          <div>
+            <h1 className="text-4xl font-black tracking-tighter">Perfil <span className="text-primary">Acadêmico</span></h1>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mt-1">Configurações de Identidade Social</p>
           </div>
         </div>
 
-        {/* Indicador de Auto-Save Inteligente */}
-        <div className="flex items-center justify-end sm:justify-start gap-2 bg-background border border-border/50 px-4 py-2.5 rounded-2xl shadow-sm">
+        <div className="flex items-center gap-3 bg-card border border-border/50 px-5 py-3 rounded-2xl shadow-sm">
           {autoSaveStatus === "saving" ? (
-            <span className="flex items-center gap-2 text-primary text-[10px] font-black uppercase tracking-widest animate-pulse">
-              <Cloud className="h-4 w-4" /> Salvando...
-            </span>
-          ) : autoSaveStatus === "saved" ? (
-            <span className="flex items-center gap-2 text-emerald-500 text-[10px] font-black uppercase tracking-widest">
-              <CheckCircle2 className="h-4 w-4" /> Salvo na Nuvem
-            </span>
+            <div className="flex items-center gap-2 text-primary animate-pulse">
+              <Cloud className="h-4 w-4" />
+              <span className="text-[10px] font-black uppercase tracking-widest">Salvando...</span>
+            </div>
           ) : (
-            <span className="flex items-center gap-2 text-muted-foreground text-[10px] font-black uppercase tracking-widest">
-              <Cloud className="h-4 w-4" /> Sincronizado
-            </span>
+            <div className="flex items-center gap-2 text-emerald-500">
+              <ShieldCheck className="h-4 w-4" />
+              <span className="text-[10px] font-black uppercase tracking-widest">Protegido</span>
+            </div>
           )}
         </div>
-      </div>
+      </header>
 
-      {/* Cartão do Avatar Redesenhado */}
-      <Card className="glass-card border-border/50 shadow-xl overflow-hidden bg-card rounded-[32px] relative mt-4">
-        <div className="absolute top-0 left-0 w-full h-24 sm:h-32 bg-gradient-to-r from-primary/40 to-primary/10" />
-        <CardContent className="flex flex-col items-center pt-12 sm:pt-16 pb-10 gap-5 relative z-10">
+      {/* 2. Hero Section (Avatar & Banner) */}
+      <Card className="rounded-[40px] border-border/40 bg-card overflow-hidden shadow-2xl relative">
+        <div className="h-32 bg-gradient-to-r from-primary/20 via-primary/5 to-background" />
+        <CardContent className="px-8 pb-10 flex flex-col items-center -mt-16 relative z-10">
           <div className="relative group">
-            <Avatar className="h-32 w-32 sm:h-40 sm:w-40 border-8 border-card shadow-2xl bg-card transition-transform duration-500 group-hover:scale-105">
+            <Avatar className="h-36 w-36 border-[6px] border-card shadow-2xl transition-transform group-hover:scale-105 duration-500">
               <AvatarImage src={avatarUrl} className="object-cover" />
-              <AvatarFallback className="bg-primary/10 text-primary text-4xl sm:text-5xl font-black">
-                {fullName ? fullName[0].toUpperCase() : <User className="h-12 w-12" />}
+              <AvatarFallback className="bg-primary/10 text-primary text-4xl font-black uppercase">
+                {profileData.full_name?.substring(0, 2) || <User className="h-10 w-10" />}
               </AvatarFallback>
             </Avatar>
-            
-            <label className="absolute bottom-2 right-2 sm:bottom-4 sm:right-4 h-12 w-12 sm:h-14 sm:w-14 rounded-full bg-primary text-primary-foreground flex items-center justify-center cursor-pointer shadow-xl hover:bg-primary/90 transition-all active:scale-95 border-4 border-card">
-              {isUploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Camera className="h-5 w-5 sm:h-6 sm:w-6" />}
+            <label className="absolute bottom-1 right-1 h-12 w-12 rounded-full bg-primary text-primary-foreground flex items-center justify-center cursor-pointer shadow-xl border-4 border-card hover:bg-primary/90 transition-all active:scale-90">
+              {isUploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Camera className="h-5 w-5" />}
               <input type="file" accept="image/*" className="hidden" onChange={uploadAvatar} disabled={isUploading} />
             </label>
           </div>
           
-          <div className="text-center space-y-1 mt-2">
-            <p className="font-black text-2xl sm:text-3xl text-foreground tracking-tight">
-              {fullName || "Nome não definido"}
-            </p>
-            <p className="text-xs sm:text-sm text-muted-foreground font-bold uppercase tracking-widest">
-              {university && course ? `${course} • ${university}` : "Configure seu curso abaixo"}
+          <div className="text-center mt-6">
+            <h2 className="text-2xl font-black tracking-tight">{profileData.full_name || "Estudante EduFlow"}</h2>
+            <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-[0.2em] mt-2">
+              {profileData.course ? `${profileData.course} • ${profileData.university}` : "Vínculo Institucional Pendente"}
             </p>
           </div>
         </CardContent>
       </Card>
 
-      {/* Formulários de Informação */}
-      <div className="grid gap-6 sm:grid-cols-2 items-start">
-        {/* Coluna 1: Dados Pessoais */}
-        <Card className="glass-card border-border/50 shadow-lg overflow-hidden bg-card rounded-[32px]">
-          <div className="h-2 w-full bg-primary" />
-          <CardHeader className="pb-4 pt-6 px-6 sm:px-8">
-            <CardTitle className="text-lg font-black flex items-center gap-3 text-foreground">
-              <User className="h-5 w-5 text-primary" /> Dados Institucionais
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-5 px-6 sm:px-8 pb-8">
+      {/* 3. Grid de Informações */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        
+        {/* Coluna: Dados Acadêmicos */}
+        <section className="space-y-6">
+          <h3 className="text-xs font-black uppercase tracking-[0.3em] flex items-center gap-3 ml-2">
+            <GraduationCap className="h-4 w-4 text-primary" /> Instituição & Curso
+          </h3>
+          <Card className="rounded-[32px] border-border/40 bg-card p-8 space-y-6 shadow-xl">
             <div className="space-y-2">
               <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Nome Completo</Label>
-              <Input value={fullName} onChange={handleChange(setFullName, "full_name")} placeholder="Como você quer ser chamado" className="h-14 bg-background border-border/50 focus:ring-primary/20 rounded-2xl font-bold" />
+              <Input 
+                value={profileData.full_name} 
+                onChange={handleChange("full_name")}
+                placeholder="Ex: Anatomia Souza" 
+                className="h-14 rounded-2xl bg-muted/20 border-border/40 font-bold" 
+              />
             </div>
             <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1 flex items-center gap-1.5">
-                <GraduationCap className="h-3.5 w-3.5" /> Instituição de Ensino
-              </Label>
-              <Input value={university} onChange={handleChange(setUniversity, "university")} placeholder="Ex: Universidade Federal" className="h-14 bg-background border-border/50 focus:ring-primary/20 rounded-2xl font-bold" />
+              <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Universidade / Faculdade</Label>
+              <Input 
+                value={profileData.university} 
+                onChange={handleChange("university")}
+                placeholder="Ex: Universidade Federal" 
+                className="h-14 rounded-2xl bg-muted/20 border-border/40 font-bold" 
+              />
             </div>
             <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Curso Acadêmico</Label>
-              <Input value={course} onChange={handleChange(setCourse, "course")} placeholder="Ex: Medicina, Direito, Engenharia" className="h-14 bg-background border-border/50 focus:ring-primary/20 rounded-2xl font-bold" />
+              <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Curso / Área de Estudo</Label>
+              <Input 
+                value={profileData.course} 
+                onChange={handleChange("course")}
+                placeholder="Ex: Direito Penal" 
+                className="h-14 rounded-2xl bg-muted/20 border-border/40 font-bold" 
+              />
             </div>
-          </CardContent>
-        </Card>
+          </Card>
+        </section>
 
-        {/* Coluna 2: Metas e Links */}
-        <Card className="glass-card border-border/50 shadow-lg overflow-hidden bg-card rounded-[32px]">
-          <div className="h-2 w-full bg-amber-500" />
-          <CardHeader className="pb-4 pt-6 px-6 sm:px-8">
-            <CardTitle className="text-lg font-black flex items-center gap-3 text-foreground">
-              <Target className="h-5 w-5 text-amber-500" /> Metas & Carreira
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-5 px-6 sm:px-8 pb-8">
+        {/* Coluna: Objetivos & Links */}
+        <section className="space-y-6">
+          <h3 className="text-xs font-black uppercase tracking-[0.3em] flex items-center gap-3 ml-2">
+            <Target className="h-4 w-4 text-amber-500" /> Carreira & Metas
+          </h3>
+          <Card className="rounded-[32px] border-border/40 bg-card p-8 space-y-6 shadow-xl">
             <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Carreira Almejada / Foco</Label>
-              <Input value={careerGoal} onChange={handleChange(setCareerGoal, "career_goal")} placeholder="Ex: Pesquisador, Auditor, Cirurgião" className="h-14 bg-background border-border/50 focus:ring-primary/20 rounded-2xl font-bold" />
+              <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Carreira Almejada</Label>
+              <Input 
+                value={profileData.career_goal} 
+                onChange={handleChange("career_goal")}
+                placeholder="Ex: Pesquisador Acadêmico" 
+                className="h-14 rounded-2xl bg-muted/20 border-border/40 font-bold" 
+              />
             </div>
             <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1 flex items-center gap-1.5">
-                <Link2 className="h-3.5 w-3.5" /> Link do Currículo Lattes
+              <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1 flex items-center gap-2">
+                <Globe className="h-3 w-3" /> Currículo Lattes / Portfólio
               </Label>
-              <Input value={portfolioUrl} onChange={handleChange(setPortfolioUrl, "portfolio_url")} placeholder="https://lattes.cnpq.br/..." className="h-14 bg-background border-border/50 focus:ring-primary/20 rounded-2xl font-bold text-primary" />
+              <Input 
+                value={profileData.portfolio_url} 
+                onChange={handleChange("portfolio_url")}
+                placeholder="https://lattes.cnpq.br/..." 
+                className="h-14 rounded-2xl bg-muted/20 border-border/40 font-bold text-primary" 
+              />
             </div>
             <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1 flex items-center gap-1.5">
-                <BookOpen className="h-3.5 w-3.5" /> Planos de Estudo do Semestre
+              <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1 flex items-center gap-2">
+                <BookOpen className="h-3 w-3" /> Planos para este Período
               </Label>
-              <Textarea value={studyPlans} onChange={handleChange(setStudyPlans, "study_plans")} placeholder="Quais são as suas metas acadêmicas atuais?" className="min-h-[120px] bg-background border-border/50 focus:ring-primary/20 resize-none rounded-2xl font-medium p-4" />
+              <Textarea 
+                value={profileData.study_plans} 
+                onChange={handleChange("study_plans")}
+                placeholder="Quais seus objetivos para o semestre?" 
+                className="min-h-[100px] rounded-2xl bg-muted/20 border-border/40 font-medium resize-none p-4" 
+              />
             </div>
-          </CardContent>
-        </Card>
+          </Card>
+        </section>
 
-        {/* Bio (Ocupa as duas colunas em telas maiores) */}
-        <Card className="glass-card border-border/50 shadow-lg overflow-hidden bg-card rounded-[32px] sm:col-span-2">
-          <CardContent className="pt-8 px-6 sm:px-8 pb-8">
-            <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Biografia Pessoal</Label>
-              <Textarea value={bio} onChange={handleChange(setBio, "bio")} placeholder="Escreva um breve resumo sobre a sua jornada profissional e acadêmica..." className="min-h-[140px] bg-background border-border/50 focus:ring-primary/20 resize-none rounded-2xl font-medium p-4 text-base" />
-            </div>
-          </CardContent>
-        </Card>
+        {/* Biografia: Full Width */}
+        <section className="md:col-span-2 space-y-6">
+          <h3 className="text-xs font-black uppercase tracking-[0.3em] flex items-center gap-3 ml-2">
+            <User className="h-4 w-4 text-primary" /> Sobre Mim
+          </h3>
+          <Card className="rounded-[32px] border-border/40 bg-card p-8 shadow-xl">
+            <Textarea 
+              value={profileData.bio} 
+              onChange={handleChange("bio")}
+              placeholder="Conte um pouco sobre sua trajetória acadêmica e interesses de pesquisa..." 
+              className="min-h-[150px] rounded-2xl bg-muted/20 border-border/40 font-medium resize-none p-5 text-lg leading-relaxed" 
+            />
+          </Card>
+        </section>
       </div>
 
+      {/* iOS Safe Area Spacer */}
+      <div className="pb-24" />
     </div>
   );
 }
+
