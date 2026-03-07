@@ -22,9 +22,11 @@ export type Database = {
           end_date: string | null
           id: string
           material_format: string
+          pages_read: number | null
           reading_status: string
           start_date: string | null
           title: string
+          total_pages: number | null
           user_id: string
         }
         Insert: {
@@ -34,9 +36,11 @@ export type Database = {
           end_date?: string | null
           id?: string
           material_format?: string
+          pages_read?: number | null
           reading_status?: string
           start_date?: string | null
           title: string
+          total_pages?: number | null
           user_id: string
         }
         Update: {
@@ -46,9 +50,11 @@ export type Database = {
           end_date?: string | null
           id?: string
           material_format?: string
+          pages_read?: number | null
           reading_status?: string
           start_date?: string | null
           title?: string
+          total_pages?: number | null
           user_id?: string
         }
         Relationships: [
