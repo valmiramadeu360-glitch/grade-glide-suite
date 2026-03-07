@@ -1,6 +1,8 @@
+import { useEffect, useState } from "react";
 import { LayoutDashboard, BookOpen, Bell, Settings, Sparkles, LogOut, User, MessageSquare } from "lucide-react";
-import { NavLink, useLocation } from "react-router-dom";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
+import { supabase } from "@/integrations/supabase/client";
 import {
   Sidebar,
   SidebarContent,
@@ -13,48 +15,73 @@ import {
   SidebarFooter,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 
 const mainItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
-  { title: "Disciplinas", url: "/disciplines", icon: BookOpen },
+  { title: "Minhas Disciplinas", url: "/disciplines", icon: BookOpen },
   { title: "Cursos Extras", url: "/extra-courses", icon: Sparkles },
-  { title: "Lembretes", url: "/reminders", icon: Bell },
+  { title: "Cronograma", url: "/reminders", icon: Bell },
   { title: "Configurações", url: "/settings", icon: Settings },
-  { title: "Feedback", url: "/feedback", icon: MessageSquare },
+  { title: "Central de Ajuda", url: "/feedback", icon: MessageSquare },
 ];
 
 export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const location = useLocation();
+  const navigate = useNavigate();
   const { signOut, user } = useAuth();
+  
+  const [avatarUrl, setAvatarUrl] = useState("");
+
+  // Busca a foto de perfil inicial e escuta mudanças em tempo real
+  useEffect(() => {
+    if (user) {
+      supabase
+        .from("profiles")
+        .select("avatar_url")
+        .eq("user_id", user.id)
+        .maybeSingle()
+        .then(({ data }) => {
+          if (data?.avatar_url) setAvatarUrl(data.avatar_url);
+        });
+    }
+
+    const handleAvatarUpdate = (e: any) => setAvatarUrl(e.detail);
+    window.addEventListener("avatarUpdated", handleAvatarUpdate);
+    
+    return () => window.removeEventListener("avatarUpdated", handleAvatarUpdate);
+  }, [user]);
 
   return (
-    <Sidebar collapsible="icon" className="border-r border-sidebar-border bg-sidebar shadow-xl">
-      <SidebarContent>
+    <Sidebar collapsible="icon" className="border-r border-sidebar-border bg-sidebar shadow-2xl">
+      <SidebarContent className="custom-scrollbar">
+        {/* Header do App no Menu */}
         <div className={cn(
-          "flex items-center gap-3 px-4 py-6 transition-all",
+          "flex items-center gap-3.5 px-4 py-6 transition-all",
           collapsed ? "justify-center" : "justify-start"
         )}>
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary shadow-lg shadow-primary/20">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary shadow-lg shadow-primary/30">
             <BookOpen className="h-6 w-6 text-primary-foreground" />
           </div>
           {!collapsed && (
-            <div className="flex flex-col">
-              <h2 className="text-base font-bold leading-none text-foreground">EduFlow</h2>
-              <p className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground mt-1">Gestão Acadêmica</p>
+            <div className="flex flex-col min-w-0">
+              <h2 className="text-xl font-black leading-none text-foreground tracking-tight">EduFlow</h2>
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary mt-1.5 truncate">Academy</p>
             </div>
           )}
         </div>
 
         <SidebarGroup>
-          <SidebarGroupLabel className="px-4 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">
-            Navegação Principal
+          <SidebarGroupLabel className="px-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 mb-2">
+            Navegação
           </SidebarGroupLabel>
-          <SidebarGroupContent className="mt-2">
-            <SidebarMenu>
+          <SidebarGroupContent>
+            <SidebarMenu className="space-y-1.5 px-2">
               {mainItems.map((item) => {
+                // Lógica afiada para detectar se a rota está ativa
                 const isActive = location.pathname === item.url || 
                                  (item.url !== "/" && location.pathname.startsWith(item.url));
                 
@@ -64,13 +91,15 @@ export function AppSidebar() {
                       asChild 
                       tooltip={item.title}
                       className={cn(
-                        "flex items-center gap-3 px-4 py-6 transition-all duration-200",
-                        isActive ? "bg-primary/10 text-primary" : "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+                        "h-14 flex items-center gap-3.5 px-4 rounded-xl transition-all duration-200 active:scale-[0.98]",
+                        isActive 
+                          ? "bg-primary text-primary-foreground shadow-md font-black" 
+                          : "hover:bg-muted/80 text-muted-foreground hover:text-foreground font-bold"
                       )}
                     >
                       <NavLink to={item.url}>
-                        <item.icon className={cn("h-5 w-5 shrink-0", isActive ? "text-primary" : "text-muted-foreground")} />
-                        {!collapsed && <span className="text-sm font-medium">{item.title}</span>}
+                        <item.icon className={cn("h-5 w-5 shrink-0 transition-transform", isActive && "scale-110")} />
+                        {!collapsed && <span className="text-sm tracking-wide">{item.title}</span>}
                       </NavLink>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
@@ -81,29 +110,42 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="border-t border-sidebar-border bg-sidebar/50 p-4 backdrop-blur-sm">
+      {/* Footer com Perfil e Logout */}
+      <SidebarFooter className="border-t border-sidebar-border bg-sidebar/80 p-4 backdrop-blur-md pb-[calc(1rem+env(safe-area-inset-bottom))]">
+        
         {!collapsed && user && (
-          <NavLink to="/profile" className="mb-4 flex items-center gap-3 px-2 hover:opacity-80 transition-opacity cursor-pointer">
-            <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center shrink-0">
-              <User className="h-4 w-4 text-muted-foreground" />
-            </div>
+          <div 
+            onClick={() => navigate("/profile")}
+            className="mb-3 flex items-center gap-3 p-3 rounded-2xl hover:bg-muted transition-colors cursor-pointer border border-transparent hover:border-border/50 group"
+          >
+            <Avatar className="h-10 w-10 shrink-0 border border-border shadow-sm group-hover:scale-105 transition-transform bg-card">
+              <AvatarImage src={avatarUrl} className="object-cover" />
+              <AvatarFallback className="bg-primary/10 text-primary">
+                <User className="h-5 w-5" />
+              </AvatarFallback>
+            </Avatar>
             <div className="flex flex-col min-w-0">
-              <p className="text-xs font-semibold text-foreground truncate">Meu Perfil</p>
-              <p className="text-[10px] text-muted-foreground truncate italic">{user.email}</p>
+              <p className="text-sm font-black text-foreground truncate group-hover:text-primary transition-colors">Meu Perfil</p>
+              <p className="text-[10px] text-muted-foreground font-bold truncate tracking-wide">{user.email}</p>
             </div>
-          </NavLink>
+          </div>
         )}
+
         <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton 
               onClick={() => signOut()} 
-              className="flex items-center gap-3 px-4 py-5 text-destructive hover:bg-destructive/10 hover:text-destructive transition-colors"
+              className={cn(
+                "h-14 flex items-center gap-3.5 px-4 rounded-xl text-destructive hover:bg-destructive/10 hover:text-destructive transition-colors font-bold",
+                collapsed && "justify-center"
+              )}
             >
               <LogOut className="h-5 w-5 shrink-0" />
-              {!collapsed && <span className="text-sm font-medium">Sair do App</span>}
+              {!collapsed && <span className="text-sm">Encerrar Sessão</span>}
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
+
       </SidebarFooter>
     </Sidebar>
   );
