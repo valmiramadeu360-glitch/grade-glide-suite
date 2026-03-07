@@ -42,20 +42,22 @@ interface ThemeContextType {
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
-function applyPrimaryColor(color: ThemeColors, mode: ThemeMode) {
+function applyThemeVariables(color: ThemeColors, mode: ThemeMode) {
   if (typeof window === "undefined") return;
   
   const root = document.documentElement;
   const { hue, saturation, lightness } = color;
 
-  if (mode === "dark") {
-    const safeLightness = Math.min(lightness + 15, 80);
-    root.style.setProperty("--primary", `${hue} ${saturation}% ${safeLightness}%`);
-    root.style.setProperty("--ring", `${hue} ${saturation}% ${safeLightness}%`);
-  } else {
-    root.style.setProperty("--primary", `${hue} ${saturation}% ${lightness}%`);
-    root.style.setProperty("--ring", `${hue} ${saturation}% ${lightness}%`);
-  }
+  // Ajuste inteligente de brilho para o modo escuro
+  const adjustedLightness = mode === "dark" ? Math.min(lightness + 10, 80) : lightness;
+  
+  // Atualiza as variáveis de cor primária
+  root.style.setProperty("--primary", `${hue} ${saturation}% ${adjustedLightness}%`);
+  root.style.setProperty("--ring", `${hue} ${saturation}% ${adjustedLightness}%`);
+
+  // Lógica de Contraste: Se a cor for muito clara, o texto do botão deve ser escuro
+  const isLightColor = adjustedLightness > 65;
+  root.style.setProperty("--primary-foreground", isLightColor ? "0 0% 0%" : "0 0% 100%");
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
@@ -86,12 +88,17 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const root = document.documentElement;
+    
+    // Sincroniza a classe 'dark' para o Tailwind
     if (mode === "dark") {
       root.classList.add("dark");
     } else {
       root.classList.remove("dark");
     }
-    applyPrimaryColor(primaryColor, mode);
+
+    // Aplica as variáveis CSS dinâmicas
+    applyThemeVariables(primaryColor, mode);
+
   }, [mode, primaryColor]);
 
   return (
