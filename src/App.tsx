@@ -18,29 +18,36 @@ import Profile from "./pages/Profile";
 import Feedback from "./pages/Feedback";
 import NotFound from "./pages/NotFound";
 
+// Configuração do motor de dados (Performance BI)
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       retry: 2,
-      refetchOnWindowFocus: false,
-      staleTime: 1000 * 60 * 5,
+      refetchOnWindowFocus: false, // Evita recargas desnecessárias ao trocar de aba
+      staleTime: 1000 * 60 * 5,    // Mantém os dados frescos por 5 minutos
     },
   },
 });
 
+/**
+ * Filtro de Segurança: Impede acesso de deslogados
+ */
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
 
   if (loading) {
     return (
-      <div className="flex h-screen w-full items-center justify-center bg-background transition-colors duration-500">
-        <div className="flex flex-col items-center gap-4">
-          <div className="animate-spin h-12 w-12 border-4 border-primary border-t-transparent rounded-full shadow-lg shadow-primary/20" />
-          <div className="text-center space-y-1">
-            <p className="text-[10px] font-black uppercase tracking-[0.3em] text-primary animate-pulse">
+      <div className="flex h-[100dvh] w-full items-center justify-center bg-background transition-colors duration-500">
+        <div className="flex flex-col items-center gap-6 animate-in fade-in duration-700">
+          <div className="relative flex items-center justify-center">
+            <div className="animate-spin h-14 w-14 border-[3px] border-primary/20 border-t-primary rounded-full shadow-inner" />
+            <div className="absolute h-6 w-6 bg-primary/10 rounded-full animate-pulse" />
+          </div>
+          <div className="text-center space-y-2">
+            <p className="text-[11px] font-black uppercase tracking-[0.4em] text-primary leading-none">
               EduFlow Academy
             </p>
-            <p className="text-[9px] font-bold uppercase tracking-[0.1em] text-muted-foreground italic">
+            <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-muted-foreground/60 italic">
               Sincronizando sua jornada...
             </p>
           </div>
@@ -54,6 +61,9 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <AppLayout>{children}</AppLayout>;
 }
 
+/**
+ * Filtro de Segurança: Impede acesso de logados na tela de Login
+ */
 function PublicRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   if (loading) return null;
@@ -69,7 +79,10 @@ const App = () => (
           <AuthProvider>
             <SemesterProvider>
               <Routes>
+                {/* Rotas de Acesso */}
                 <Route path="/auth" element={<PublicRoute><Auth /></PublicRoute>} />
+                
+                {/* Rotas Acadêmicas Protegidas */}
                 <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
                 <Route path="/disciplines" element={<ProtectedRoute><Disciplines /></ProtectedRoute>} />
                 <Route path="/disciplines/:id" element={<ProtectedRoute><DisciplineDetail /></ProtectedRoute>} />
@@ -78,16 +91,20 @@ const App = () => (
                 <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
                 <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
                 <Route path="/feedback" element={<ProtectedRoute><Feedback /></ProtectedRoute>} />
+                
+                {/* Fallback de Erro */}
                 <Route path="*" element={<NotFound />} />
               </Routes>
               
+              {/* Notificações do Sistema */}
               <Toaster />
               <Sonner 
-                position="top-right" 
+                position="top-center" // Melhor visibilidade no mobile (fica no topo)
                 closeButton 
                 richColors 
                 expand={false}
                 theme="system"
+                className="font-bold"
               />
             </SemesterProvider>
           </AuthProvider>
@@ -98,3 +115,4 @@ const App = () => (
 );
 
 export default App;
+
