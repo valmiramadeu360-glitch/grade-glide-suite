@@ -1,5 +1,5 @@
-import { LayoutDashboard, BookOpen, Bell, Settings, GraduationCap, Sparkles, LogOut, User } from "lucide-react";
-import { NavLink, useLocation } from "react-router-dom"; // Importado useLocation diretamente
+import { LayoutDashboard, BookOpen, Bell, Settings, Sparkles, LogOut, User, MessageSquare } from "lucide-react";
+import { NavLink, useLocation } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import {
   Sidebar,
@@ -21,6 +21,7 @@ const mainItems = [
   { title: "Cursos Extras", url: "/extra-courses", icon: Sparkles },
   { title: "Lembretes", url: "/reminders", icon: Bell },
   { title: "Configurações", url: "/settings", icon: Settings },
+  { title: "Feedback", url: "/feedback", icon: MessageSquare },
 ];
 
 export function AppSidebar() {
@@ -32,13 +33,12 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="icon" className="border-r border-sidebar-border bg-sidebar shadow-xl">
       <SidebarContent>
-        {/* Header do Logo */}
         <div className={cn(
           "flex items-center gap-3 px-4 py-6 transition-all",
           collapsed ? "justify-center" : "justify-start"
         )}>
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary shadow-lg shadow-primary/20">
-            <GraduationCap className="h-6 w-6 text-primary-foreground" />
+            <BookOpen className="h-6 w-6 text-primary-foreground" />
           </div>
           {!collapsed && (
             <div className="flex flex-col">
@@ -83,15 +83,15 @@ export function AppSidebar() {
 
       <SidebarFooter className="border-t border-sidebar-border bg-sidebar/50 p-4 backdrop-blur-sm">
         {!collapsed && user && (
-          <div className="mb-4 flex items-center gap-3 px-2">
-             <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center shrink-0">
-                <User className="h-4 w-4 text-muted-foreground" />
-             </div>
-             <div className="flex flex-col min-w-0">
-                <p className="text-xs font-semibold text-foreground truncate">Minha Conta</p>
-                <p className="text-[10px] text-muted-foreground truncate italic">{user.email}</p>
-             </div>
-          </div>
+          <NavLink to="/profile" className="mb-4 flex items-center gap-3 px-2 hover:opacity-80 transition-opacity cursor-pointer">
+            <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center shrink-0">
+              <User className="h-4 w-4 text-muted-foreground" />
+            </div>
+            <div className="flex flex-col min-w-0">
+              <p className="text-xs font-semibold text-foreground truncate">Meu Perfil</p>
+              <p className="text-[10px] text-muted-foreground truncate italic">{user.email}</p>
+            </div>
+          </NavLink>
         )}
         <SidebarMenu>
           <SidebarMenuItem>
