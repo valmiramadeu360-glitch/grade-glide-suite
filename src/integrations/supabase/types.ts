@@ -185,6 +185,7 @@ export type Database = {
           is_extra_course: boolean | null
           name: string
           professor: string | null
+          semester_label: string | null
           semester_number: number | null
           updated_at: string
           user_id: string
@@ -198,6 +199,7 @@ export type Database = {
           is_extra_course?: boolean | null
           name: string
           professor?: string | null
+          semester_label?: string | null
           semester_number?: number | null
           updated_at?: string
           user_id: string
@@ -211,9 +213,40 @@ export type Database = {
           is_extra_course?: boolean | null
           name?: string
           professor?: string | null
+          semester_label?: string | null
           semester_number?: number | null
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      feedbacks: {
+        Row: {
+          category: string
+          created_at: string
+          email: string | null
+          id: string
+          is_anonymous: boolean | null
+          message: string
+          user_id: string | null
+        }
+        Insert: {
+          category: string
+          created_at?: string
+          email?: string | null
+          id?: string
+          is_anonymous?: boolean | null
+          message: string
+          user_id?: string | null
+        }
+        Update: {
+          category?: string
+          created_at?: string
+          email?: string | null
+          id?: string
+          is_anonymous?: boolean | null
+          message?: string
+          user_id?: string | null
         }
         Relationships: []
       }
@@ -298,37 +331,70 @@ export type Database = {
       }
       profiles: {
         Row: {
+          avatar_url: string | null
+          bio: string | null
+          career_goal: string | null
           course: string | null
           created_at: string
+          current_semester_label: string | null
           full_name: string | null
           id: string
+          notification_email: boolean | null
+          notification_end_time: string | null
+          notification_frequency: string | null
+          notification_push: boolean | null
+          notification_start_time: string | null
+          portfolio_url: string | null
           semester: number | null
           semester_end: string | null
           semester_start: string | null
+          study_plans: string | null
           university: string | null
           updated_at: string
           user_id: string
         }
         Insert: {
+          avatar_url?: string | null
+          bio?: string | null
+          career_goal?: string | null
           course?: string | null
           created_at?: string
+          current_semester_label?: string | null
           full_name?: string | null
           id?: string
+          notification_email?: boolean | null
+          notification_end_time?: string | null
+          notification_frequency?: string | null
+          notification_push?: boolean | null
+          notification_start_time?: string | null
+          portfolio_url?: string | null
           semester?: number | null
           semester_end?: string | null
           semester_start?: string | null
+          study_plans?: string | null
           university?: string | null
           updated_at?: string
           user_id: string
         }
         Update: {
+          avatar_url?: string | null
+          bio?: string | null
+          career_goal?: string | null
           course?: string | null
           created_at?: string
+          current_semester_label?: string | null
           full_name?: string | null
           id?: string
+          notification_email?: boolean | null
+          notification_end_time?: string | null
+          notification_frequency?: string | null
+          notification_push?: boolean | null
+          notification_start_time?: string | null
+          portfolio_url?: string | null
           semester?: number | null
           semester_end?: string | null
           semester_start?: string | null
+          study_plans?: string | null
           university?: string | null
           updated_at?: string
           user_id?: string
