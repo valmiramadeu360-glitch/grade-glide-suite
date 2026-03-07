@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useSemester } from "@/hooks/useSemester";
@@ -8,272 +8,342 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
-import { Plus, BookOpen, ChevronRight, GraduationCap, Loader2, History, ArrowLeft, Palette } from "lucide-react";
+import { 
+  Dialog, DialogContent, DialogHeader, DialogTitle, 
+  DialogTrigger, DialogDescription 
+} from "@/components/ui/dialog";
+import { 
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, 
+  AlertDialogTrigger 
+} from "@/components/ui/alert-dialog";
+import { 
+  Plus, BookOpen, ChevronRight, GraduationCap, 
+  Loader2, History, ArrowLeft, RefreshCcw, Search,
+  Filter, AlertCircle
+} from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
+// Interface Universal (Sem placeholders nichados)
 interface Discipline {
   id: string;
   name: string;
   professor: string | null;
   color: string;
-  current_grade: number | null;
+  status: 'active' | 'archived'; // Padronizado conforme Core Architecture
   is_extra_course: boolean;
-  archived: boolean;
-  semester: string | null;
+  semester: string; // Ex: "2026.1"
 }
 
 export default function Disciplines({ extraOnly = false }: { extraOnly?: boolean }) {
   const { user } = useAuth();
-  const { currentLabel } = useSemester();
+  const { currentLabel, restoreSemester, isLoading: isSwapping } = useSemester();
   const navigate = useNavigate();
   const { toast } = useToast();
+  
   const [allDisciplines, setAllDisciplines] = useState<Discipline[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
+  // Form State
   const [newName, setNewName] = useState("");
   const [newProfessor, setNewProfessor] = useState("");
-  const [newColor, setNewColor] = useState("#3B82F6");
+  const [newColor, setNewColor] = useState("#6366F1");
 
   const colors = [
-    "#FFB3BA", "#FFDFBA", "#BAFFC9", "#BAE1FF", "#E8BAFF", 
-    "#FF10F0", "#39FF14", "#00FFFF", "#FF6600", "#3B82F6", 
-    "#10B981", "#F59E0B", "#8B5CF6", "#EF4444", "#6366F1"
+    "#FFB3BA", "#BAFFC9", "#BAE1FF", "#E8BAFF", "#FF10F0", 
+    "#39FF14", "#00FFFF", "#6366F1", "#10B981", "#F59E0B"
   ];
 
   useEffect(() => {
-    if (user) loadAll();
-  }, [user, extraOnly]);
+    if (user) loadDisciplines();
+  }, [user, extraOnly, currentLabel]);
 
-  async function loadAll() {
+  async function loadDisciplines() {
     setLoading(true);
-    const { data } = await supabase
-      .from("disciplines")
-      .select("*")
-      .eq("user_id", user!.id)
-      .eq("is_extra_course", extraOnly)
-      .order("name");
+    try {
+      const { data, error } = await supabase
+        .from("disciplines")
+        .select("*")
+        .eq("user_id", user!.id)
+        .eq("is_extra_course", extraOnly)
+        .order("name");
 
-    setAllDisciplines(data ?? []);
-    setLoading(false);
+      if (error) throw error;
+      setAllDisciplines(data || []);
+    } catch (e: any) {
+      toast({ title: "Erro de Sincronização", description: e.message, variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
   }
 
-  // Ativas = Matérias não arquivadas do semestre selecionado
-  const activeDisciplines = allDisciplines.filter(d =>
-    !d.archived && (d.semester === currentLabel || !d.semester)
-  );
-  
-  // Arquivadas = Disciplinas marcadas como archived (Histórico)
-  const archivedDisciplines = allDisciplines.filter(d => d.archived);
+  // Filtragem Reativa (Time Machine + Busca)
+  const activeDisciplines = useMemo(() => {
+    return allDisciplines.filter(d => 
+      d.status === 'active' && 
+      d.semester === currentLabel &&
+      d.name.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [allDisciplines, currentLabel, searchQuery]);
 
-  // Agrupamento para a visão de histórico
-  const archivedBySemester: Record<string, Discipline[]> = {};
-  archivedDisciplines.forEach(d => {
-    const label = d.semester ?? "Sem Período";
-    if (!archivedBySemester[label]) archivedBySemester[label] = [];
-    archivedBySemester[label].push(d);
-  });
-
-  async function createDiscipline() {
-    if (!newName.trim() || !user) {
-      toast({ title: "O nome é obrigatório", variant: "destructive" });
-      return;
-    }
-    setIsSubmitting(true);
-
-    const { error } = await supabase.from("disciplines").insert({
-      user_id: user.id,
-      name: newName.trim(),
-      professor: newProfessor.trim() || null,
-      color: newColor,
-      is_extra_course: extraOnly,
-      semester: currentLabel, 
+  // Histórico Agrupado por Semestre
+  const archivedBySemester = useMemo(() => {
+    const archived = allDisciplines.filter(d => d.status === 'archived');
+    const grouped: Record<string, Discipline[]> = {};
+    
+    archived.forEach(d => {
+      if (!grouped[d.semester]) grouped[d.semester] = [];
+      grouped[d.semester].push(d);
     });
+    
+    return Object.entries(grouped).sort(([a], [b]) => b.localeCompare(a));
+  }, [allDisciplines]);
 
-    if (error) {
-      toast({ title: "Erro ao salvar", description: error.message, variant: "destructive" });
-    } else {
-      toast({ title: extraOnly ? "Curso registrado!" : "Disciplina adicionada!" });
+  async function handleCreate() {
+    if (!newName.trim()) return;
+    setIsSubmitting(true);
+    try {
+      const { error } = await supabase.from("disciplines").insert({
+        user_id: user!.id,
+        name: newName.trim(),
+        professor: newProfessor.trim() || null,
+        color: newColor,
+        is_extra_course: extraOnly,
+        semester: currentLabel,
+        status: 'active'
+      });
+
+      if (error) throw error;
+      
+      toast({ title: "Módulo Adicionado", description: "Dados sincronizados com sucesso." });
+      setOpen(false);
       setNewName("");
       setNewProfessor("");
-      setOpen(false);
-      loadAll();
+      loadDisciplines();
+    } catch (e: any) {
+      toast({ title: "Falha ao salvar", description: e.message, variant: "destructive" });
+    } finally {
+      setIsSubmitting(false);
     }
-    setIsSubmitting(false);
   }
 
   const renderDisciplineCard = (d: Discipline) => (
     <Card 
       key={d.id} 
-      className="group overflow-hidden border border-border/50 transition-all cursor-pointer shadow-sm hover:shadow-2xl hover:border-primary/40 hover:-translate-y-1 active:scale-[0.97] rounded-[32px] bg-card relative" 
+      className="group relative overflow-hidden border-border/40 bg-card hover:bg-accent/5 transition-all duration-300 rounded-[32px] shadow-sm hover:shadow-2xl active:scale-[0.97] cursor-pointer"
       onClick={() => navigate(`/disciplines/${d.id}`)}
     >
-      <div className="absolute top-0 left-0 w-full h-2 transition-all duration-500 group-hover:h-3" style={{ backgroundColor: d.color }} />
-      <CardContent className="p-6 pt-8">
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-4 min-w-0">
-            <div className="h-14 w-14 sm:h-16 sm:w-16 rounded-2xl flex items-center justify-center shadow-inner transition-transform duration-500 group-hover:rotate-6 shrink-0" style={{ backgroundColor: `${d.color}15`, border: `1px solid ${d.color}30` }}>
-              <BookOpen className="h-7 w-7 sm:h-8 sm:w-8" style={{ color: d.color }} />
-            </div>
-            <div className="min-w-0">
-              <h3 className="font-black text-lg sm:text-xl text-foreground leading-tight truncate group-hover:text-primary transition-colors">{d.name}</h3>
-              <p className="text-[10px] sm:text-xs mt-2 font-bold text-muted-foreground truncate uppercase tracking-widest flex items-center gap-2">
-                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: d.color }} />
-                {d.professor || "Docente não informado"}
-              </p>
-            </div>
+      <div className="absolute top-0 left-0 w-1.5 h-full" style={{ backgroundColor: d.color }} />
+      <CardContent className="p-6 flex items-center justify-between gap-4">
+        <div className="flex items-center gap-5 min-w-0">
+          <div 
+            className="h-14 w-14 rounded-2xl flex items-center justify-center shrink-0 shadow-inner group-hover:rotate-6 transition-transform"
+            style={{ backgroundColor: `${d.color}15`, border: `1px solid ${d.color}30` }}
+          >
+            <BookOpen className="h-7 w-7" style={{ color: d.color }} />
           </div>
-          <div className="h-12 w-12 shrink-0 rounded-2xl bg-muted/50 flex items-center justify-center opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-all duration-300 group-hover:bg-primary/10 group-hover:text-primary">
-            <ChevronRight className="h-6 w-6" />
+          <div className="min-w-0">
+            <h3 className="font-black text-lg tracking-tight truncate group-hover:text-primary transition-colors">
+              {d.name}
+            </h3>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mt-1 flex items-center gap-2">
+              <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: d.color }} />
+              {d.professor || "Docente não informado"}
+            </p>
           </div>
         </div>
+        <ChevronRight className="h-5 w-5 text-muted-foreground/30 group-hover:text-primary group-hover:translate-x-1 transition-all" />
       </CardContent>
     </Card>
   );
 
-  if (loading && allDisciplines.length === 0) {
+  if (loading || isSwapping) {
     return (
       <div className="flex flex-col items-center justify-center h-[70vh] gap-4">
-        <Loader2 className="h-12 w-12 animate-spin text-primary" />
-        <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground animate-pulse">Sincronizando Grade...</p>
+        <Loader2 className="h-10 w-10 animate-spin text-primary" />
+        <span className="text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground animate-pulse">Sincronizando Ciclos...</span>
       </div>
     );
   }
 
   return (
-    <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in duration-700 pb-24 px-4 sm:px-6">
+    <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500 pb-safe px-4 sm:px-6">
       
-      {/* Header com Ações */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 pt-6">
-        <div className="flex items-center gap-4 w-full sm:w-auto">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => navigate(-1)}
-            className="h-14 w-14 sm:h-16 sm:w-16 rounded-2xl bg-muted/30 border border-border/50 hover:bg-muted shrink-0"
+      {/* 1. Cabeçalho Adaptativo */}
+      <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 pt-4">
+        <div className="flex items-center gap-4">
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            onClick={() => navigate('/')}
+            className="h-12 w-12 rounded-xl bg-card border border-border/40 shrink-0"
           >
-            <ArrowLeft className="h-6 w-6" />
+            <ArrowLeft className="h-5 w-5" />
           </Button>
-          <div className="flex-1 min-w-0">
-            <h1 className="text-3xl sm:text-5xl font-black text-foreground tracking-tight truncate">
-              {extraOnly ? "Cursos Extras" : "Grade Curricular"}
+          <div>
+            <h1 className="text-4xl font-black tracking-tighter">
+              {extraOnly ? "Cursos" : "Disciplinas"}
             </h1>
-            <p className="text-muted-foreground font-medium text-xs sm:text-sm mt-1 uppercase tracking-wider">
-              {extraOnly
-                ? "Capacitações e Atividades"
-                : `Semestre ${currentLabel} • ${activeDisciplines.length} Ativas`}
+            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mt-1">
+              {extraOnly ? "CAPACITAÇÕES EXTRACURRICULARES" : `GRADE ATIVA • ${currentLabel}`}
             </p>
           </div>
         </div>
-        
+
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button className="w-full sm:w-auto shadow-xl shadow-primary/20 font-black uppercase text-[10px] sm:text-xs tracking-widest h-14 px-8 rounded-2xl bg-primary text-primary-foreground hover:bg-primary/90 active:scale-95 transition-all">
-              <Plus className="mr-2 h-5 w-5" /> Adicionar Novo
+            <Button className="h-14 px-8 rounded-2xl bg-primary text-primary-foreground font-black uppercase text-xs tracking-widest shadow-xl shadow-primary/20 active:scale-95 transition-all w-full md:w-auto">
+              <Plus className="mr-2 h-5 w-5" /> Novo Registro
             </Button>
           </DialogTrigger>
-          <DialogContent className="w-[95vw] sm:max-w-[450px] rounded-[32px] bg-card border-border p-6 sm:p-8">
+          <DialogContent className="bg-card border-border rounded-[32px] p-8 shadow-2xl">
             <DialogHeader className="text-left">
-              <DialogTitle className="text-2xl font-black text-foreground">Novo Registro</DialogTitle>
-              <DialogDescription className="font-medium text-muted-foreground text-sm mt-1">
-                Configure a disciplina ou curso para o período <strong className="text-foreground">{currentLabel}</strong>.
+              <DialogTitle className="text-2xl font-black tracking-tight">Configurar Módulo</DialogTitle>
+              <DialogDescription className="font-medium text-muted-foreground">
+                Adicione uma nova matéria para o período <strong>{currentLabel}</strong>.
               </DialogDescription>
             </DialogHeader>
-            <div className="space-y-6 pt-6">
+            <div className="space-y-6 pt-4">
               <div className="space-y-2">
-                <Label className="font-black text-[10px] uppercase tracking-widest text-muted-foreground ml-1">Identificação da Matéria</Label>
-                <Input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Ex: Cálculo III, Marketing..." className="h-14 rounded-2xl bg-background border-border text-base font-bold" />
+                <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Nome da Matéria</Label>
+                <Input 
+                  value={newName} 
+                  onChange={e => setNewName(e.target.value)}
+                  placeholder="Ex: Anatomia, Direito Penal..." 
+                  className="h-14 rounded-2xl bg-muted/20 border-border/50 text-base font-bold" 
+                />
               </div>
               <div className="space-y-2">
-                <Label className="font-black text-[10px] uppercase tracking-widest text-muted-foreground ml-1">Cor do Módulo</Label>
-                <div className="grid grid-cols-5 gap-3 p-3 bg-muted/20 rounded-2xl border border-border/50">
-                  {colors.map((c) => (
+                <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Cor de Identificação</Label>
+                <div className="grid grid-cols-5 gap-3 p-4 bg-muted/10 rounded-2xl border border-border/40">
+                  {colors.map(c => (
                     <button
                       key={c}
                       onClick={() => setNewColor(c)}
                       className={cn(
-                        "h-10 w-full rounded-xl border-4 transition-all hover:scale-110",
-                        newColor === c ? "border-foreground/40 ring-2 ring-primary scale-110 shadow-lg" : "border-transparent"
+                        "h-10 w-full rounded-xl transition-all active:scale-90",
+                        newColor === c ? "ring-2 ring-primary ring-offset-2 scale-110 shadow-lg" : "opacity-60"
                       )}
                       style={{ backgroundColor: c }}
-                      type="button"
                     />
                   ))}
                 </div>
               </div>
-              <div className="space-y-2">
-                <Label className="font-black text-[10px] uppercase tracking-widest text-muted-foreground ml-1">Docentes Responsáveis</Label>
-                <Input value={newProfessor} onChange={(e) => setNewProfessor(e.target.value)} placeholder="Nomes dos professores" className="h-14 rounded-2xl bg-background border-border text-sm font-medium" />
-              </div>
-              <Button onClick={createDiscipline} disabled={isSubmitting} className="w-full h-14 rounded-2xl font-black uppercase tracking-widest text-xs bg-primary text-primary-foreground hover:bg-primary/90 shadow-xl shadow-primary/20">
-                {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : "Concluir Cadastro"}
+              <Button 
+                onClick={handleCreate} 
+                disabled={isSubmitting || !newName.trim()} 
+                className="w-full h-14 rounded-2xl font-black uppercase tracking-widest text-xs bg-primary"
+              >
+                {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : "Salvar Disciplina"}
               </Button>
             </div>
           </DialogContent>
         </Dialog>
+      </header>
+
+      {/* 2. Barra de Busca e Filtros */}
+      <div className="relative group max-w-2xl">
+        <Search className="absolute left-5 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground group-focus-within:text-primary transition-colors" />
+        <Input 
+          placeholder="Buscar módulo ou docente..." 
+          value={searchQuery}
+          onChange={e => setSearchQuery(e.target.value)}
+          className="h-16 pl-14 pr-6 rounded-[24px] bg-card border-border/40 shadow-sm text-lg font-bold placeholder:font-medium placeholder:text-muted-foreground/40 focus:ring-primary/20"
+        />
       </div>
 
-      <Tabs defaultValue="current" className="w-full mt-8">
-        <TabsList className="w-full sm:w-fit bg-card border border-border/50 p-1.5 rounded-2xl h-auto grid grid-cols-2 shadow-sm mb-10">
-          <TabsTrigger value="current" className="rounded-xl font-black text-[10px] sm:text-xs uppercase tracking-widest py-3 sm:py-3.5 px-6 data-[state=active]:bg-primary/10 data-[state=active]:text-primary data-[state=active]:shadow-none transition-all">
-            Em Andamento ({activeDisciplines.length})
+      {/* 3. Abas de Gestão */}
+      <Tabs defaultValue="active" className="w-full space-y-10">
+        <TabsList className="bg-card/50 border border-border/40 p-1.5 rounded-2xl h-auto w-fit grid grid-cols-2">
+          <TabsTrigger value="active" className="rounded-xl font-black text-[10px] uppercase tracking-widest px-8 py-3.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all">
+            Em Curso
           </TabsTrigger>
-          <TabsTrigger value="history" className="rounded-xl font-black text-[10px] sm:text-xs uppercase tracking-widest py-3 sm:py-3.5 px-6 data-[state=active]:bg-muted data-[state=active]:shadow-none transition-all">
-            Histórico ({archivedDisciplines.length})
+          <TabsTrigger value="archive" className="rounded-xl font-black text-[10px] uppercase tracking-widest px-8 py-3.5 data-[state=active]:bg-muted transition-all">
+            Histórico
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="current" className="m-0 animate-in fade-in slide-in-from-bottom-4 duration-500">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {activeDisciplines.length === 0 ? (
-              <div className="col-span-full flex flex-col items-center justify-center py-20 bg-card rounded-[40px] border border-border/50 shadow-inner">
-                <div className="h-20 w-20 rounded-3xl bg-muted/30 flex items-center justify-center mb-6">
-                  {extraOnly ? <GraduationCap className="h-10 w-10 text-muted-foreground/30" /> : <BookOpen className="h-10 w-10 text-muted-foreground/30" />}
-                </div>
-                <h3 className="text-xl font-black text-foreground">Nada por aqui ainda</h3>
-                <p className="text-muted-foreground text-sm max-w-sm text-center mt-2 mb-8 font-medium">
-                  {extraOnly ? "Nenhum curso extra cadastrado." : `Você não possui disciplinas ativas em ${currentLabel}.`}
-                </p>
-                <Button onClick={() => setOpen(true)} className="rounded-2xl px-10 h-14 font-black uppercase tracking-widest text-xs bg-muted text-foreground hover:bg-muted/80">
-                  <Plus className="mr-2 h-4 w-4" /> Criar Primeiro Registro
-                </Button>
+        <TabsContent value="active" className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+          {activeDisciplines.length === 0 ? (
+            <div className="p-24 rounded-[40px] border-2 border-dashed border-border/40 flex flex-col items-center text-center bg-card/20">
+              <div className="h-20 w-20 rounded-3xl bg-muted/50 flex items-center justify-center mb-6">
+                <BookOpen className="h-10 w-10 text-muted-foreground/20" />
               </div>
-            ) : (
-              activeDisciplines.map(d => renderDisciplineCard(d))
-            )}
-          </div>
-        </TabsContent>
-
-        <TabsContent value="history" className="m-0 space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
-          {archivedDisciplines.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-20 bg-card rounded-[40px] border border-border/50">
-              <History className="h-12 w-12 text-muted-foreground/20 mb-4" />
-              <p className="text-sm font-bold text-muted-foreground uppercase tracking-widest">Sem registros arquivados</p>
+              <h3 className="text-xl font-black">Nenhum módulo ativo</h3>
+              <p className="text-sm font-medium text-muted-foreground mt-2 max-w-xs">
+                Inicie um novo ciclo clicando em "Novo Registro" ou altere o semestre no topo da tela.
+              </p>
             </div>
           ) : (
-            Object.entries(archivedBySemester).sort(([a], [b]) => b.localeCompare(a)).map(([label, items]) => (
-              <div key={label} className="space-y-6">
-                <div className="flex items-center gap-4 ml-2">
-                  <div className="h-10 w-10 rounded-xl bg-muted/50 border border-border/50 flex items-center justify-center shrink-0">
-                    <History className="h-5 w-5 text-muted-foreground" />
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {activeDisciplines.map(renderDisciplineCard)}
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="archive" className="space-y-16 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          {archivedBySemester.length === 0 ? (
+            <div className="p-20 text-center flex flex-col items-center">
+              <History className="h-12 w-12 text-muted-foreground/20 mb-4" />
+              <p className="text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground">Arquivo Vazio</p>
+            </div>
+          ) : (
+            archivedBySemester.map(([label, items]) => (
+              <section key={label} className="space-y-6">
+                <div className="flex items-center justify-between px-2">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-xl bg-muted border border-border/50 flex items-center justify-center">
+                      <History className="h-5 w-5 text-muted-foreground" />
+                    </div>
+                    <div>
+                      <h3 className="text-2xl font-black tracking-tighter">{label}</h3>
+                      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">{items.length} Matérias Arquivadas</p>
+                    </div>
                   </div>
-                  <h3 className="text-xl font-black text-foreground uppercase tracking-tight">
-                    {label} <span className="text-sm font-bold text-muted-foreground/60 ml-2 tracking-widest">({items.length})</span>
-                  </h3>
-                  <div className="flex-1 h-px bg-gradient-to-r from-border/80 to-transparent" />
+
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="ghost" className="h-11 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-amber-500/10 hover:text-amber-500">
+                        <RefreshCcw className="mr-2 h-4 w-4" /> Restaurar Ciclo
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent className="bg-card border-border rounded-[32px] p-8">
+                      <AlertDialogHeader>
+                        <AlertDialogTitle className="text-2xl font-black tracking-tight flex items-center gap-3">
+                          <AlertCircle className="text-amber-500 h-6 w-6" /> Trocar Período Ativo?
+                        </AlertDialogTitle>
+                        <AlertDialogDescription className="font-medium text-base">
+                          Ao restaurar o ciclo <strong>{label}</strong>, as matérias de <strong>{currentLabel}</strong> (atuais) serão arquivadas para dar lugar a estas.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter className="gap-3 mt-6">
+                        <AlertDialogCancel className="h-12 rounded-2xl border-none bg-muted font-bold uppercase text-[10px] tracking-widest">Manter como está</AlertDialogCancel>
+                        <AlertDialogAction 
+                          onClick={() => restoreSemester(label)}
+                          className="h-12 rounded-2xl bg-amber-500 text-white font-black uppercase text-[10px] tracking-widest"
+                        >
+                          Confirmar Troca
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
                 </div>
-                
+
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {items.map(d => renderDisciplineCard(d))}
+                  {items.map(renderDisciplineCard)}
                 </div>
-              </div>
+              </section>
             ))
           )}
         </TabsContent>
       </Tabs>
+      
+      {/* iOS Bottom Safe Spacer */}
+      <div className="pb-24" />
     </div>
   );
 }
