@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { Mail, Lock, User, GraduationCap, Loader2, ArrowLeft } from "lucide-react";
+import { Mail, Lock, User, GraduationCap, Loader2, ArrowLeft, Eye, EyeOff } from "lucide-react";
 
 export default function Auth() {
   const [loading, setLoading] = useState(false);
@@ -13,6 +13,7 @@ export default function Auth() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
+  const [showPassword, setShowPassword] = useState(false); // Estado para o Olho da senha
   const { toast } = useToast();
 
   async function handleAuth(e: React.FormEvent) {
@@ -45,7 +46,7 @@ export default function Auth() {
       <Button 
         variant="ghost" 
         size="icon" 
-        className="absolute top-4 left-4 md:top-8 md:left-8 text-muted-foreground hover:text-foreground hover:bg-accent/10 transition-colors z-10"
+        className="absolute top-4 left-4 md:top-8 md:left-8 text-muted-foreground hover:text-foreground hover:bg-accent/10 transition-colors z-10 h-12 w-12"
         onClick={() => window.history.back()}
         title="Voltar"
       >
@@ -81,7 +82,7 @@ export default function Auth() {
               <div className="space-y-2">
                 <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Nome Completo</Label>
                 <div className="relative group">
-                  <User className="absolute left-3 top-3 h-5 w-5 text-muted-foreground group-focus-within:text-primary transition-colors duration-300" />
+                  <User className="absolute left-3 top-3.5 h-5 w-5 text-muted-foreground group-focus-within:text-primary transition-colors duration-300" />
                   <Input
                     className="pl-11 h-12 bg-muted/30 border-border text-foreground rounded-2xl focus:ring-primary/20 transition-all"
                     placeholder="Seu nome"
@@ -96,7 +97,7 @@ export default function Auth() {
             <div className="space-y-2">
               <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">E-mail acadêmico</Label>
               <div className="relative group">
-                <Mail className="absolute left-3 top-3 h-5 w-5 text-muted-foreground group-focus-within:text-primary transition-colors duration-300" />
+                <Mail className="absolute left-3 top-3.5 h-5 w-5 text-muted-foreground group-focus-within:text-primary transition-colors duration-300" />
                 <Input
                   className="pl-11 h-12 bg-muted/30 border-border text-foreground rounded-2xl focus:ring-primary/20 transition-all"
                   type="email"
@@ -111,15 +112,23 @@ export default function Auth() {
             <div className="space-y-2">
               <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Senha</Label>
               <div className="relative group">
-                <Lock className="absolute left-3 top-3 h-5 w-5 text-muted-foreground group-focus-within:text-primary transition-colors duration-300" />
+                <Lock className="absolute left-3 top-3.5 h-5 w-5 text-muted-foreground group-focus-within:text-primary transition-colors duration-300" />
                 <Input
-                  className="pl-11 h-12 bg-muted/30 border-border text-foreground rounded-2xl focus:ring-primary/20 transition-all"
-                  type="password"
+                  className="pl-11 pr-12 h-12 bg-muted/30 border-border text-foreground rounded-2xl focus:ring-primary/20 transition-all"
+                  type={showPassword ? "text" : "password"}
                   placeholder="No mínimo 6 caracteres"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-0 top-0 h-12 w-12 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors outline-none"
+                  tabIndex={-1}
+                >
+                  {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                </button>
               </div>
             </div>
           </CardContent>
