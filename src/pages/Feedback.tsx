@@ -64,7 +64,7 @@ export default function Feedback() {
         },
         body: JSON.stringify({
           // IMPORTANTE: Cole a sua chave do Web3Forms aqui dentro das aspas!
-          access_key: "COLE_SUA_CHAVE_AQUI", 
+          access_key: "403d59d2-6728-40be-a5a2-c35bd6fe8afd", 
           subject: `EduFlow App - Novo Feedback: ${categoryLabel}`,
           from_name: "Sistema EduFlow",
           to: "eduflow.adm.academy@gmail.com",
