@@ -15,7 +15,7 @@ import {
 import { 
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger 
 } from "@/components/ui/dialog";
-// Importação do Calendário Interativo do shadcn
+// Importação do Calendário Interativo
 import { Calendar } from "@/components/ui/calendar"; 
 import { 
   Calendar as CalendarIcon, BookOpen, Clock, AlertTriangle, 
@@ -72,6 +72,7 @@ export default function Dashboard() {
 
   // Estado do Calendário Interativo
   const [calendarDate, setCalendarDate] = useState<Date | undefined>(new Date());
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
 
   const [activeSemesterFromProfile, setActiveSemesterFromProfile] = useState("");
   const isHistoricalView = useMemo(() => {
@@ -286,13 +287,14 @@ export default function Dashboard() {
             )}
           </div>
 
-          {/* NOVO: Modal com Calendário Interativo */}
-          <Dialog>
+          {/* NOVO: Modal com Calendário Interativo Limpo */}
+          <Dialog open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
             <DialogTrigger asChild>
               <Button variant="outline" className="h-14 w-full sm:w-auto bg-card border-border hover:border-primary/40 rounded-2xl flex items-center gap-4 shadow-md px-6 active:scale-95 transition-all">
                 <CalendarIcon className="h-5 w-5 text-primary shrink-0" />
                 <span className="text-base font-black text-foreground capitalize truncate">
-                  {format(new Date(), "EEEE, dd 'de' MMMM", { locale: ptBR })}
+                  {/* Atualiza visualmente para a data que o usuário escolheu! */}
+                  {format(calendarDate || new Date(), "EEEE, dd 'de' MMMM", { locale: ptBR })}
                 </span>
               </Button>
             </DialogTrigger>
@@ -301,33 +303,19 @@ export default function Dashboard() {
                 <DialogTitle className="text-center font-black text-2xl mb-2">Calendário Mensal</DialogTitle>
               </DialogHeader>
               
-              {/* Contêiner de Luxo para o Calendário */}
-              <div className="bg-background border border-border/50 rounded-[24px] p-2 w-full flex justify-center shadow-sm">
+              <div className="w-full flex justify-center mt-2">
                 <Calendar
                   mode="single"
                   selected={calendarDate}
-                  onSelect={setCalendarDate}
-                  locale={ptBR}
-                  className="rounded-xl w-full"
-                  classNames={{
-                    months: "flex flex-col sm:flex-row space-y-4 sm:space-x-4 sm:space-y-0 w-full justify-center",
-                    month: "space-y-4 w-full",
-                    table: "w-full border-collapse space-y-1",
-                    head_row: "flex w-full justify-between",
-                    row: "flex w-full mt-2 justify-between",
-                    cell: "h-9 w-9 text-center text-sm p-0 relative [&:has([aria-selected].day-range-end)]:rounded-r-md [&:has([aria-selected].day-outside)]:bg-accent/50 [&:has([aria-selected])]:bg-accent first:[&:has([aria-selected])]:rounded-l-md last:[&:has([aria-selected])]:rounded-r-md focus-within:relative focus-within:z-20",
-                    day: "h-9 w-9 p-0 font-normal aria-selected:opacity-100 rounded-lg hover:bg-muted transition-colors",
-                    day_range_end: "day-range-end",
-                    day_selected: "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground focus:bg-primary focus:text-primary-foreground",
-                    day_today: "bg-accent text-accent-foreground font-black",
-                    day_outside: "day-outside text-muted-foreground opacity-50 aria-selected:bg-accent/50 aria-selected:text-muted-foreground aria-selected:opacity-30",
-                    day_disabled: "text-muted-foreground opacity-50",
-                    day_range_middle: "aria-selected:bg-accent aria-selected:text-accent-foreground",
-                    day_hidden: "invisible",
+                  onSelect={(date) => {
+                    setCalendarDate(date);
+                    setIsCalendarOpen(false); // Fecha o modal sozinho ao escolher uma data
                   }}
+                  locale={ptBR}
+                  className="w-full flex justify-center"
                 />
               </div>
-              <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest mt-4 text-center">
+              <p className="text-[10px] text-muted-foreground font-black uppercase tracking-widest mt-6 text-center animate-pulse">
                 Use as setas para navegar entre os meses e anos
               </p>
             </DialogContent>
@@ -335,6 +323,7 @@ export default function Dashboard() {
         </div>
       </header>
 
+      {/* Grid de Métricas */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {[
           { label: "Cadeiras Ativas", value: disciplineCount, icon: BookOpen, color: "text-primary", bg: "bg-primary/10", path: "/disciplines" },
