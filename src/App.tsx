@@ -87,7 +87,7 @@ const App = () => (
               closeButton 
               richColors 
               expand={false}
-              theme="inherit" // Segue automaticamente o modo Light/Dark do app
+              theme="system"
             />
           </AuthProvider>
         </BrowserRouter>
