@@ -9,13 +9,17 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Send, Loader2, MessageSquare, ShieldCheck } from "lucide-react";
+import { 
+  ArrowLeft, Send, Loader2, MessageSquare, 
+  ShieldCheck, Heart, AlertCircle, Sparkles,
+  HelpCircle
+} from "lucide-react";
 
 const CATEGORIES = [
   { value: "improvement", label: "Sugestão de Melhoria" },
-  { value: "bug", label: "Relato de Bug" },
-  { value: "criticism", label: "Crítica" },
-  { value: "praise", label: "Elogio" },
+  { value: "bug", label: "Relato de Problema" },
+  { value: "criticism", label: "Crítica Construtiva" },
+  { value: "praise", label: "Elogio à Equipe" },
 ];
 
 export default function Feedback() {
@@ -30,14 +34,14 @@ export default function Feedback() {
 
   async function handleSubmit() {
     if (!message.trim()) {
-      toast({ title: "Escreva sua mensagem", variant: "destructive" });
+      toast({ title: "Mensagem vazia", description: "Por favor, descreva seu feedback.", variant: "destructive" });
       return;
     }
 
     setSubmitting(true);
 
     try {
-      // 1. Salva no banco de dados do Supabase (Histórico)
+      // 1. Registro no Banco (Backup de Segurança)
       const payload: any = {
         category,
         message: message.trim(),
@@ -52,106 +56,113 @@ export default function Feedback() {
       const { error: dbError } = await supabase.from("feedbacks").insert(payload);
       if (dbError) throw dbError;
 
-      // 2. Dispara o E-mail real via Web3Forms para o Administrador
+      // 2. Envio de E-mail via Web3Forms (Formatado para BI)
       const categoryLabel = CATEGORIES.find(c => c.value === category)?.label ?? category;
-      const userName = isAnonymous ? "Aluno Anônimo" : (user?.email || "Aluno EduFlow");
       
-      const emailResponse = await fetch("https://api.web3forms.com/submit", {
+      const response = await fetch("https://api.web3forms.com/submit", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-        },
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify({
-          // IMPORTANTE: Cole a sua chave do Web3Forms aqui dentro das aspas!
-          access_key: "403d59d2-6728-40be-a5a2-c35bd6fe8afd", 
-          subject: `EduFlow App - Novo Feedback: ${categoryLabel}`,
-          from_name: "Sistema EduFlow",
-          to: "eduflow.adm.academy@gmail.com",
+          access_key: "403d59d2-6728-40be-a5a2-c35bd6fe8afd",
+          subject: `EduFlow 2.0: Novo Feedback [${categoryLabel}]`,
+          from_name: isAnonymous ? "Estudante Anônimo" : (user?.email?.split('@')[0] || "Usuário EduFlow"),
+          // O campo 'email' aqui serve para você poder responder ao aluno se não for anônimo
+          email: isAnonymous ? "noreply@eduflow.com" : user?.email,
           message: `
-Você recebeu uma nova mensagem através do aplicativo EduFlow:
-
-📝 Categoria: ${categoryLabel}
-👤 Estudante: ${userName}
-🔒 Anônimo: ${isAnonymous ? "Sim" : "Não"}
-
-Mensagem:
--------------------------------------------
+ID CATEGORIA: ${category}
+MODO ANÔNIMO: ${isAnonymous ? "SIM" : "NÃO"}
+--------------------------------------------------
+CONTEÚDO DO FEEDBACK:
 ${message.trim()}
--------------------------------------------
+--------------------------------------------------
+Enviado via Central de Suporte EduFlow Academy.
           `,
         }),
       });
 
-      const emailResult = await emailResponse.json();
+      const result = await response.json();
 
-      if (!emailResult.success) {
-        throw new Error("Falha ao entregar o e-mail no servidor.");
-      }
+      if (!result.success) throw new Error("O servidor de e-mail rejeitou o envio.");
 
       toast({
-        title: "Obrigado pelo seu feedback! 💙",
-        description: "Sua mensagem foi entregue diretamente à administração do EduFlow.",
+        title: "Mensagem entregue!",
+        description: "Seu feedback foi enviado para a administração.",
       });
 
       setMessage("");
       setCategory("improvement");
       setIsAnonymous(false);
     } catch (error: any) {
-      toast({ title: "Erro ao enviar", description: "Sua mensagem foi salva, mas o e-mail falhou. Verifique a configuração.", variant: "destructive" });
-      console.error(error);
+      toast({ 
+        title: "Erro no envio", 
+        description: "Salvamos no banco, mas o e-mail falhou. Verifique sua chave Web3Forms.", 
+        variant: "destructive" 
+      });
     } finally {
       setSubmitting(false);
     }
   }
 
   return (
-    <div className="max-w-2xl mx-auto space-y-8 animate-in fade-in duration-700 pb-24 px-4 sm:px-6">
+    <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in duration-500 pb-safe px-4 sm:px-6">
       
-      {/* Header Mobile-First */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 pt-6">
-        <div className="flex items-center gap-4 w-full sm:w-auto">
+      {/* Header BI-Style */}
+      <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 pt-6">
+        <div className="flex items-center gap-4">
           <Button
             variant="ghost"
             size="icon"
             onClick={() => navigate(-1)}
-            className="h-14 w-14 sm:h-16 sm:w-16 rounded-2xl bg-muted/30 border border-border/50 hover:bg-muted shrink-0 transition-all"
+            className="h-12 w-12 rounded-xl bg-card border border-border/40 shrink-0"
           >
-            <ArrowLeft className="h-6 w-6 text-foreground" />
+            <ArrowLeft className="h-5 w-5" />
           </Button>
-          <div className="flex-1 min-w-0">
-            <h1 className="text-3xl sm:text-4xl font-black text-foreground tracking-tight truncate">
-              Central de Apoio
-            </h1>
-            <p className="text-muted-foreground font-medium text-xs sm:text-sm mt-1 uppercase tracking-wider">
-              Feedback & Suporte EduFlow
-            </p>
+          <div>
+            <h1 className="text-4xl font-black tracking-tighter">Central de <span className="text-primary">Apoio</span></h1>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mt-1">Contato direto com a administração</p>
           </div>
         </div>
-      </div>
+      </header>
 
-      <Card className="glass-card border-none shadow-2xl overflow-hidden bg-card rounded-[32px]">
-        <div className="h-2 w-full bg-primary/80" />
-        <CardHeader className="pb-4 pt-8 px-6 sm:px-8">
-          <CardTitle className="text-xl font-black flex items-center gap-3 text-foreground">
-            <MessageSquare className="h-6 w-6 text-primary" /> Fale com a Administração
-          </CardTitle>
-          <CardDescription className="text-xs font-bold text-muted-foreground uppercase tracking-widest mt-1">
-            Escolha uma categoria e descreva sua experiência ou problema.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6 pt-2 px-6 sm:px-8 pb-8">
-          
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 items-start">
+        
+        {/* Lado Esquerdo: Orientações */}
+        <div className="lg:col-span-2 space-y-6">
+          <Card className="rounded-[32px] border-border/40 bg-primary/5 p-8 space-y-4">
+            <h3 className="text-lg font-black tracking-tight flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-primary" /> Como ajudamos?
+            </h3>
+            <p className="text-sm font-medium text-muted-foreground leading-relaxed">
+              Sua opinião molda o futuro do <strong>EduFlow Academy</strong>. Relate falhas técnicas ou sugira funcionalidades que facilitariam sua jornada acadêmica.
+            </p>
+            <ul className="space-y-3 pt-2">
+              {[
+                { icon: AlertCircle, text: "Bugs são resolvidos em até 24h", color: "text-amber-500" },
+                { icon: Heart, text: "Elogios motivam nossa equipe", color: "text-rose-500" },
+                { icon: HelpCircle, text: "Dúvidas técnicas via e-mail", color: "text-primary" }
+              ].map((item, i) => (
+                <li key={i} className="flex items-center gap-3 text-[10px] font-black uppercase tracking-widest">
+                  <item.icon className={cn("h-4 w-4", item.color)} /> {item.text}
+                </li>
+              ))}
+            </ul>
+          </Card>
+        </div>
+
+        {/* Lado Direito: Formulário */}
+        <Card className="lg:col-span-3 rounded-[32px] border-border/40 bg-card p-8 shadow-2xl space-y-6">
           <div className="space-y-2">
-            <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Assunto do Contato</Label>
+            <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Assunto do Feedback</Label>
             <Select value={category} onValueChange={setCategory}>
-              <SelectTrigger className="h-14 rounded-2xl bg-background border border-border/50 font-bold text-foreground focus:ring-primary/20">
+              <SelectTrigger className="h-14 rounded-2xl bg-muted/20 border-border/40 font-bold">
                 <SelectValue />
               </SelectTrigger>
-              {/* bg-popover sólido para corrigir o bug de transparência */}
-              <SelectContent className="rounded-2xl bg-popover border border-border shadow-2xl">
+              {/* BUG FIX: bg-card sólido para evitar transparência no Select */}
+              <SelectContent className="bg-card border-border shadow-2xl rounded-2xl">
                 {CATEGORIES.map(c => (
-                  <SelectItem key={c.value} value={c.value} className="font-medium cursor-pointer py-3">{c.label}</SelectItem>
+                  <SelectItem key={c.value} value={c.value} className="font-bold py-3 uppercase text-[10px] tracking-widest">
+                    {c.label}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
@@ -159,37 +170,37 @@ ${message.trim()}
 
           <div className="space-y-2">
             <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Sua Mensagem</Label>
-            <Textarea
+            <Textarea 
               value={message}
               onChange={e => setMessage(e.target.value)}
-              placeholder="Descreva sua sugestão, informe um erro que encontrou ou deixe seu comentário para a equipe..."
-              className="min-h-[200px] bg-background border border-border/50 focus:ring-primary/20 resize-none rounded-2xl text-base p-4"
+              placeholder="Descreva detalhadamente..."
+              className="min-h-[180px] rounded-2xl bg-muted/20 border-border/40 font-medium p-5 resize-none leading-relaxed"
             />
           </div>
 
-          <div className="flex items-center justify-between p-5 bg-background border border-border/50 rounded-2xl">
+          <div className="flex items-center justify-between p-5 bg-primary/5 rounded-2xl border border-primary/20">
             <div className="flex items-center gap-4">
-              <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                <ShieldCheck className="h-5 w-5 text-primary" />
-              </div>
+              <ShieldCheck className="h-5 w-5 text-primary" />
               <div>
-                <p className="text-sm font-black text-foreground">Modo Anônimo</p>
-                <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest mt-0.5">Seu e-mail será ocultado do envio</p>
+                <p className="text-xs font-black uppercase tracking-widest">Enviar Anonimamente</p>
+                <p className="text-[9px] font-bold text-muted-foreground uppercase opacity-60">Ocultar meu e-mail e ID</p>
               </div>
             </div>
-            <Switch checked={isAnonymous} onCheckedChange={setIsAnonymous} className="data-[state=checked]:bg-primary" />
+            <Switch checked={isAnonymous} onCheckedChange={setIsAnonymous} />
           </div>
 
-          <Button
-            onClick={handleSubmit}
-            disabled={submitting || !message.trim()}
-            className="w-full h-14 rounded-2xl font-black uppercase tracking-widest text-xs shadow-xl shadow-primary/20 bg-primary text-primary-foreground hover:bg-primary/90 mt-4 transition-all active:scale-[0.98]"
+          <Button 
+            onClick={handleSubmit} 
+            disabled={submitting || !message.trim()} 
+            className="w-full h-14 rounded-2xl font-black uppercase tracking-widest text-xs bg-primary text-primary-foreground shadow-xl shadow-primary/20 active:scale-95 transition-all"
           >
-            {submitting ? <Loader2 className="h-5 w-5 animate-spin" /> : <><Send className="mr-2 h-4 w-4" /> Enviar para a Equipe</>}
+            {submitting ? <Loader2 className="h-5 w-5 animate-spin" /> : <><Send className="mr-2 h-4 w-4" /> Despachar Feedback</>}
           </Button>
-        </CardContent>
-      </Card>
+        </Card>
+      </div>
+
+      {/* iOS Safe Area Bottom */}
+      <div className="pb-24" />
     </div>
   );
 }
-
