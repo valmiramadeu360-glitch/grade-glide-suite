@@ -32,7 +32,7 @@ export function SemesterProvider({ children }: { children: ReactNode }) {
     localStorage.setItem("eduflow-active-semester", label);
     
     if (user) {
-      await supabase.from("profiles").update({ semester: label }).eq("user_id", user.id);
+      await supabase.from("profiles").update({ current_semester_label: label }).eq("user_id", user.id);
     }
     
     window.dispatchEvent(new CustomEvent("semesterChanged", { detail: label }));
@@ -48,9 +48,9 @@ export function SemesterProvider({ children }: { children: ReactNode }) {
       // Arquiva todas as disciplinas que estão 'active' no semestre que acaba de fechar
       const { error: archiveError } = await supabase
         .from("disciplines")
-        .update({ status: "archived" })
+        .update({ archived: true })
         .eq("user_id", user.id)
-        .eq("status", "active");
+        .eq("archived", false);
 
       if (archiveError) throw archiveError;
 
@@ -78,19 +78,19 @@ export function SemesterProvider({ children }: { children: ReactNode }) {
     try {
       const activeLabel = currentLabel;
 
-      // Passo A: Arquivar as matérias do semestre atual (que será substituído)
+      // Passo A: Arquivar as matérias do semestre atual
       await supabase
         .from("disciplines")
-        .update({ status: "archived" })
+        .update({ archived: true })
         .eq("user_id", user.id)
-        .eq("status", "active");
+        .eq("archived", false);
 
       // Passo B: Ativar as matérias do semestre alvo
       const { error: restoreError } = await supabase
         .from("disciplines")
-        .update({ status: "active" })
+        .update({ archived: false })
         .eq("user_id", user.id)
-        .eq("semester", targetLabel);
+        .eq("semester_label", targetLabel);
 
       if (restoreError) throw restoreError;
 
@@ -137,9 +137,9 @@ export function SemesterProvider({ children }: { children: ReactNode }) {
     if (user) {
       loadSemesters();
       // Sincroniza estado inicial com o banco
-      supabase.from("profiles").select("semester").eq("user_id", user.id).maybeSingle()
+      supabase.from("profiles").select("current_semester_label").eq("user_id", user.id).maybeSingle()
         .then(({ data }) => {
-          if (data?.semester) setCurrentLabelState(data.semester);
+          if (data?.current_semester_label) setCurrentLabelState(data.current_semester_label);
         });
     }
   }, [user]);

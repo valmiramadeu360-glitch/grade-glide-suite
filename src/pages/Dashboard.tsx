@@ -22,6 +22,7 @@ import {
   CheckCircle2, ArrowRight, Cloud, CloudOff, History, 
   Loader2, Sparkles, RefreshCcw, UserCircle 
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { format, isToday, isTomorrow, differenceInDays, startOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useNavigate } from "react-router-dom";
@@ -102,17 +103,17 @@ export default function Dashboard() {
     try {
       const { data: profile } = await supabase
         .from("profiles")
-        .select("semester, semester_start, semester_end")
+        .select("current_semester_label, semester_start, semester_end")
         .eq("user_id", user!.id)
         .maybeSingle();
 
-      if (profile?.semester) setActiveSemesterFromProfile(profile.semester);
+      if (profile?.current_semester_label) setActiveSemesterFromProfile(profile.current_semester_label);
 
       const { data: disciplines } = await supabase
         .from("disciplines")
         .select("id")
         .eq("user_id", user!.id)
-        .eq("semester", currentLabel);
+        .eq("semester_label", currentLabel);
 
       const discIds = (disciplines ?? []).map(d => d.id);
       setDisciplineCount(discIds.length);
