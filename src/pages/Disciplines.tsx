@@ -92,12 +92,13 @@ export default function Disciplines({ extraOnly = false }: { extraOnly?: boolean
 
   // Histórico Agrupado por Semestre
   const archivedBySemester = useMemo(() => {
-    const archived = allDisciplines.filter(d => d.status === 'archived');
+    const archived = allDisciplines.filter(d => d.archived);
     const grouped: Record<string, Discipline[]> = {};
     
     archived.forEach(d => {
-      if (!grouped[d.semester]) grouped[d.semester] = [];
-      grouped[d.semester].push(d);
+      const sem = d.semester_label || "Sem período";
+      if (!grouped[sem]) grouped[sem] = [];
+      grouped[sem].push(d);
     });
     
     return Object.entries(grouped).sort(([a], [b]) => b.localeCompare(a));
