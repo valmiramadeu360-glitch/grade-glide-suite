@@ -32,7 +32,7 @@ export function SemesterProvider({ children }: { children: ReactNode }) {
     localStorage.setItem("eduflow-active-semester", label);
     
     if (user) {
-      await supabase.from("profiles").update({ semester: label }).eq("user_id", user.id);
+      await supabase.from("profiles").update({ current_semester_label: label }).eq("user_id", user.id);
     }
     
     window.dispatchEvent(new CustomEvent("semesterChanged", { detail: label }));
