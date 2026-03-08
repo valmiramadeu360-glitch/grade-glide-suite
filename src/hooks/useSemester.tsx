@@ -48,9 +48,9 @@ export function SemesterProvider({ children }: { children: ReactNode }) {
       // Arquiva todas as disciplinas que estão 'active' no semestre que acaba de fechar
       const { error: archiveError } = await supabase
         .from("disciplines")
-        .update({ status: "archived" })
+        .update({ archived: true })
         .eq("user_id", user.id)
-        .eq("status", "active");
+        .eq("archived", false);
 
       if (archiveError) throw archiveError;
 
