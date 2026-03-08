@@ -84,8 +84,8 @@ export default function Disciplines({ extraOnly = false }: { extraOnly?: boolean
   // Filtragem Reativa (Time Machine + Busca)
   const activeDisciplines = useMemo(() => {
     return allDisciplines.filter(d => 
-      d.status === 'active' && 
-      d.semester === currentLabel &&
+      !d.archived && 
+      d.semester_label === currentLabel &&
       d.name.toLowerCase().includes(searchQuery.toLowerCase())
     );
   }, [allDisciplines, currentLabel, searchQuery]);
