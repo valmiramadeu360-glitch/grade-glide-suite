@@ -31,9 +31,9 @@ interface Discipline {
   name: string;
   professor: string | null;
   color: string;
-  status: 'active' | 'archived'; // Padronizado conforme Core Architecture
+  archived: boolean;
   is_extra_course: boolean;
-  semester: string; // Ex: "2026.1"
+  semester_label: string | null;
 }
 
 export default function Disciplines({ extraOnly = false }: { extraOnly?: boolean }) {
