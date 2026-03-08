@@ -78,19 +78,19 @@ export function SemesterProvider({ children }: { children: ReactNode }) {
     try {
       const activeLabel = currentLabel;
 
-      // Passo A: Arquivar as matérias do semestre atual (que será substituído)
+      // Passo A: Arquivar as matérias do semestre atual
       await supabase
         .from("disciplines")
-        .update({ status: "archived" })
+        .update({ archived: true })
         .eq("user_id", user.id)
-        .eq("status", "active");
+        .eq("archived", false);
 
       // Passo B: Ativar as matérias do semestre alvo
       const { error: restoreError } = await supabase
         .from("disciplines")
-        .update({ status: "active" })
+        .update({ archived: false })
         .eq("user_id", user.id)
-        .eq("semester", targetLabel);
+        .eq("semester_label", targetLabel);
 
       if (restoreError) throw restoreError;
 
