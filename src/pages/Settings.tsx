@@ -55,12 +55,12 @@ export default function Settings() {
         setProfileId(data.id);
         setSemesterStart(data.semester_start ?? "");
         setSemesterEnd(data.semester_end ?? "");
-        setPushEnabled(data.notify_push ?? true);
-        setEmailEnabled(data.notify_email ?? true);
-        setNotifyStart(data.notify_time_start ?? "09:00");
-        setNotifyEnd(data.notify_time_end ?? "18:00");
-        setNotifyVolume(data.notify_volume?.toString() ?? "3");
-        setNotifyFrequency(data.notify_frequency ?? "daily");
+        setPushEnabled(data.notification_push ?? true);
+        setEmailEnabled(data.notification_email ?? true);
+        setNotifyStart(data.notification_start_time ?? "09:00");
+        setNotifyEnd(data.notification_end_time ?? "18:00");
+        setNotifyVolume("3");
+        setNotifyFrequency(data.notification_frequency ?? "daily");
       }
     } finally {
       setLoading(false);
