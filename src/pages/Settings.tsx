@@ -74,12 +74,11 @@ export default function Settings() {
     const payload = {
       semester_start: semesterStart || null,
       semester_end: semesterEnd || null,
-      notify_push: pushEnabled,
-      notify_email: emailEnabled,
-      notify_time_start: notifyStart,
-      notify_time_end: notifyEnd,
-      notify_volume: parseInt(notifyVolume) || 3,
-      notify_frequency: notifyFrequency,
+      notification_push: pushEnabled,
+      notification_email: emailEnabled,
+      notification_start_time: notifyStart,
+      notification_end_time: notifyEnd,
+      notification_frequency: notifyFrequency,
       updated_at: new Date().toISOString(),
     };
 

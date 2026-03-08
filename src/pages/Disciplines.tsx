@@ -114,8 +114,8 @@ export default function Disciplines({ extraOnly = false }: { extraOnly?: boolean
         professor: newProfessor.trim() || null,
         color: newColor,
         is_extra_course: extraOnly,
-        semester: currentLabel,
-        status: 'active'
+        semester_label: currentLabel,
+        archived: false
       });
 
       if (error) throw error;

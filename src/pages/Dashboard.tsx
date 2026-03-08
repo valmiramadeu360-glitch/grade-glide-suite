@@ -22,6 +22,7 @@ import {
   CheckCircle2, ArrowRight, Cloud, CloudOff, History, 
   Loader2, Sparkles, RefreshCcw, UserCircle 
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { format, isToday, isTomorrow, differenceInDays, startOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useNavigate } from "react-router-dom";

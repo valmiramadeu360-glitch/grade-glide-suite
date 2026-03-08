@@ -137,9 +137,9 @@ export function SemesterProvider({ children }: { children: ReactNode }) {
     if (user) {
       loadSemesters();
       // Sincroniza estado inicial com o banco
-      supabase.from("profiles").select("semester").eq("user_id", user.id).maybeSingle()
+      supabase.from("profiles").select("current_semester_label").eq("user_id", user.id).maybeSingle()
         .then(({ data }) => {
-          if (data?.semester) setCurrentLabelState(data.semester);
+          if (data?.current_semester_label) setCurrentLabelState(data.current_semester_label);
         });
     }
   }, [user]);
