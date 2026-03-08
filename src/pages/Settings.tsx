@@ -193,7 +193,7 @@ export default function Settings() {
                 </Select>
               </div>
             </div>
-          </CardContent>
+          </Card>
         </section>
 
         {/* Coluna: Estética & Tema */}
