@@ -183,21 +183,28 @@ export default function Connect() {
   }
 
   async function handlePost() {
-    if (!newContent.trim() || !user) return;
+    if ((!newContent.trim() && !selectedFile) || !user) return;
     setPosting(true);
+
     try {
       let mediaUrl: string | null = null;
 
-      // Upload image if selected
       if (selectedFile) {
-        const fileExt = selectedFile.name.split(".").pop();
-        const filePath = `${user.id}/${Date.now()}.${fileExt}`;
+        const fileExt = selectedFile.name.split('.').pop();
+        const fileName = `${Math.random()}.${fileExt}`;
+        const filePath = `${user.id}/${fileName}`;
+
         const { error: uploadError } = await supabase.storage
-          .from("post-media")
+          .from('post-media')
           .upload(filePath, selectedFile);
+
         if (uploadError) throw uploadError;
-        const { data: urlData } = supabase.storage.from("post-media").getPublicUrl(filePath);
-        mediaUrl = urlData.publicUrl;
+
+        const { data: publicUrlData } = supabase.storage
+          .from('post-media')
+          .getPublicUrl(filePath);
+
+        mediaUrl = publicUrlData.publicUrl;
       }
 
       const { error } = await supabase.from("posts").insert({
@@ -205,6 +212,7 @@ export default function Connect() {
         content: newContent.trim(),
         media_url: mediaUrl,
       });
+
       if (error) throw error;
       setNewContent("");
       setSelectedFile(null);
