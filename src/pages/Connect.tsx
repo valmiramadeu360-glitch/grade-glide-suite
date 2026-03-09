@@ -588,6 +588,13 @@ function PostCard({ post, currentUserId, isFollowing, onLike, onComment, onDelet
         {/* Content */}
         <p className="text-sm text-foreground/90 leading-relaxed whitespace-pre-wrap">{post.content}</p>
 
+        {/* Media */}
+        {post.media_url && (
+          <div className="rounded-2xl overflow-hidden border border-border/30">
+            <img src={post.media_url} alt="Post media" className="w-full max-h-96 object-cover" loading="lazy" />
+          </div>
+        )}
+
         {post.tag && (
           <Badge variant="secondary" className="rounded-lg text-[10px] font-black uppercase tracking-widest">
             {post.tag}
