@@ -160,15 +160,41 @@ export default function Auth() {
               type="submit"
               disabled={loading}
             >
-              {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : (isSignUp ? "Cadastrar no EduFlow" : "Entrar no EduFlow")}
+              {loading ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : isResetPassword ? (
+                "Enviar Link de Recuperação"
+              ) : isSignUp ? (
+                "Cadastrar no EduFlow"
+              ) : (
+                "Entrar no EduFlow"
+              )}
             </Button>
+
+            {/* Links de navegação */}
+            {!isResetPassword && !isSignUp && (
+              <button
+                type="button"
+                onClick={() => setIsResetPassword(true)}
+                className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors underline"
+              >
+                Esqueceu sua senha?
+              </button>
+            )}
 
             <button
               type="button"
-              onClick={() => setIsSignUp(!isSignUp)}
+              onClick={() => {
+                setIsSignUp(!isSignUp);
+                setIsResetPassword(false);
+              }}
               className="text-sm font-bold text-muted-foreground hover:text-foreground transition-colors"
             >
-              {isSignUp ? "Já tem uma conta? Entre aqui" : "Ainda não tem conta? Cadastre-se"}
+              {isResetPassword 
+                ? "Voltar para o Login" 
+                : isSignUp 
+                  ? "Já tem uma conta? Entre aqui" 
+                  : "Ainda não tem conta? Cadastre-se"}
             </button>
           </CardFooter>
         </form>
