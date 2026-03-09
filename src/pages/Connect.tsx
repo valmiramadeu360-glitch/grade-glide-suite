@@ -359,26 +359,30 @@ export default function Connect() {
           )}
           <div className="flex items-center justify-between">
             <div className="flex gap-1">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handleFileSelect}
+              <input 
+                type="file" 
+                id="media-upload" 
+                accept="image/*,video/*" 
+                className="hidden" 
+                onChange={(e) => {
+                  const file = e.target.files?.[0] || null;
+                  setSelectedFile(file);
+                  setPreviewUrl(file ? URL.createObjectURL(file) : null);
+                }}
               />
-              <Button variant="ghost" size="icon" className="h-10 w-10 rounded-xl text-muted-foreground hover:text-primary" title="Imagem" onClick={() => fileInputRef.current?.click()}>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                onClick={() => document.getElementById('media-upload')?.click()}
+                className={cn("h-10 w-10 rounded-xl", selectedFile ? "text-primary bg-primary/10" : "text-muted-foreground")}
+              >
                 <Image className="h-4 w-4" />
               </Button>
-              <Button variant="ghost" size="icon" className="h-10 w-10 rounded-xl text-muted-foreground hover:text-primary" title="Link">
-                <Link2 className="h-4 w-4" />
-              </Button>
-              <Button variant="ghost" size="icon" className="h-10 w-10 rounded-xl text-muted-foreground hover:text-primary" title="Arquivo">
-                <FileText className="h-4 w-4" />
-              </Button>
+              {selectedFile && <span className="text-xs text-muted-foreground self-center truncate max-w-[100px]">{selectedFile.name}</span>}
             </div>
             <Button
               onClick={handlePost}
-              disabled={!newContent.trim() || posting}
+              disabled={(!newContent.trim() && !selectedFile) || posting}
               className="rounded-2xl px-6 gap-2"
             >
               {posting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
