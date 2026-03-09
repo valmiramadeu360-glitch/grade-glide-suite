@@ -460,6 +460,22 @@ export default function Connect() {
             />
           ))}
         </TabsContent>
+        <TabsContent value="chat" className="mt-4">
+          <Card className="overflow-hidden">
+            <CardContent className="p-8 flex flex-col items-center justify-center gap-4">
+              <div className="h-16 w-16 rounded-3xl bg-primary/10 flex items-center justify-center">
+                <MessageSquare className="h-8 w-8 text-primary" />
+              </div>
+              <div className="text-center space-y-1">
+                <p className="font-black text-foreground">Mensagens Diretas</p>
+                <p className="text-sm text-muted-foreground">Converse em privado com outros estudantes</p>
+              </div>
+              <Button className="rounded-2xl px-6 gap-2" onClick={() => window.location.href = '/messages'}>
+                <MessageSquare className="h-4 w-4" /> Abrir Mensagens
+              </Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
 
       {/* Comments Dialog */}
