@@ -31,12 +31,8 @@ export default function Profile() {
     career_goal: "",
     study_plans: "",
     portfolio_url: "",
-    linkedin_url: "",
     university: "",
     course: "",
-    current_period: "",
-    registration_number: "",
-    institutional_email: ""
   });
 
   const [autoSaveStatus, setAutoSaveStatus] = useState<"idle" | "saving" | "saved">("idle");

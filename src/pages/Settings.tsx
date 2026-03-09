@@ -70,7 +70,7 @@ export default function Settings() {
         setEmailEnabled(data.notification_email ?? true);
         setNotifyStart(data.notification_start_time ?? "09:00");
         setNotifyEnd(data.notification_end_time ?? "18:00");
-        setNotifyVolume(data.notification_volume?.toString() ?? "3");
+        setNotifyVolume("3");
         setNotifyFrequency(data.notification_frequency ?? "daily");
       }
     } finally {
