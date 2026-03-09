@@ -50,11 +50,16 @@ export default function Disciplines({ extraOnly = false }: { extraOnly?: boolean
   const [open, setOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  
+  // Restore State
+  const [restoreDialogOpen, setRestoreDialogOpen] = useState(false);
+  const [restorePeriodLabel, setRestorePeriodLabel] = useState("");
 
   // Form State
   const [newName, setNewName] = useState("");
   const [newProfessor, setNewProfessor] = useState("");
   const [newColor, setNewColor] = useState("#6366F1");
+  const [colorPickerOpen, setColorPickerOpen] = useState(false);
 
   const colors = [
     "#FFB3BA", "#BAFFC9", "#BAE1FF", "#E8BAFF", "#FF10F0", 
