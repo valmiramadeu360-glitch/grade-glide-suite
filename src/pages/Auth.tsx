@@ -10,6 +10,7 @@ import { Mail, Lock, User, GraduationCap, Loader2, ArrowLeft, Eye, EyeOff } from
 export default function Auth() {
   const [loading, setLoading] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
+  const [isResetPassword, setIsResetPassword] = useState(false); // Estado para recuperação de senha
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
@@ -20,7 +21,21 @@ export default function Auth() {
     e.preventDefault();
     setLoading(true);
 
-    if (isSignUp) {
+    if (isResetPassword) {
+      // Fluxo de recuperação de senha
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/auth`,
+      });
+      if (error) {
+        toast({ title: "Erro no envio", description: error.message, variant: "destructive" });
+      } else {
+        toast({ 
+          title: "E-mail Enviado!", 
+          description: "Verifique sua caixa de entrada para redefinir sua senha." 
+        });
+        setIsResetPassword(false); // Voltar para tela de login
+      }
+    } else if (isSignUp) {
       const { error } = await supabase.auth.signUp({
         email,
         password,
@@ -67,18 +82,20 @@ export default function Auth() {
         <div className="h-1.5 w-full bg-primary transition-colors duration-300" />
         <CardHeader className="space-y-2 pt-8 text-center">
           <CardTitle className="text-3xl font-black text-foreground tracking-tight">
-            {isSignUp ? "Criar Conta" : "Acessar Conta"}
+            {isResetPassword ? "Redefinir Senha" : isSignUp ? "Criar Conta" : "Acessar Conta"}
           </CardTitle>
           <CardDescription className="text-muted-foreground font-medium">
-            {isSignUp
-              ? "Cadastre-se para começar a organizar seus estudos."
-              : "Entre para gerenciar sua vida acadêmica."}
+            {isResetPassword 
+              ? "Digite seu e-mail para receber o link de recuperação."
+              : isSignUp
+                ? "Cadastre-se para começar a organizar seus estudos."
+                : "Entre para gerenciar sua vida acadêmica."}
           </CardDescription>
         </CardHeader>
 
         <form onSubmit={handleAuth}>
           <CardContent className="space-y-5">
-            {isSignUp && (
+            {isSignUp && !isResetPassword && (
               <div className="space-y-2">
                 <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Nome Completo</Label>
                 <div className="relative group">
@@ -95,7 +112,9 @@ export default function Auth() {
             )}
 
             <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">E-mail acadêmico</Label>
+              <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">
+                {isResetPassword ? "E-mail para recuperação" : "E-mail acadêmico"}
+              </Label>
               <div className="relative group">
                 <Mail className="absolute left-3 top-3.5 h-5 w-5 text-muted-foreground group-focus-within:text-primary transition-colors duration-300" />
                 <Input
@@ -109,28 +128,30 @@ export default function Auth() {
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Senha</Label>
-              <div className="relative group">
-                <Lock className="absolute left-3 top-3.5 h-5 w-5 text-muted-foreground group-focus-within:text-primary transition-colors duration-300" />
-                <Input
-                  className="pl-11 pr-12 h-12 bg-muted/30 border-border text-foreground rounded-2xl focus:ring-primary/20 transition-all"
-                  type={showPassword ? "text" : "password"}
-                  placeholder="No mínimo 6 caracteres"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-0 top-0 h-12 w-12 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors outline-none"
-                  tabIndex={-1}
-                >
-                  {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-                </button>
+            {!isResetPassword && (
+              <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Senha</Label>
+                <div className="relative group">
+                  <Lock className="absolute left-3 top-3.5 h-5 w-5 text-muted-foreground group-focus-within:text-primary transition-colors duration-300" />
+                  <Input
+                    className="pl-11 pr-12 h-12 bg-muted/30 border-border text-foreground rounded-2xl focus:ring-primary/20 transition-all"
+                    type={showPassword ? "text" : "password"}
+                    placeholder="No mínimo 6 caracteres"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-0 top-0 h-12 w-12 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors outline-none"
+                    tabIndex={-1}
+                  >
+                    {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
           </CardContent>
 
           <CardFooter className="flex flex-col gap-4 pb-8 pt-4">
@@ -139,15 +160,41 @@ export default function Auth() {
               type="submit"
               disabled={loading}
             >
-              {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : (isSignUp ? "Cadastrar no EduFlow" : "Entrar no EduFlow")}
+              {loading ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : isResetPassword ? (
+                "Enviar Link de Recuperação"
+              ) : isSignUp ? (
+                "Cadastrar no EduFlow"
+              ) : (
+                "Entrar no EduFlow"
+              )}
             </Button>
+
+            {/* Links de navegação */}
+            {!isResetPassword && !isSignUp && (
+              <button
+                type="button"
+                onClick={() => setIsResetPassword(true)}
+                className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors underline"
+              >
+                Esqueceu sua senha?
+              </button>
+            )}
 
             <button
               type="button"
-              onClick={() => setIsSignUp(!isSignUp)}
+              onClick={() => {
+                setIsSignUp(!isSignUp);
+                setIsResetPassword(false);
+              }}
               className="text-sm font-bold text-muted-foreground hover:text-foreground transition-colors"
             >
-              {isSignUp ? "Já tem uma conta? Entre aqui" : "Ainda não tem conta? Cadastre-se"}
+              {isResetPassword 
+                ? "Voltar para o Login" 
+                : isSignUp 
+                  ? "Já tem uma conta? Entre aqui" 
+                  : "Ainda não tem conta? Cadastre-se"}
             </button>
           </CardFooter>
         </form>

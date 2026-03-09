@@ -8,11 +8,17 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { 
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle 
+} from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { 
   Save, Loader2, Calendar, Palette, Moon, 
   Sun, BellRing, Mail, Smartphone, ArrowLeft,
-  Clock, Volume2, Repeat, CheckCircle2, ShieldCheck
+  Clock, Volume2, Repeat, CheckCircle2, ShieldCheck,
+  Trash2, AlertTriangle
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useNavigate } from "react-router-dom";
@@ -26,6 +32,12 @@ export default function Settings() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [profileId, setProfileId] = useState<string | null>(null);
+  const [colorPopoverOpen, setColorPopoverOpen] = useState(false);
+
+  // Danger Zone
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [deleting, setDeleting] = useState(false);
 
   // 1. Motor Cronológico (Dashboard Progress)
   const [semesterStart, setSemesterStart] = useState("");
@@ -97,6 +109,33 @@ export default function Settings() {
     }
   }
 
+  async function handleDeleteAccount() {
+    if (deleteConfirmText !== "EXCLUIR") return;
+    setDeleting(true);
+    
+    try {
+      // Deleta todas as disciplinas do usuário (cascade automático nos relacionamentos)
+      await supabase.from("disciplines").delete().eq("user_id", user!.id);
+      await supabase.from("reminders").delete().eq("user_id", user!.id);
+      await supabase.from("profiles").delete().eq("user_id", user!.id);
+      
+      // Faz logout
+      await supabase.auth.signOut();
+      
+      toast({ 
+        title: "Conta Excluída", 
+        description: "Todos os seus dados foram removidos permanentemente." 
+      });
+      
+      navigate("/auth");
+    } catch (e: any) {
+      toast({ title: "Erro ao excluir", description: e.message, variant: "destructive" });
+    } finally {
+      setDeleting(false);
+      setShowDeleteDialog(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex h-[80vh] flex-col items-center justify-center gap-4">
@@ -109,6 +148,52 @@ export default function Settings() {
   return (
     <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in duration-500 pb-safe px-4 sm:px-6 overflow-x-hidden">
       
+      {/* Delete Account Dialog */}
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent className="rounded-[32px] bg-card border-destructive/20 shadow-2xl">
+          <AlertDialogHeader>
+            <div className="flex items-center gap-3">
+              <div className="h-12 w-12 rounded-xl bg-destructive/10 flex items-center justify-center">
+                <AlertTriangle className="h-6 w-6 text-destructive" />
+              </div>
+              <AlertDialogTitle className="text-2xl font-black tracking-tight text-destructive">
+                Excluir Conta Permanentemente
+              </AlertDialogTitle>
+            </div>
+            <AlertDialogDescription className="font-medium text-muted-foreground pt-4">
+              Esta ação é <strong className="text-destructive">irreversível</strong>. Todos os seus dados, disciplinas, 
+              anotações e lembretes serão apagados permanentemente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">
+              Digite "EXCLUIR" para confirmar
+            </Label>
+            <Input
+              value={deleteConfirmText}
+              onChange={e => setDeleteConfirmText(e.target.value.toUpperCase())}
+              placeholder="EXCLUIR"
+              className="h-14 rounded-2xl text-center font-black text-lg border-destructive/20 bg-destructive/5"
+            />
+          </div>
+          
+          <AlertDialogFooter className="gap-3 mt-4">
+            <AlertDialogCancel className="h-12 rounded-2xl border-none font-bold uppercase text-[10px] tracking-widest">
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteAccount}
+              disabled={deleteConfirmText !== "EXCLUIR" || deleting}
+              className="h-12 rounded-2xl bg-destructive text-destructive-foreground font-black uppercase text-[10px] tracking-widest hover:bg-destructive/90"
+            >
+              {deleting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Trash2 className="h-4 w-4 mr-2" />}
+              Excluir Permanentemente
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {/* 1. Header BI-Style com Ação Global */}
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 pt-6">
         <div className="flex items-center gap-4">
@@ -213,21 +298,44 @@ export default function Settings() {
               <Switch checked={mode === 'dark'} onCheckedChange={c => setMode(c ? 'dark' : 'light')} />
             </div>
 
-            <div className="space-y-4">
-              <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Paleta da Identidade</Label>
-              <div className="grid grid-cols-5 gap-3 p-4 bg-muted/10 rounded-2xl border border-border/40">
-                {availableColors.map(c => (
-                  <button
-                    key={c.label}
-                    onClick={() => setPrimaryColor(c)}
-                    className={cn(
-                      "h-10 w-full rounded-xl transition-all active:scale-90",
-                      primaryColor.label === c.label ? "ring-2 ring-primary ring-offset-2 scale-110 shadow-lg" : "opacity-40 grayscale-[20%]"
-                    )}
-                    style={{ backgroundColor: `hsl(${c.hue}, ${c.saturation}%, ${c.lightness}%)` }}
-                  />
-                ))}
+            {/* Paleta de Cores Compacta */}
+            <div className="flex items-center justify-between p-5 bg-muted/10 rounded-2xl border border-border/40">
+              <div className="flex items-center gap-4">
+                <div 
+                  className="h-10 w-10 rounded-xl shadow-lg" 
+                  style={{ backgroundColor: `hsl(${primaryColor.hue}, ${primaryColor.saturation}%, ${primaryColor.lightness}%)` }} 
+                />
+                <div>
+                  <p className="text-xs font-black uppercase tracking-widest">Cor Principal</p>
+                  <p className="text-[10px] font-bold text-muted-foreground capitalize">{primaryColor.label}</p>
+                </div>
               </div>
+              <Popover open={colorPopoverOpen} onOpenChange={setColorPopoverOpen}>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="icon" className="h-12 w-12 rounded-xl border-border/40">
+                    <Palette className="h-5 w-5" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-4 bg-card border-border shadow-2xl rounded-2xl">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-3">Paleta</p>
+                  <div className="grid grid-cols-5 gap-2">
+                    {availableColors.map(c => (
+                      <button
+                        key={c.label}
+                        onClick={() => {
+                          setPrimaryColor(c);
+                          setColorPopoverOpen(false);
+                        }}
+                        className={cn(
+                          "h-10 w-10 rounded-xl transition-all active:scale-90",
+                          primaryColor.label === c.label ? "ring-2 ring-foreground ring-offset-2 scale-110 shadow-lg" : "hover:scale-105"
+                        )}
+                        style={{ backgroundColor: `hsl(${c.hue}, ${c.saturation}%, ${c.lightness}%)` }}
+                      />
+                    ))}
+                  </div>
+                </PopoverContent>
+              </Popover>
             </div>
           </Card>
 
@@ -256,8 +364,32 @@ export default function Settings() {
         </section>
       </div>
 
+      {/* Danger Zone */}
+      <section className="space-y-6 pt-8">
+        <h3 className="text-xs font-black uppercase tracking-[0.3em] flex items-center gap-3 ml-2 text-destructive">
+          <AlertTriangle className="h-4 w-4" /> Zona de Perigo
+        </h3>
+        <Card className="rounded-[32px] border-destructive/20 bg-destructive/5 p-8 shadow-xl">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
+            <div className="space-y-2">
+              <p className="text-sm font-black text-destructive">Excluir Conta Permanentemente</p>
+              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest max-w-md">
+                Esta ação apagará todos os seus dados, disciplinas, anotações e lembretes. Esta ação não pode ser desfeita.
+              </p>
+            </div>
+            <Button
+              variant="destructive"
+              onClick={() => setShowDeleteDialog(true)}
+              className="h-14 px-8 rounded-2xl font-black uppercase text-xs tracking-widest shadow-lg shadow-destructive/20 shrink-0"
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Excluir Conta
+            </Button>
+          </div>
+        </Card>
+      </section>
+
       <div className="pb-24" />
     </div>
   );
 }
-
