@@ -21,7 +21,21 @@ export default function Auth() {
     e.preventDefault();
     setLoading(true);
 
-    if (isSignUp) {
+    if (isResetPassword) {
+      // Fluxo de recuperação de senha
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/auth`,
+      });
+      if (error) {
+        toast({ title: "Erro no envio", description: error.message, variant: "destructive" });
+      } else {
+        toast({ 
+          title: "E-mail Enviado!", 
+          description: "Verifique sua caixa de entrada para redefinir sua senha." 
+        });
+        setIsResetPassword(false); // Voltar para tela de login
+      }
+    } else if (isSignUp) {
       const { error } = await supabase.auth.signUp({
         email,
         password,
