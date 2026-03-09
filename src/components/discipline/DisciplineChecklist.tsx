@@ -37,7 +37,6 @@ export function DisciplineChecklist({ disciplineId }: { disciplineId: string }) 
   const [editingSub, setEditingSub] = useState<string | null>(null);
   const [editingSubText, setEditingSubText] = useState("");
 
-  // Controle do Modo Offline
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
 
   useEffect(() => {
@@ -105,17 +104,13 @@ export function DisciplineChecklist({ disciplineId }: { disciplineId: string }) 
   }
 
   async function toggleItem(item: ChecklistItem) {
-    // Atualização Otimista: A interface muda na hora, mesmo sem internet
     const prev = [...items];
     setItems(items.map(i => i.id === item.id ? { ...i, completed: !i.completed } : i));
     
-    if (isOffline) {
-      // TODO: Web Worker/Queue para sincronizar quando a rede voltar
-      return; 
-    }
+    if (isOffline) return; 
 
     const { error } = await supabase.from("checklist_items").update({ completed: !item.completed }).eq("id", item.id);
-    if (error) setItems(prev); // Reverte se der erro
+    if (error) setItems(prev);
   }
 
   async function deleteItem(id: string) {
@@ -147,7 +142,6 @@ export function DisciplineChecklist({ disciplineId }: { disciplineId: string }) 
       return;
     }
     
-    // Atualização Otimista UI
     setItems(items.map(i => i.id === id ? { ...i, title: text } : i));
     setEditingItem(null);
     
@@ -168,7 +162,6 @@ export function DisciplineChecklist({ disciplineId }: { disciplineId: string }) 
       return;
     }
     
-    // Atualização Otimista UI
     setItems(items.map(i => i.id === parentId
       ? { ...i, subtopics: i.subtopics.map(s => s.id === subId ? { ...s, title: text } : s) }
       : i
@@ -206,7 +199,6 @@ export function DisciplineChecklist({ disciplineId }: { disciplineId: string }) 
   }
 
   async function toggleSubtopic(parentId: string, sub: Subtopic) {
-    // Atualização Otimista UI
     setItems(items.map(i =>
       i.id === parentId
         ? { ...i, subtopics: i.subtopics.map(s => s.id === sub.id ? { ...s, completed: !s.completed } : s) }
@@ -237,8 +229,6 @@ export function DisciplineChecklist({ disciplineId }: { disciplineId: string }) 
 
   return (
     <Card className="glass-card border-none shadow-sm bg-card rounded-[32px] overflow-hidden animate-in fade-in duration-500">
-      
-      {/* Header com Progresso */}
       <CardHeader className="pb-5 pt-6 px-6 sm:px-8 border-b border-border/40">
         <div className="flex flex-col gap-4">
           <CardTitle className="text-sm font-black uppercase tracking-widest text-foreground flex items-center gap-2">
@@ -253,19 +243,18 @@ export function DisciplineChecklist({ disciplineId }: { disciplineId: string }) 
         </div>
       </CardHeader>
 
-      <CardContent className="space-y-6 p-6 sm:p-8">
+      <CardContent className="space-y-6 p-4 sm:p-8">
         
         {isOffline && (
-          <div className="bg-destructive/10 border border-destructive/20 text-destructive p-3 rounded-2xl flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest animate-pulse">
-            <CloudOff className="h-4 w-4" /> Modo Offline. Algumas ações estão pausadas.
+          <div className="bg-destructive/10 border border-destructive/20 text-destructive p-4 rounded-2xl flex items-center justify-center gap-3 text-[10px] font-black uppercase tracking-widest animate-pulse shadow-inner">
+            <CloudOff className="h-4 w-4" /> Offline: Algumas ações bloqueadas
           </div>
         )}
 
-        {/* Input Principal */}
         <div className="flex gap-3">
           <Input
-            placeholder="Ex: Teoria Geral do Estado..."
-            className="h-14 sm:h-16 rounded-2xl bg-background border-border/50 focus:ring-primary/20 text-base sm:text-lg font-bold flex-1 shadow-sm"
+            placeholder="Ex: Aula 01 - Teoria Geral..."
+            className="h-14 sm:h-16 rounded-2xl bg-background border-border/50 focus:ring-primary/40 text-base font-bold flex-1 shadow-sm transition-all"
             value={newItem}
             disabled={isOffline}
             onChange={(e) => setNewItem(e.target.value)}
@@ -276,33 +265,29 @@ export function DisciplineChecklist({ disciplineId }: { disciplineId: string }) 
           </Button>
         </div>
 
-        {/* Lista de Tarefas */}
-        <div className="space-y-4">
+        <div className="space-y-4 mt-8">
           {items.map((item) => (
             <div key={item.id} className="space-y-2">
               
-              {/* Item Principal */}
               <div className={cn(
-                "flex items-center gap-3 sm:gap-4 rounded-2xl p-3 sm:p-4 transition-all border",
-                item.completed ? "bg-muted/20 border-border/30 opacity-70" : "bg-background border-border/60 shadow-sm hover:border-primary/40 hover:shadow-md"
+                "flex items-center gap-3 sm:gap-4 rounded-[20px] p-3 sm:p-4 transition-all border",
+                item.completed ? "bg-muted/10 border-border/20 opacity-60 hover:opacity-100" : "bg-card border-border/50 shadow-sm hover:border-primary/40 hover:shadow-md"
               )}>
                 
-                {/* Botão Expandir - Área de Toque Otimizada */}
-                <Button size="icon" variant="ghost" className="h-12 w-12 shrink-0 rounded-xl hover:bg-muted/50" onClick={() => toggleExpand(item.id)}>
+                <Button size="icon" variant="ghost" className="h-12 w-12 shrink-0 rounded-xl hover:bg-muted/50 transition-colors" onClick={() => toggleExpand(item.id)}>
                   {item.expanded ? <ChevronDown className="h-6 w-6" /> : <ChevronRight className="h-6 w-6" />}
                 </Button>
                 
                 <Checkbox 
                   checked={item.completed} 
                   onCheckedChange={() => toggleItem(item)} 
-                  className="h-7 w-7 sm:h-8 sm:w-8 rounded-lg border-2 border-primary/30 data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500 shadow-inner transition-colors"
+                  className="h-7 w-7 sm:h-8 sm:w-8 rounded-xl border-2 border-primary/30 data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500 shadow-inner transition-transform hover:scale-105"
                 />
 
-                {/* Área de Texto / Edição */}
                 {editingItem === item.id ? (
                   <Input
                     autoFocus
-                    className="flex-1 h-12 text-base sm:text-lg font-black rounded-xl bg-background border-primary/40 focus:ring-primary/20"
+                    className="flex-1 h-12 text-base sm:text-lg font-black rounded-xl bg-background border-primary/40 focus:ring-primary/30"
                     value={editingItemText}
                     onChange={e => setEditingItemText(e.target.value)}
                     onBlur={() => saveEditItem(item.id)}
@@ -310,44 +295,40 @@ export function DisciplineChecklist({ disciplineId }: { disciplineId: string }) 
                   />
                 ) : (
                   <span
-                    className={cn("flex-1 text-base sm:text-lg font-black cursor-pointer select-none leading-tight truncate transition-colors hover:text-primary", item.completed && "line-through text-muted-foreground")}
-                    onDoubleClick={() => startEditItem(item)}
-                    onClick={() => startEditItem(item)} // Permite o clique simples no mobile para facilitar a edição
+                    className={cn("flex-1 text-base sm:text-lg font-black cursor-pointer select-none leading-tight truncate transition-colors hover:text-primary active:opacity-50", item.completed && "line-through text-muted-foreground")}
+                    onClick={() => startEditItem(item)}
                   >
                     {item.title}
                   </span>
                 )}
 
-                {/* Contador de Subtópicos Mobile */}
                 {item.subtopics.length > 0 && (
-                  <span className="text-[10px] bg-muted/50 px-2.5 py-1.5 rounded-lg text-muted-foreground font-black tracking-widest shrink-0 hidden sm:block">
+                  <span className="text-[10px] bg-background border border-border/50 px-2.5 py-1.5 rounded-lg text-muted-foreground font-black tracking-widest shrink-0 hidden sm:block">
                     {item.subtopics.filter(s => s.completed).length}/{item.subtopics.length}
                   </span>
                 )}
                 
-                {/* Ações (Editar / Excluir) */}
                 <div className="flex items-center gap-1 sm:gap-2 shrink-0">
                   <Button size="icon" variant="ghost" className="h-12 w-12 rounded-xl text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors" onClick={() => startEditItem(item)}>
-                    <Pencil className="h-5 w-5" />
+                    <Pencil className="h-4 w-4 sm:h-5 sm:w-5" />
                   </Button>
-                  <Button size="icon" variant="ghost" disabled={isOffline} className="h-12 w-12 rounded-xl text-destructive hover:bg-destructive/10 transition-colors hidden sm:flex" onClick={() => deleteItem(item.id)}>
-                    <Trash2 className="h-5 w-5" />
+                  <Button size="icon" variant="ghost" disabled={isOffline} className="h-12 w-12 rounded-xl text-destructive hover:bg-destructive/10 transition-colors" onClick={() => deleteItem(item.id)}>
+                    <Trash2 className="h-4 w-4 sm:h-5 sm:w-5" />
                   </Button>
                 </div>
               </div>
 
-              {/* Subtópicos Expandidos */}
               {item.expanded && (
-                <div className="ml-6 pl-4 sm:ml-10 sm:pl-6 border-l-2 border-border/40 space-y-3 mb-6 animate-in fade-in slide-in-from-top-2 duration-300">
+                <div className="ml-5 pl-4 sm:ml-9 sm:pl-6 border-l-2 border-border/40 space-y-3 mb-8 animate-in fade-in slide-in-from-top-4 duration-300">
                   {item.subtopics.map(sub => (
                     <div key={sub.id} className={cn(
-                      "flex items-center gap-3 sm:gap-4 rounded-xl p-3 sm:p-4 transition-colors border",
-                      sub.completed ? "bg-muted/10 border-transparent opacity-60" : "bg-card border-border/40 hover:border-border/80"
+                      "flex items-center gap-3 sm:gap-4 rounded-xl p-2 sm:p-3 transition-colors border",
+                      sub.completed ? "bg-transparent border-transparent opacity-50 hover:opacity-100" : "bg-muted/10 border-border/30 hover:border-border/60 hover:bg-muted/30"
                     )}>
                       <Checkbox 
                         checked={sub.completed} 
                         onCheckedChange={() => toggleSubtopic(item.id, sub)} 
-                        className="h-6 w-6 rounded-[6px] border-primary/30 data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500"
+                        className="h-6 w-6 rounded-[8px] border-primary/30 data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500 hover:scale-105 transition-transform"
                       />
                       
                       {editingSub === sub.id ? (
@@ -361,8 +342,7 @@ export function DisciplineChecklist({ disciplineId }: { disciplineId: string }) 
                         />
                       ) : (
                         <span
-                          className={cn("flex-1 text-sm sm:text-base font-bold cursor-pointer select-none truncate hover:text-primary transition-colors", sub.completed && "line-through text-muted-foreground")}
-                          onDoubleClick={() => startEditSub(sub)}
+                          className={cn("flex-1 text-sm sm:text-base font-bold cursor-pointer select-none truncate hover:text-primary transition-colors active:opacity-50", sub.completed && "line-through text-muted-foreground")}
                           onClick={() => startEditSub(sub)}
                         >
                           {sub.title}
@@ -380,17 +360,16 @@ export function DisciplineChecklist({ disciplineId }: { disciplineId: string }) 
                     </div>
                   ))}
                   
-                  {/* Input Novo Subtópico */}
-                  <div className="flex gap-3 mt-3">
+                  <div className="flex gap-3 mt-3 pt-2">
                     <Input
                       placeholder="Criar subtópico..."
-                      className="h-12 text-sm font-bold rounded-xl bg-background border-border/50 focus:ring-primary/20 shadow-sm"
+                      className="h-12 text-sm font-bold rounded-xl bg-background border-border/50 focus:ring-primary/30 shadow-sm transition-all"
                       value={newSubtopics[item.id] ?? ""}
                       disabled={isOffline}
                       onChange={e => setNewSubtopics({ ...newSubtopics, [item.id]: e.target.value })}
                       onKeyDown={e => e.key === "Enter" && addSubtopic(item.id)}
                     />
-                    <Button size="icon" variant="secondary" disabled={isOffline || !(newSubtopics[item.id]?.trim())} className="h-12 w-12 rounded-xl shrink-0 border border-border/50 bg-card hover:bg-muted" onClick={() => addSubtopic(item.id)}>
+                    <Button size="icon" variant="secondary" disabled={isOffline || !(newSubtopics[item.id]?.trim())} className="h-12 w-12 rounded-xl shrink-0 border border-border/50 bg-card hover:bg-muted active:scale-95 transition-transform" onClick={() => addSubtopic(item.id)}>
                       <Plus className="h-5 w-5" />
                     </Button>
                   </div>
@@ -403,3 +382,4 @@ export function DisciplineChecklist({ disciplineId }: { disciplineId: string }) 
     </Card>
   );
 }
+
