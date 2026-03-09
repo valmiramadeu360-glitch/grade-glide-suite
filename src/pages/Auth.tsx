@@ -82,12 +82,14 @@ export default function Auth() {
         <div className="h-1.5 w-full bg-primary transition-colors duration-300" />
         <CardHeader className="space-y-2 pt-8 text-center">
           <CardTitle className="text-3xl font-black text-foreground tracking-tight">
-            {isSignUp ? "Criar Conta" : "Acessar Conta"}
+            {isResetPassword ? "Redefinir Senha" : isSignUp ? "Criar Conta" : "Acessar Conta"}
           </CardTitle>
           <CardDescription className="text-muted-foreground font-medium">
-            {isSignUp
-              ? "Cadastre-se para começar a organizar seus estudos."
-              : "Entre para gerenciar sua vida acadêmica."}
+            {isResetPassword 
+              ? "Digite seu e-mail para receber o link de recuperação."
+              : isSignUp
+                ? "Cadastre-se para começar a organizar seus estudos."
+                : "Entre para gerenciar sua vida acadêmica."}
           </CardDescription>
         </CardHeader>
 
