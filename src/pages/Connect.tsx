@@ -135,6 +135,50 @@ export default function Connect() {
     }
   }
 
+  async function loadTrending() {
+    try {
+      const { data: trendingData } = await supabase
+        .from("trending_posts" as any)
+        .select("*")
+        .limit(30);
+
+      if (!trendingData) { setTrendingPosts([]); return; }
+
+      const postIds = (trendingData as any[]).map((p: any) => p.id);
+      
+      const { data: likesData } = await supabase
+        .from("post_likes")
+        .select("post_id, user_id")
+        .in("post_id", postIds);
+
+      const likesMap: Record<string, { count: number; userLiked: boolean }> = {};
+      (likesData ?? []).forEach(l => {
+        if (!likesMap[l.post_id]) likesMap[l.post_id] = { count: 0, userLiked: false };
+        likesMap[l.post_id].count++;
+        if (l.user_id === user!.id) likesMap[l.post_id].userLiked = true;
+      });
+
+      // Get profiles for trending posts
+      const userIds = [...new Set((trendingData as any[]).map((p: any) => p.user_id))];
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("user_id, full_name, avatar_url, course")
+        .in("user_id", userIds);
+
+      const profileMap = new Map((profiles ?? []).map(p => [p.user_id, p]));
+
+      setTrendingPosts((trendingData as any[]).map((p: any) => ({
+        ...p,
+        profiles: profileMap.get(p.user_id) || null,
+        likes_count: (p as any).likes_count || likesMap[p.id]?.count || 0,
+        comments_count: (p as any).comments_count || 0,
+        user_liked: likesMap[p.id]?.userLiked || false,
+      })));
+    } catch (e) {
+      console.error("Error loading trending:", e);
+    }
+  }
+
   async function handlePost() {
     if (!newContent.trim() || !user) return;
     setPosting(true);
