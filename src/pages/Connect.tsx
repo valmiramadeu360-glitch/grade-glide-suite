@@ -75,6 +75,7 @@ export default function Connect() {
     if (user) {
       loadFollowing();
       loadPosts();
+      loadTrending();
     }
   }, [user]);
 
