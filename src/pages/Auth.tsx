@@ -10,6 +10,7 @@ import { Mail, Lock, User, GraduationCap, Loader2, ArrowLeft, Eye, EyeOff } from
 export default function Auth() {
   const [loading, setLoading] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
+  const [isResetPassword, setIsResetPassword] = useState(false); // Estado para recuperação de senha
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
