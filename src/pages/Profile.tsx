@@ -10,8 +10,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
 import { 
   ArrowLeft, User, Camera, Loader2, Cloud, 
-  GraduationCap, Target, BookOpen, 
-  Globe, ShieldCheck, Mail, BookOpen
+  GraduationCap, Target, BookOpen, Globe, ShieldCheck, Mail
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
