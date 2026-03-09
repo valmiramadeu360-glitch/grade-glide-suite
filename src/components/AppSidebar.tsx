@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { LayoutDashboard, BookOpen, Bell, Settings, Sparkles, LogOut, User, MessageSquare } from "lucide-react";
+import { LayoutDashboard, BookOpen, Bell, Settings, Sparkles, LogOut, User, MessageSquare, Globe } from "lucide-react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
