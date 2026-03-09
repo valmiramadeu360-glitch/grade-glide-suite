@@ -104,3 +104,48 @@
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
 }
+
+/* Calendar Day Markers */
+.calendar-dot-class::after {
+  content: '';
+  position: absolute;
+  bottom: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: hsl(var(--warning));
+  box-shadow: 0 0 4px hsl(var(--warning) / 0.4);
+}
+
+.calendar-dot-reminder::after {
+  content: '';
+  position: absolute;
+  bottom: 4px;
+  right: 50%;
+  transform: translateX(50%);
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: hsl(var(--destructive));
+  box-shadow: 0 0 4px hsl(var(--destructive) / 0.4);
+}
+
+/* If a day has both class and reminder, show both dots */
+.calendar-dot-class.calendar-dot-reminder::after {
+  right: 55%;
+}
+
+.calendar-dot-class.calendar-dot-reminder::before {
+  content: '';
+  position: absolute;
+  bottom: 4px;
+  left: 55%;
+  transform: translateX(-50%);
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: hsl(var(--warning));
+  box-shadow: 0 0 4px hsl(var(--warning) / 0.4);
+}
