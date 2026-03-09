@@ -605,8 +605,8 @@ function PostCard({ post, currentUserId, isFollowing, onLike, onComment, onDelet
 
         {/* Media */}
         {post.media_url && (
-          <div className="rounded-2xl overflow-hidden border border-border/30">
-            <img src={post.media_url} alt="Post media" className="w-full max-h-96 object-cover" loading="lazy" />
+          <div className="mt-3 rounded-xl overflow-hidden border border-border/50 bg-muted/20">
+            <img src={post.media_url} alt="Mídia da publicação" className="w-full h-auto object-cover max-h-[400px]" />
           </div>
         )}
 
