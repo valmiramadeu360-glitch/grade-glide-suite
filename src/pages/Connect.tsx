@@ -399,10 +399,13 @@ export default function Connect() {
             <Globe className="h-4 w-4 mr-1.5" /> Global
           </TabsTrigger>
           <TabsTrigger value="trending" className="flex-1 h-10 rounded-xl font-black text-[10px] uppercase tracking-widest data-[state=active]:bg-background data-[state=active]:shadow-sm">
-            <TrendingUp className="h-4 w-4 mr-1.5" /> Trending
+            🔥 Em Alta
           </TabsTrigger>
           <TabsTrigger value="following" className="flex-1 h-10 rounded-xl font-black text-[10px] uppercase tracking-widest data-[state=active]:bg-background data-[state=active]:shadow-sm">
             <Users className="h-4 w-4 mr-1.5" /> Seguindo
+          </TabsTrigger>
+          <TabsTrigger value="chat" className="flex-1 h-10 rounded-xl font-black text-[10px] uppercase tracking-widest data-[state=active]:bg-background data-[state=active]:shadow-sm">
+            💬 Chat
           </TabsTrigger>
         </TabsList>
 
@@ -456,6 +459,22 @@ export default function Connect() {
               onFollow={() => handleFollow(post.user_id)}
             />
           ))}
+        </TabsContent>
+        <TabsContent value="chat" className="mt-4">
+          <Card className="overflow-hidden">
+            <CardContent className="p-8 flex flex-col items-center justify-center gap-4">
+              <div className="h-16 w-16 rounded-3xl bg-primary/10 flex items-center justify-center">
+                <MessageSquare className="h-8 w-8 text-primary" />
+              </div>
+              <div className="text-center space-y-1">
+                <p className="font-black text-foreground">Mensagens Diretas</p>
+                <p className="text-sm text-muted-foreground">Converse em privado com outros estudantes</p>
+              </div>
+              <Button className="rounded-2xl px-6 gap-2" onClick={() => window.location.href = '/messages'}>
+                <MessageSquare className="h-4 w-4" /> Abrir Mensagens
+              </Button>
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
 
@@ -602,8 +621,8 @@ function PostCard({ post, currentUserId, isFollowing, onLike, onComment, onDelet
 
         {/* Media */}
         {post.media_url && (
-          <div className="rounded-2xl overflow-hidden border border-border/30">
-            <img src={post.media_url} alt="Post media" className="w-full max-h-96 object-cover" loading="lazy" />
+          <div className="mt-3 rounded-xl overflow-hidden border border-border/50 bg-muted/20">
+            <img src={post.media_url} alt="Mídia da publicação" className="w-full h-auto object-cover max-h-[400px]" />
           </div>
         )}
 
