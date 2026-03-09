@@ -204,7 +204,7 @@ export default function Profile() {
           <div className="text-center mt-6 w-full px-4">
             <h2 className="text-2xl sm:text-3xl font-black tracking-tight truncate">{profileData.full_name || "Estudante EduFlow"}</h2>
             <p className="text-[10px] sm:text-[11px] font-bold text-muted-foreground uppercase tracking-[0.2em] mt-2 truncate">
-              {profileData.course ? `${profileData.course} • ${profileData.current_period || '1º'} Período` : "Vínculo Institucional Pendente"}
+              {profileData.course ? `${profileData.course}` : "Vínculo Institucional Pendente"}
             </p>
           </div>
         </CardContent>
@@ -228,27 +228,6 @@ export default function Profile() {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1 flex items-center gap-1.5"><Hash className="h-3 w-3" /> Matrícula (RA)</Label>
-                <Input 
-                  value={profileData.registration_number} 
-                  onChange={handleChange("registration_number")}
-                  placeholder="00000000" 
-                  className="h-14 rounded-2xl bg-muted/20 border-border/40 font-bold focus:ring-primary/30" 
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Período Atual</Label>
-                <Input 
-                  value={profileData.current_period} 
-                  onChange={handleChange("current_period")}
-                  placeholder="Ex: 4º Semestre" 
-                  className="h-14 rounded-2xl bg-muted/20 border-border/40 font-bold focus:ring-primary/30" 
-                />
-              </div>
-            </div>
-
             <div className="space-y-2">
               <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Universidade / Faculdade</Label>
               <Input 
@@ -266,16 +245,6 @@ export default function Profile() {
                 onChange={handleChange("course")}
                 placeholder="Ex: Direito, Medicina, Economia..." 
                 className="h-14 rounded-2xl bg-muted/20 border-border/40 font-bold focus:ring-primary/30" 
-              />
-            </div>
-            
-            <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1 flex items-center gap-1.5"><Mail className="h-3 w-3" /> E-mail Institucional</Label>
-              <Input 
-                value={profileData.institutional_email} 
-                onChange={handleChange("institutional_email")}
-                placeholder="aluno@instituicao.edu.br" 
-                className="h-14 rounded-2xl bg-muted/20 border-border/40 font-bold text-primary focus:ring-primary/30" 
               />
             </div>
           </Card>
