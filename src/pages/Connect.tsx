@@ -15,7 +15,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import {
   Globe, Heart, MessageSquare, MoreHorizontal, Image, Link2, FileText,
-  Send, Loader2, User, Flag, Trash2, Users, TrendingUp
+  Send, Loader2, User, Flag, Trash2, Users, TrendingUp, X
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
