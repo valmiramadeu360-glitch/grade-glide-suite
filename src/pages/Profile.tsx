@@ -280,18 +280,6 @@ export default function Profile() {
 
             <div className="space-y-2">
               <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1 flex items-center gap-2">
-                <Linkedin className="h-3 w-3 text-blue-500" /> Perfil LinkedIn
-              </Label>
-              <Input 
-                value={profileData.linkedin_url} 
-                onChange={handleChange("linkedin_url")}
-                placeholder="https://linkedin.com/in/seu-perfil" 
-                className="h-14 rounded-2xl bg-muted/20 border-border/40 font-medium text-blue-500 focus:ring-primary/30" 
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1 flex items-center gap-2">
                 <BookOpen className="h-3 w-3" /> Planos para este Período
               </Label>
               <Textarea 
