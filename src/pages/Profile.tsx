@@ -58,12 +58,8 @@ export default function Profile() {
           career_goal: data.career_goal ?? "",
           study_plans: data.study_plans ?? "",
           portfolio_url: data.portfolio_url ?? "",
-          linkedin_url: data.linkedin_url ?? "",
           university: data.university ?? "",
           course: data.course ?? "",
-          current_period: data.current_period ?? "",
-          registration_number: data.registration_number ?? "",
-          institutional_email: data.institutional_email ?? ""
         });
         setAvatarUrl(data.avatar_url ?? "");
       }
