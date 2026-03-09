@@ -227,20 +227,46 @@ export default function Disciplines({ extraOnly = false }: { extraOnly?: boolean
                 />
               </div>
               <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Nome do Professor (opcional)</Label>
+                <Input 
+                  value={newProfessor} 
+                  onChange={e => setNewProfessor(e.target.value)}
+                  placeholder="Ex: Prof. Dr. João Silva" 
+                  className="h-14 rounded-2xl bg-muted/20 border-border/50 text-base font-bold" 
+                />
+              </div>
+              <div className="space-y-2">
                 <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Cor de Identificação</Label>
-                <div className="grid grid-cols-5 gap-3 p-4 bg-muted/10 rounded-2xl border border-border/40">
-                  {colors.map(c => (
-                    <button
-                      key={c}
-                      onClick={() => setNewColor(c)}
-                      className={cn(
-                        "h-10 w-full rounded-xl transition-all active:scale-90",
-                        newColor === c ? "ring-2 ring-primary ring-offset-2 scale-110 shadow-lg" : "opacity-60"
-                      )}
-                      style={{ backgroundColor: c }}
-                    />
-                  ))}
-                </div>
+                <Popover open={colorPickerOpen} onOpenChange={setColorPickerOpen}>
+                  <PopoverTrigger asChild>
+                    <Button 
+                      variant="outline" 
+                      className="h-14 w-full rounded-2xl bg-muted/20 border-border/50 justify-start gap-4 font-bold"
+                    >
+                      <div 
+                        className="h-8 w-8 rounded-xl shadow-inner" 
+                        style={{ backgroundColor: newColor }}
+                      />
+                      <span className="text-muted-foreground">Clique para escolher a cor</span>
+                      <Palette className="ml-auto h-5 w-5 text-muted-foreground" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-64 p-4 rounded-2xl" align="start">
+                    <div className="grid grid-cols-5 gap-3">
+                      {colors.map(c => (
+                        <button
+                          key={c}
+                          onClick={() => { setNewColor(c); setColorPickerOpen(false); }}
+                          className={cn(
+                            "h-10 w-10 rounded-xl transition-all active:scale-90",
+                            newColor === c ? "ring-2 ring-primary ring-offset-2 scale-110 shadow-lg" : "opacity-70 hover:opacity-100"
+                          )}
+                          style={{ backgroundColor: c }}
+                        />
+                      ))}
+                    </div>
+                  </PopoverContent>
+                </Popover>
               </div>
               <Button 
                 onClick={handleCreate} 
