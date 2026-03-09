@@ -267,9 +267,10 @@ export default function Connect() {
   }
 
   const filteredPosts = useMemo(() => {
+    if (tab === "trending") return trendingPosts;
     if (tab === "following") return posts.filter(p => followingIds.includes(p.user_id));
     return posts;
-  }, [tab, posts, followingIds]);
+  }, [tab, posts, trendingPosts, followingIds]);
 
   if (loading) {
     return (
