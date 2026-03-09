@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { LayoutDashboard, BookOpen, Bell, Settings, Sparkles, LogOut, User, MessageSquare } from "lucide-react";
+import { LayoutDashboard, BookOpen, Bell, Settings, Sparkles, LogOut, User, MessageSquare, Globe } from "lucide-react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -21,6 +21,7 @@ import { cn } from "@/lib/utils";
 const mainItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Minhas Disciplinas", url: "/disciplines", icon: BookOpen },
+  { title: "Connect", url: "/connect", icon: Globe },
   { title: "Cursos Extras", url: "/extra-courses", icon: Sparkles },
   { title: "Cronograma", url: "/reminders", icon: Bell },
   { title: "Configurações", url: "/settings", icon: Settings },
