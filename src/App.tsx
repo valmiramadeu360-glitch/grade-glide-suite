@@ -17,6 +17,7 @@ import Settings from "./pages/Settings";
 import Profile from "./pages/Profile";
 import Feedback from "./pages/Feedback";
 import Connect from "./pages/Connect";
+import Messages from "./pages/Messages";
 import NotFound from "./pages/NotFound";
 
 // Configuração do motor de dados (Performance BI)
