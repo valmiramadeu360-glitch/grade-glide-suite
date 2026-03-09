@@ -334,18 +334,39 @@ export default function Connect() {
             onChange={e => setNewContent(e.target.value)}
             placeholder="Compartilhe um resumo, dúvida ou notícia..."
             className="min-h-[100px] rounded-2xl border-border/50 bg-muted/30 resize-none text-sm font-medium focus:bg-background transition-colors"
-          />
+           />
+          {/* Image Preview */}
+          {previewUrl && (
+            <div className="relative rounded-2xl overflow-hidden border border-border/50">
+              <img src={previewUrl} alt="Preview" className="w-full max-h-64 object-cover" />
+              <Button
+                variant="secondary"
+                size="icon"
+                className="absolute top-2 right-2 h-8 w-8 rounded-full bg-background/80 backdrop-blur-sm"
+                onClick={() => { setSelectedFile(null); setPreviewUrl(null); }}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
           <div className="flex items-center justify-between">
             <div className="flex gap-1">
-              {[
-                { icon: Image, label: "Imagem" },
-                { icon: Link2, label: "Link" },
-                { icon: FileText, label: "Arquivo" },
-              ].map(({ icon: Icon, label }) => (
-                <Button key={label} variant="ghost" size="icon" className="h-10 w-10 rounded-xl text-muted-foreground hover:text-primary" title={label}>
-                  <Icon className="h-4 w-4" />
-                </Button>
-              ))}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleFileSelect}
+              />
+              <Button variant="ghost" size="icon" className="h-10 w-10 rounded-xl text-muted-foreground hover:text-primary" title="Imagem" onClick={() => fileInputRef.current?.click()}>
+                <Image className="h-4 w-4" />
+              </Button>
+              <Button variant="ghost" size="icon" className="h-10 w-10 rounded-xl text-muted-foreground hover:text-primary" title="Link">
+                <Link2 className="h-4 w-4" />
+              </Button>
+              <Button variant="ghost" size="icon" className="h-10 w-10 rounded-xl text-muted-foreground hover:text-primary" title="Arquivo">
+                <FileText className="h-4 w-4" />
+              </Button>
             </div>
             <Button
               onClick={handlePost}
