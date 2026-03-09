@@ -11,7 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { 
   ArrowLeft, User, Camera, Loader2, Cloud, 
   GraduationCap, Target, BookOpen, 
-  Globe, ShieldCheck, Mail, Hash, Linkedin
+  Globe, ShieldCheck, Mail, BookOpen
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
