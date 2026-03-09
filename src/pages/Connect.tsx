@@ -399,10 +399,13 @@ export default function Connect() {
             <Globe className="h-4 w-4 mr-1.5" /> Global
           </TabsTrigger>
           <TabsTrigger value="trending" className="flex-1 h-10 rounded-xl font-black text-[10px] uppercase tracking-widest data-[state=active]:bg-background data-[state=active]:shadow-sm">
-            <TrendingUp className="h-4 w-4 mr-1.5" /> Trending
+            🔥 Em Alta
           </TabsTrigger>
           <TabsTrigger value="following" className="flex-1 h-10 rounded-xl font-black text-[10px] uppercase tracking-widest data-[state=active]:bg-background data-[state=active]:shadow-sm">
             <Users className="h-4 w-4 mr-1.5" /> Seguindo
+          </TabsTrigger>
+          <TabsTrigger value="chat" className="flex-1 h-10 rounded-xl font-black text-[10px] uppercase tracking-widest data-[state=active]:bg-background data-[state=active]:shadow-sm">
+            💬 Chat
           </TabsTrigger>
         </TabsList>
 
