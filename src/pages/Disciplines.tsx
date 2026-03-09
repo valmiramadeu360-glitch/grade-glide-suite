@@ -13,12 +13,16 @@ import {
   DialogTrigger, DialogDescription 
 } from "@/components/ui/dialog";
 import { 
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle 
+} from "@/components/ui/alert-dialog";
+import { 
   Popover, PopoverContent, PopoverTrigger 
 } from "@/components/ui/popover";
 import { 
   Plus, BookOpen, ChevronRight, GraduationCap, 
   Loader2, History, ArrowLeft, RefreshCcw, Search,
-  Palette
+  Palette, Trash2, AlertTriangle
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -35,7 +39,7 @@ interface Discipline {
 
 export default function Disciplines({ extraOnly = false }: { extraOnly?: boolean }) {
   const { user } = useAuth();
-  const { currentLabel, restoreSemester, isLoading: isSwapping } = useSemester();
+  const { currentLabel, setCurrentLabel, loadSemesters, isLoading: isSwapping } = useSemester();
   const navigate = useNavigate();
   const { toast } = useToast();
   
@@ -43,10 +47,17 @@ export default function Disciplines({ extraOnly = false }: { extraOnly?: boolean
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false); // Novo estado para loaders de massa
   const [searchQuery, setSearchQuery] = useState("");
   
+  // Estados de Restauração
   const [restoreDialogOpen, setRestoreDialogOpen] = useState(false);
-  const [restorePeriodLabel, setRestorePeriodLabel] = useState("");
+  const [restoreTargetLabel, setRestoreTargetLabel] = useState(""); // Qual período será restaurado
+  const [restorePeriodLabel, setRestorePeriodLabel] = useState(""); // Novo nome
+
+  // Estados de Exclusão
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deleteTargetLabel, setDeleteTargetLabel] = useState("");
 
   const [newName, setNewName] = useState("");
   const [newProfessor, setNewProfessor] = useState("");
@@ -135,6 +146,74 @@ export default function Disciplines({ extraOnly = false }: { extraOnly?: boolean
     }
   }
 
+  // Lógica Avançada: Restaurar e Renomear para "Em Curso"
+  async function handleRestorePeriod() {
+    if (!restorePeriodLabel.trim() || !user) return;
+    setIsProcessing(true);
+    try {
+      const newLabel = restorePeriodLabel.trim();
+
+      // 1. Atualiza as matérias (Desarquiva e muda o rótulo pro novo nome)
+      const { error: updateError } = await supabase
+        .from("disciplines")
+        .update({ archived: false, semester_label: newLabel })
+        .eq("user_id", user.id)
+        .eq("semester_label", restoreTargetLabel)
+        .eq("archived", true);
+
+      if (updateError) throw updateError;
+
+      // 2. Define o perfil para focar nesse novo semestre restaurado
+      await supabase
+        .from("profiles")
+        .update({ current_semester_label: newLabel, updated_at: new Date().toISOString() })
+        .eq("user_id", user.id);
+
+      toast({ 
+        title: "Período Restaurado! 🚀", 
+        description: `As matérias foram movidas para "Em Curso" sob o ciclo ${newLabel}.` 
+      });
+
+      setRestoreDialogOpen(false);
+      if (setCurrentLabel) setCurrentLabel(newLabel);
+      if (loadSemesters) await loadSemesters();
+      await loadDisciplines();
+    } catch (e: any) {
+      toast({ title: "Erro na restauração", description: e.message, variant: "destructive" });
+    } finally {
+      setIsProcessing(false);
+    }
+  }
+
+  // Lógica Avançada: Excluir Período Definitivamente
+  async function handleDeletePeriod() {
+    if (!user) return;
+    setIsProcessing(true);
+    try {
+      const { error } = await supabase
+        .from("disciplines")
+        .delete()
+        .eq("user_id", user.id)
+        .eq("semester_label", deleteTargetLabel)
+        .eq("archived", true);
+
+      if (error) throw error;
+
+      toast({ 
+        title: "Histórico Apagado", 
+        description: `O período ${deleteTargetLabel} foi excluído permanentemente.` 
+      });
+      
+      setDeleteDialogOpen(false);
+      if (loadSemesters) await loadSemesters();
+      await loadDisciplines();
+    } catch (e: any) {
+      toast({ title: "Erro na exclusão", description: e.message, variant: "destructive" });
+    } finally {
+      setIsProcessing(false);
+    }
+  }
+
   const renderDisciplineCard = (d: Discipline) => (
     <Card 
       key={d.id} 
@@ -203,7 +282,6 @@ export default function Disciplines({ extraOnly = false }: { extraOnly?: boolean
           </div>
         </div>
 
-        {/* Modal Novo Registro com UI Corrigida */}
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button className="h-14 sm:h-16 px-8 rounded-2xl bg-primary text-primary-foreground font-black uppercase text-xs tracking-widest shadow-xl shadow-primary/20 active:scale-95 transition-all w-full md:w-auto">
@@ -324,42 +402,54 @@ export default function Disciplines({ extraOnly = false }: { extraOnly?: boolean
           )}
         </TabsContent>
 
-        {/* Tab: Histórico */}
+        {/* Tab: Histórico com Nova Lógica */}
         <TabsContent value="archive" className="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-500 m-0">
           {archivedBySemester.length === 0 ? (
             <div className="py-24 px-6 text-center flex flex-col items-center bg-card/20 rounded-[40px] border border-border/30">
               <History className="h-14 w-14 text-muted-foreground/20 mb-4" />
               <h3 className="text-xl font-black text-foreground">Arquivo Vazio</h3>
-              <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mt-2">
-                Sem registros passados
-              </p>
+              <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mt-2">Sem registros passados</p>
             </div>
           ) : (
             archivedBySemester.map(([label, items]) => (
-              <section key={label} className="space-y-6">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 px-2">
+              <section key={label} className="space-y-6 bg-card/20 p-6 rounded-[32px] border border-border/30">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 px-2">
                   <div className="flex items-center gap-4">
-                    <div className="h-12 w-12 rounded-2xl bg-muted border border-border/50 flex items-center justify-center shrink-0">
-                      <History className="h-6 w-6 text-muted-foreground" />
+                    <div className="h-14 w-14 rounded-2xl bg-muted border border-border/50 flex items-center justify-center shrink-0 shadow-inner">
+                      <History className="h-7 w-7 text-muted-foreground" />
                     </div>
                     <div>
                       <h3 className="text-2xl sm:text-3xl font-black tracking-tighter text-foreground">{label}</h3>
-                      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mt-0.5">
+                      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mt-1">
                         {items.length} Matérias Arquivadas
                       </p>
                     </div>
                   </div>
 
-                  <Button 
-                    variant="outline" 
-                    className="h-12 rounded-xl text-[10px] font-black uppercase tracking-widest border-amber-500/20 text-amber-500 hover:bg-amber-500/10 hover:text-amber-500 active:scale-95 transition-all w-full sm:w-auto"
-                    onClick={() => {
-                      setRestorePeriodLabel(label);
-                      setRestoreDialogOpen(true);
-                    }}
-                  >
-                    <RefreshCcw className="mr-2 h-4 w-4" /> Restaurar Ciclo
-                  </Button>
+                  <div className="flex items-center gap-3 w-full md:w-auto">
+                    <Button 
+                      variant="outline" 
+                      className="flex-1 md:flex-none h-12 rounded-xl text-[10px] font-black uppercase tracking-widest border-amber-500/20 text-amber-500 hover:bg-amber-500/10 hover:text-amber-500 active:scale-95 transition-all shadow-sm"
+                      onClick={() => {
+                        setRestoreTargetLabel(label);
+                        setRestorePeriodLabel(label); // Auto-preenche com o nome antigo
+                        setRestoreDialogOpen(true);
+                      }}
+                    >
+                      <RefreshCcw className="mr-2 h-4 w-4" /> Restaurar
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      className="h-12 w-12 shrink-0 rounded-xl border-destructive/20 text-destructive hover:bg-destructive/10 bg-background hover:border-destructive/40 active:scale-90 transition-all shadow-sm"
+                      onClick={() => {
+                        setDeleteTargetLabel(label);
+                        setDeleteDialogOpen(true);
+                      }}
+                      title="Excluir Período"
+                    >
+                      <Trash2 className="h-5 w-5" />
+                    </Button>
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6">
@@ -371,15 +461,15 @@ export default function Disciplines({ extraOnly = false }: { extraOnly?: boolean
         </TabsContent>
       </Tabs>
 
-      {/* Modal de Restauração em Massa */}
+      {/* Modal 1: Restauração Interativa */}
       <Dialog open={restoreDialogOpen} onOpenChange={setRestoreDialogOpen}>
         <DialogContent className="w-[95vw] sm:max-w-[400px] bg-card border-border rounded-[32px] p-6 sm:p-8 shadow-2xl">
           <DialogHeader className="text-left space-y-2">
             <DialogTitle className="text-2xl font-black tracking-tight flex items-center gap-3">
-              <RefreshCcw className="text-amber-500 h-6 w-6" /> Restaurar
+              <RefreshCcw className="text-amber-500 h-6 w-6" /> Reativar Ciclo
             </DialogTitle>
             <DialogDescription className="font-medium text-muted-foreground text-sm">
-              As disciplinas deste arquivo irão para a sua aba "Em Curso". Se desejar, você pode renomear o período.
+              As matérias voltarão para a aba "Em Curso". Você pode atualizar o nome do período abaixo se desejar.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-6 pt-4">
@@ -388,35 +478,54 @@ export default function Disciplines({ extraOnly = false }: { extraOnly?: boolean
               <Input 
                 value={restorePeriodLabel} 
                 onChange={e => setRestorePeriodLabel(e.target.value)}
-                placeholder="Ex: 2026.1" 
-                className="h-14 rounded-2xl bg-muted/20 border-border/50 text-base font-bold text-center focus:ring-amber-500/40 focus:bg-background transition-colors" 
+                className="h-14 rounded-2xl bg-muted/20 border-border/50 text-lg font-black text-center focus:ring-amber-500/40 transition-colors" 
               />
             </div>
             <div className="flex gap-3 pt-2">
-              <Button 
-                variant="outline"
-                onClick={() => setRestoreDialogOpen(false)}
-                className="flex-1 h-12 rounded-2xl border-border/50 font-bold uppercase text-[10px] tracking-widest hover:bg-muted"
-              >
+              <Button variant="outline" onClick={() => setRestoreDialogOpen(false)} className="flex-1 h-12 rounded-2xl border-border/50 font-bold uppercase text-[10px] tracking-widest hover:bg-muted">
                 Cancelar
               </Button>
-              <Button 
-                onClick={async () => {
-                  if (restorePeriodLabel.trim()) {
-                    await restoreSemester(restorePeriodLabel.trim());
-                    await loadDisciplines();
-                    setRestoreDialogOpen(false);
-                  }
-                }}
-                disabled={!restorePeriodLabel.trim() || isSwapping}
-                className="flex-1 h-12 rounded-2xl bg-amber-500 text-white hover:bg-amber-600 font-black uppercase text-[10px] tracking-widest active:scale-95 transition-all shadow-lg shadow-amber-500/20"
-              >
-                {isSwapping ? <Loader2 className="h-4 w-4 animate-spin" /> : "Confirmar"}
+              <Button onClick={handleRestorePeriod} disabled={!restorePeriodLabel.trim() || isProcessing} className="flex-1 h-12 rounded-2xl bg-amber-500 text-white hover:bg-amber-600 font-black uppercase text-[10px] tracking-widest active:scale-95 transition-all shadow-lg shadow-amber-500/20">
+                {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : "Confirmar"}
               </Button>
             </div>
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Modal 2: Exclusão Permanente (Danger Zone) */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent className="w-[95vw] sm:max-w-[420px] rounded-[32px] bg-card border-destructive/20 shadow-2xl">
+          <AlertDialogHeader>
+            <div className="flex items-center gap-4 mb-2">
+              <div className="h-12 w-12 rounded-xl bg-destructive/10 flex items-center justify-center shrink-0">
+                <AlertTriangle className="h-6 w-6 text-destructive" />
+              </div>
+              <AlertDialogTitle className="text-xl font-black tracking-tight text-destructive text-left">
+                Destruir Período?
+              </AlertDialogTitle>
+            </div>
+            <AlertDialogDescription className="font-medium text-muted-foreground text-left text-sm">
+              Você está prestes a deletar permanentemente o ciclo <strong className="text-foreground">{deleteTargetLabel}</strong> e todas as matérias contidas nele. Esta ação <strong className="text-destructive">não pode ser desfeita</strong>.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-3 sm:gap-0 mt-4">
+            <AlertDialogCancel className="h-12 rounded-2xl border-none font-bold uppercase text-[10px] tracking-widest bg-muted/50 hover:bg-muted">
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeletePeriod}
+              disabled={isProcessing}
+              className="h-12 rounded-2xl bg-destructive text-white font-black uppercase text-[10px] tracking-widest hover:bg-destructive/90 active:scale-95 transition-all"
+            >
+              {isProcessing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Trash2 className="h-4 w-4 mr-2" />}
+              Sim, Excluir Tudo
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
     </div>
   );
 }
+
