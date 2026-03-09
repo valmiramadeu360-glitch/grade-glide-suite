@@ -60,6 +60,9 @@ export default function Connect() {
   const [newContent, setNewContent] = useState("");
   const [posting, setPosting] = useState(false);
   const [followingIds, setFollowingIds] = useState<string[]>([]);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Comment dialog state
   const [commentPostId, setCommentPostId] = useState<string | null>(null);
