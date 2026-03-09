@@ -15,7 +15,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import {
   Globe, Heart, MessageSquare, MoreHorizontal, Image, Link2, FileText,
-  Send, Loader2, User, Flag, Trash2, Users
+  Send, Loader2, User, Flag, Trash2, Users, TrendingUp
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -55,6 +55,7 @@ export default function Connect() {
   const { toast } = useToast();
   const [tab, setTab] = useState("global");
   const [posts, setPosts] = useState<Post[]>([]);
+  const [trendingPosts, setTrendingPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [newContent, setNewContent] = useState("");
   const [posting, setPosting] = useState(false);
@@ -74,6 +75,7 @@ export default function Connect() {
     if (user) {
       loadFollowing();
       loadPosts();
+      loadTrending();
     }
   }, [user]);
 
@@ -130,6 +132,50 @@ export default function Connect() {
       })));
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function loadTrending() {
+    try {
+      const { data: trendingData } = await supabase
+        .from("trending_posts" as any)
+        .select("*")
+        .limit(30);
+
+      if (!trendingData) { setTrendingPosts([]); return; }
+
+      const postIds = (trendingData as any[]).map((p: any) => p.id);
+      
+      const { data: likesData } = await supabase
+        .from("post_likes")
+        .select("post_id, user_id")
+        .in("post_id", postIds);
+
+      const likesMap: Record<string, { count: number; userLiked: boolean }> = {};
+      (likesData ?? []).forEach(l => {
+        if (!likesMap[l.post_id]) likesMap[l.post_id] = { count: 0, userLiked: false };
+        likesMap[l.post_id].count++;
+        if (l.user_id === user!.id) likesMap[l.post_id].userLiked = true;
+      });
+
+      // Get profiles for trending posts
+      const userIds = [...new Set((trendingData as any[]).map((p: any) => p.user_id))];
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("user_id, full_name, avatar_url, course")
+        .in("user_id", userIds);
+
+      const profileMap = new Map((profiles ?? []).map(p => [p.user_id, p]));
+
+      setTrendingPosts((trendingData as any[]).map((p: any) => ({
+        ...p,
+        profiles: profileMap.get(p.user_id) || null,
+        likes_count: (p as any).likes_count || likesMap[p.id]?.count || 0,
+        comments_count: (p as any).comments_count || 0,
+        user_liked: likesMap[p.id]?.userLiked || false,
+      })));
+    } catch (e) {
+      console.error("Error loading trending:", e);
     }
   }
 
@@ -221,9 +267,10 @@ export default function Connect() {
   }
 
   const filteredPosts = useMemo(() => {
+    if (tab === "trending") return trendingPosts;
     if (tab === "following") return posts.filter(p => followingIds.includes(p.user_id));
     return posts;
-  }, [tab, posts, followingIds]);
+  }, [tab, posts, trendingPosts, followingIds]);
 
   if (loading) {
     return (
@@ -284,17 +331,37 @@ export default function Connect() {
       {/* Feed Tabs */}
       <Tabs value={tab} onValueChange={setTab} className="w-full">
         <TabsList className="w-full h-12 rounded-2xl bg-muted/50 p-1">
-          <TabsTrigger value="global" className="flex-1 h-10 rounded-xl font-black text-xs uppercase tracking-widest data-[state=active]:bg-background data-[state=active]:shadow-sm">
-            <Globe className="h-4 w-4 mr-2" /> Feed Global
+          <TabsTrigger value="global" className="flex-1 h-10 rounded-xl font-black text-[10px] uppercase tracking-widest data-[state=active]:bg-background data-[state=active]:shadow-sm">
+            <Globe className="h-4 w-4 mr-1.5" /> Global
           </TabsTrigger>
-          <TabsTrigger value="following" className="flex-1 h-10 rounded-xl font-black text-xs uppercase tracking-widest data-[state=active]:bg-background data-[state=active]:shadow-sm">
-            <Users className="h-4 w-4 mr-2" /> Seguindo
+          <TabsTrigger value="trending" className="flex-1 h-10 rounded-xl font-black text-[10px] uppercase tracking-widest data-[state=active]:bg-background data-[state=active]:shadow-sm">
+            <TrendingUp className="h-4 w-4 mr-1.5" /> Trending
+          </TabsTrigger>
+          <TabsTrigger value="following" className="flex-1 h-10 rounded-xl font-black text-[10px] uppercase tracking-widest data-[state=active]:bg-background data-[state=active]:shadow-sm">
+            <Users className="h-4 w-4 mr-1.5" /> Seguindo
           </TabsTrigger>
         </TabsList>
 
         <TabsContent value="global" className="mt-4 space-y-4">
           {filteredPosts.length === 0 ? (
             <EmptyFeed message="Nenhuma publicação ainda. Seja o primeiro!" />
+          ) : filteredPosts.map(post => (
+            <PostCard
+              key={post.id}
+              post={post}
+              currentUserId={user!.id}
+              isFollowing={followingIds.includes(post.user_id)}
+              onLike={() => handleLike(post.id, post.user_liked)}
+              onComment={() => openComments(post.id)}
+              onDelete={() => handleDelete(post.id)}
+              onReport={() => setReportPostId(post.id)}
+              onFollow={() => handleFollow(post.user_id)}
+            />
+          ))}
+        </TabsContent>
+        <TabsContent value="trending" className="mt-4 space-y-4">
+          {filteredPosts.length === 0 ? (
+            <EmptyFeed message="Nenhum post em alta ainda. Interaja mais!" />
           ) : filteredPosts.map(post => (
             <PostCard
               key={post.id}

@@ -17,6 +17,7 @@ import Settings from "./pages/Settings";
 import Profile from "./pages/Profile";
 import Feedback from "./pages/Feedback";
 import Connect from "./pages/Connect";
+import Messages from "./pages/Messages";
 import NotFound from "./pages/NotFound";
 
 // Configuração do motor de dados (Performance BI)
@@ -88,6 +89,7 @@ const App = () => (
                 <Route path="/disciplines" element={<ProtectedRoute><Disciplines /></ProtectedRoute>} />
                 <Route path="/disciplines/:id" element={<ProtectedRoute><DisciplineDetail /></ProtectedRoute>} />
                 <Route path="/connect" element={<ProtectedRoute><Connect /></ProtectedRoute>} />
+                <Route path="/messages" element={<ProtectedRoute><Messages /></ProtectedRoute>} />
                 <Route path="/extra-courses" element={<ProtectedRoute><Disciplines extraOnly /></ProtectedRoute>} />
                 <Route path="/reminders" element={<ProtectedRoute><Reminders /></ProtectedRoute>} />
                 <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
