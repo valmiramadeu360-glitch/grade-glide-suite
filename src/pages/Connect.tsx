@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent } from "@/components/ui/card";
@@ -15,7 +15,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import {
   Globe, Heart, MessageSquare, MoreHorizontal, Image, Link2, FileText,
-  Send, Loader2, User, Flag, Trash2, Users, TrendingUp
+  Send, Loader2, User, Flag, Trash2, Users, TrendingUp, X
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -60,6 +60,9 @@ export default function Connect() {
   const [newContent, setNewContent] = useState("");
   const [posting, setPosting] = useState(false);
   const [followingIds, setFollowingIds] = useState<string[]>([]);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Comment dialog state
   const [commentPostId, setCommentPostId] = useState<string | null>(null);
@@ -183,12 +186,29 @@ export default function Connect() {
     if (!newContent.trim() || !user) return;
     setPosting(true);
     try {
+      let mediaUrl: string | null = null;
+
+      // Upload image if selected
+      if (selectedFile) {
+        const fileExt = selectedFile.name.split(".").pop();
+        const filePath = `${user.id}/${Date.now()}.${fileExt}`;
+        const { error: uploadError } = await supabase.storage
+          .from("post-media")
+          .upload(filePath, selectedFile);
+        if (uploadError) throw uploadError;
+        const { data: urlData } = supabase.storage.from("post-media").getPublicUrl(filePath);
+        mediaUrl = urlData.publicUrl;
+      }
+
       const { error } = await supabase.from("posts").insert({
         user_id: user.id,
         content: newContent.trim(),
+        media_url: mediaUrl,
       });
       if (error) throw error;
       setNewContent("");
+      setSelectedFile(null);
+      setPreviewUrl(null);
       toast({ title: "Publicado! 🎉" });
       await loadPosts();
     } catch (e: any) {
@@ -196,6 +216,17 @@ export default function Connect() {
     } finally {
       setPosting(false);
     }
+  }
+
+  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      toast({ title: "Arquivo muito grande", description: "Máximo de 5MB", variant: "destructive" });
+      return;
+    }
+    setSelectedFile(file);
+    setPreviewUrl(URL.createObjectURL(file));
   }
 
   async function handleLike(postId: string, liked: boolean) {
@@ -303,18 +334,39 @@ export default function Connect() {
             onChange={e => setNewContent(e.target.value)}
             placeholder="Compartilhe um resumo, dúvida ou notícia..."
             className="min-h-[100px] rounded-2xl border-border/50 bg-muted/30 resize-none text-sm font-medium focus:bg-background transition-colors"
-          />
+           />
+          {/* Image Preview */}
+          {previewUrl && (
+            <div className="relative rounded-2xl overflow-hidden border border-border/50">
+              <img src={previewUrl} alt="Preview" className="w-full max-h-64 object-cover" />
+              <Button
+                variant="secondary"
+                size="icon"
+                className="absolute top-2 right-2 h-8 w-8 rounded-full bg-background/80 backdrop-blur-sm"
+                onClick={() => { setSelectedFile(null); setPreviewUrl(null); }}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
           <div className="flex items-center justify-between">
             <div className="flex gap-1">
-              {[
-                { icon: Image, label: "Imagem" },
-                { icon: Link2, label: "Link" },
-                { icon: FileText, label: "Arquivo" },
-              ].map(({ icon: Icon, label }) => (
-                <Button key={label} variant="ghost" size="icon" className="h-10 w-10 rounded-xl text-muted-foreground hover:text-primary" title={label}>
-                  <Icon className="h-4 w-4" />
-                </Button>
-              ))}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleFileSelect}
+              />
+              <Button variant="ghost" size="icon" className="h-10 w-10 rounded-xl text-muted-foreground hover:text-primary" title="Imagem" onClick={() => fileInputRef.current?.click()}>
+                <Image className="h-4 w-4" />
+              </Button>
+              <Button variant="ghost" size="icon" className="h-10 w-10 rounded-xl text-muted-foreground hover:text-primary" title="Link">
+                <Link2 className="h-4 w-4" />
+              </Button>
+              <Button variant="ghost" size="icon" className="h-10 w-10 rounded-xl text-muted-foreground hover:text-primary" title="Arquivo">
+                <FileText className="h-4 w-4" />
+              </Button>
             </div>
             <Button
               onClick={handlePost}
@@ -535,6 +587,13 @@ function PostCard({ post, currentUserId, isFollowing, onLike, onComment, onDelet
 
         {/* Content */}
         <p className="text-sm text-foreground/90 leading-relaxed whitespace-pre-wrap">{post.content}</p>
+
+        {/* Media */}
+        {post.media_url && (
+          <div className="rounded-2xl overflow-hidden border border-border/30">
+            <img src={post.media_url} alt="Post media" className="w-full max-h-96 object-cover" loading="lazy" />
+          </div>
+        )}
 
         {post.tag && (
           <Badge variant="secondary" className="rounded-lg text-[10px] font-black uppercase tracking-widest">
