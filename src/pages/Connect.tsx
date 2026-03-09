@@ -284,11 +284,14 @@ export default function Connect() {
       {/* Feed Tabs */}
       <Tabs value={tab} onValueChange={setTab} className="w-full">
         <TabsList className="w-full h-12 rounded-2xl bg-muted/50 p-1">
-          <TabsTrigger value="global" className="flex-1 h-10 rounded-xl font-black text-xs uppercase tracking-widest data-[state=active]:bg-background data-[state=active]:shadow-sm">
-            <Globe className="h-4 w-4 mr-2" /> Feed Global
+          <TabsTrigger value="global" className="flex-1 h-10 rounded-xl font-black text-[10px] uppercase tracking-widest data-[state=active]:bg-background data-[state=active]:shadow-sm">
+            <Globe className="h-4 w-4 mr-1.5" /> Global
           </TabsTrigger>
-          <TabsTrigger value="following" className="flex-1 h-10 rounded-xl font-black text-xs uppercase tracking-widest data-[state=active]:bg-background data-[state=active]:shadow-sm">
-            <Users className="h-4 w-4 mr-2" /> Seguindo
+          <TabsTrigger value="trending" className="flex-1 h-10 rounded-xl font-black text-[10px] uppercase tracking-widest data-[state=active]:bg-background data-[state=active]:shadow-sm">
+            <TrendingUp className="h-4 w-4 mr-1.5" /> Trending
+          </TabsTrigger>
+          <TabsTrigger value="following" className="flex-1 h-10 rounded-xl font-black text-[10px] uppercase tracking-widest data-[state=active]:bg-background data-[state=active]:shadow-sm">
+            <Users className="h-4 w-4 mr-1.5" /> Seguindo
           </TabsTrigger>
         </TabsList>
 
