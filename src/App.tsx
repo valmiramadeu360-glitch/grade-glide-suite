@@ -16,6 +16,7 @@ import Reminders from "./pages/Reminders";
 import Settings from "./pages/Settings";
 import Profile from "./pages/Profile";
 import Feedback from "./pages/Feedback";
+import Connect from "./pages/Connect";
 import NotFound from "./pages/NotFound";
 
 // Configuração do motor de dados (Performance BI)
