@@ -359,6 +359,23 @@ export default function Connect() {
             />
           ))}
         </TabsContent>
+        <TabsContent value="trending" className="mt-4 space-y-4">
+          {filteredPosts.length === 0 ? (
+            <EmptyFeed message="Nenhum post em alta ainda. Interaja mais!" />
+          ) : filteredPosts.map(post => (
+            <PostCard
+              key={post.id}
+              post={post}
+              currentUserId={user!.id}
+              isFollowing={followingIds.includes(post.user_id)}
+              onLike={() => handleLike(post.id, post.user_liked)}
+              onComment={() => openComments(post.id)}
+              onDelete={() => handleDelete(post.id)}
+              onReport={() => setReportPostId(post.id)}
+              onFollow={() => handleFollow(post.user_id)}
+            />
+          ))}
+        </TabsContent>
         <TabsContent value="following" className="mt-4 space-y-4">
           {filteredPosts.length === 0 ? (
             <EmptyFeed message="Siga outros estudantes para ver posts aqui." />
