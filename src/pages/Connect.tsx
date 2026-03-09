@@ -55,6 +55,7 @@ export default function Connect() {
   const { toast } = useToast();
   const [tab, setTab] = useState("global");
   const [posts, setPosts] = useState<Post[]>([]);
+  const [trendingPosts, setTrendingPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [newContent, setNewContent] = useState("");
   const [posting, setPosting] = useState(false);
