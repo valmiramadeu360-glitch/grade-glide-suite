@@ -18,9 +18,12 @@ import {
   AlertDialogTrigger 
 } from "@/components/ui/alert-dialog";
 import { 
+  Popover, PopoverContent, PopoverTrigger 
+} from "@/components/ui/popover";
+import { 
   Plus, BookOpen, ChevronRight, GraduationCap, 
   Loader2, History, ArrowLeft, RefreshCcw, Search,
-  Filter, AlertCircle
+  Filter, AlertCircle, Palette
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -47,11 +50,16 @@ export default function Disciplines({ extraOnly = false }: { extraOnly?: boolean
   const [open, setOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  
+  // Restore State
+  const [restoreDialogOpen, setRestoreDialogOpen] = useState(false);
+  const [restorePeriodLabel, setRestorePeriodLabel] = useState("");
 
   // Form State
   const [newName, setNewName] = useState("");
   const [newProfessor, setNewProfessor] = useState("");
   const [newColor, setNewColor] = useState("#6366F1");
+  const [colorPickerOpen, setColorPickerOpen] = useState(false);
 
   const colors = [
     "#FFB3BA", "#BAFFC9", "#BAE1FF", "#E8BAFF", "#FF10F0", 
@@ -219,20 +227,46 @@ export default function Disciplines({ extraOnly = false }: { extraOnly?: boolean
                 />
               </div>
               <div className="space-y-2">
+                <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Nome do Professor (opcional)</Label>
+                <Input 
+                  value={newProfessor} 
+                  onChange={e => setNewProfessor(e.target.value)}
+                  placeholder="Ex: Prof. Dr. João Silva" 
+                  className="h-14 rounded-2xl bg-muted/20 border-border/50 text-base font-bold" 
+                />
+              </div>
+              <div className="space-y-2">
                 <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Cor de Identificação</Label>
-                <div className="grid grid-cols-5 gap-3 p-4 bg-muted/10 rounded-2xl border border-border/40">
-                  {colors.map(c => (
-                    <button
-                      key={c}
-                      onClick={() => setNewColor(c)}
-                      className={cn(
-                        "h-10 w-full rounded-xl transition-all active:scale-90",
-                        newColor === c ? "ring-2 ring-primary ring-offset-2 scale-110 shadow-lg" : "opacity-60"
-                      )}
-                      style={{ backgroundColor: c }}
-                    />
-                  ))}
-                </div>
+                <Popover open={colorPickerOpen} onOpenChange={setColorPickerOpen}>
+                  <PopoverTrigger asChild>
+                    <Button 
+                      variant="outline" 
+                      className="h-14 w-full rounded-2xl bg-muted/20 border-border/50 justify-start gap-4 font-bold"
+                    >
+                      <div 
+                        className="h-8 w-8 rounded-xl shadow-inner" 
+                        style={{ backgroundColor: newColor }}
+                      />
+                      <span className="text-muted-foreground">Clique para escolher a cor</span>
+                      <Palette className="ml-auto h-5 w-5 text-muted-foreground" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-64 p-4 rounded-2xl" align="start">
+                    <div className="grid grid-cols-5 gap-3">
+                      {colors.map(c => (
+                        <button
+                          key={c}
+                          onClick={() => { setNewColor(c); setColorPickerOpen(false); }}
+                          className={cn(
+                            "h-10 w-10 rounded-xl transition-all active:scale-90",
+                            newColor === c ? "ring-2 ring-primary ring-offset-2 scale-110 shadow-lg" : "opacity-70 hover:opacity-100"
+                          )}
+                          style={{ backgroundColor: c }}
+                        />
+                      ))}
+                    </div>
+                  </PopoverContent>
+                </Popover>
               </div>
               <Button 
                 onClick={handleCreate} 
@@ -306,32 +340,16 @@ export default function Disciplines({ extraOnly = false }: { extraOnly?: boolean
                     </div>
                   </div>
 
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button variant="ghost" className="h-11 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-amber-500/10 hover:text-amber-500">
-                        <RefreshCcw className="mr-2 h-4 w-4" /> Restaurar Ciclo
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent className="bg-card border-border rounded-[32px] p-8">
-                      <AlertDialogHeader>
-                        <AlertDialogTitle className="text-2xl font-black tracking-tight flex items-center gap-3">
-                          <AlertCircle className="text-amber-500 h-6 w-6" /> Trocar Período Ativo?
-                        </AlertDialogTitle>
-                        <AlertDialogDescription className="font-medium text-base">
-                          Ao restaurar o ciclo <strong>{label}</strong>, as matérias de <strong>{currentLabel}</strong> (atuais) serão arquivadas para dar lugar a estas.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter className="gap-3 mt-6">
-                        <AlertDialogCancel className="h-12 rounded-2xl border-none bg-muted font-bold uppercase text-[10px] tracking-widest">Manter como está</AlertDialogCancel>
-                        <AlertDialogAction 
-                          onClick={() => restoreSemester(label)}
-                          className="h-12 rounded-2xl bg-amber-500 text-white font-black uppercase text-[10px] tracking-widest"
-                        >
-                          Confirmar Troca
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
+                  <Button 
+                    variant="ghost" 
+                    className="h-11 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-amber-500/10 hover:text-amber-500"
+                    onClick={() => {
+                      setRestorePeriodLabel(label);
+                      setRestoreDialogOpen(true);
+                    }}
+                  >
+                    <RefreshCcw className="mr-2 h-4 w-4" /> Restaurar Ciclo
+                  </Button>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -342,6 +360,53 @@ export default function Disciplines({ extraOnly = false }: { extraOnly?: boolean
           )}
         </TabsContent>
       </Tabs>
+
+      {/* Restore Period Dialog */}
+      <Dialog open={restoreDialogOpen} onOpenChange={setRestoreDialogOpen}>
+        <DialogContent className="bg-card border-border rounded-[32px] p-8 shadow-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-black tracking-tight flex items-center gap-3">
+              <RefreshCcw className="text-amber-500 h-6 w-6" /> Restaurar Período
+            </DialogTitle>
+            <DialogDescription className="font-medium text-base">
+              Você pode editar o nome do período antes de restaurar. As disciplinas deste período irão para a aba "Em Curso".
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-6 pt-4">
+            <div className="space-y-2">
+              <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Nome do Período</Label>
+              <Input 
+                value={restorePeriodLabel} 
+                onChange={e => setRestorePeriodLabel(e.target.value)}
+                placeholder="Ex: 2026.1, 2025.2..." 
+                className="h-14 rounded-2xl bg-muted/20 border-border/50 text-base font-bold" 
+              />
+            </div>
+            <div className="flex gap-3">
+              <Button 
+                variant="outline"
+                onClick={() => setRestoreDialogOpen(false)}
+                className="flex-1 h-12 rounded-2xl border-border/50 font-bold uppercase text-[10px] tracking-widest"
+              >
+                Cancelar
+              </Button>
+              <Button 
+                onClick={async () => {
+                  if (restorePeriodLabel.trim()) {
+                    await restoreSemester(restorePeriodLabel.trim());
+                    await loadDisciplines();
+                    setRestoreDialogOpen(false);
+                  }
+                }}
+                disabled={!restorePeriodLabel.trim() || isSwapping}
+                className="flex-1 h-12 rounded-2xl bg-amber-500 text-white font-black uppercase text-[10px] tracking-widest"
+              >
+                {isSwapping ? <Loader2 className="h-4 w-4 animate-spin" /> : "Restaurar"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
       
       {/* iOS Bottom Safe Spacer */}
       <div className="pb-24" />
