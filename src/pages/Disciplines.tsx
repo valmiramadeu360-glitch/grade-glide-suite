@@ -394,6 +394,7 @@ export default function Disciplines({ extraOnly = false }: { extraOnly?: boolean
                 onClick={async () => {
                   if (restorePeriodLabel.trim()) {
                     await restoreSemester(restorePeriodLabel.trim());
+                    await loadDisciplines();
                     setRestoreDialogOpen(false);
                   }
                 }}
