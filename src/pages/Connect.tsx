@@ -186,12 +186,29 @@ export default function Connect() {
     if (!newContent.trim() || !user) return;
     setPosting(true);
     try {
+      let mediaUrl: string | null = null;
+
+      // Upload image if selected
+      if (selectedFile) {
+        const fileExt = selectedFile.name.split(".").pop();
+        const filePath = `${user.id}/${Date.now()}.${fileExt}`;
+        const { error: uploadError } = await supabase.storage
+          .from("post-media")
+          .upload(filePath, selectedFile);
+        if (uploadError) throw uploadError;
+        const { data: urlData } = supabase.storage.from("post-media").getPublicUrl(filePath);
+        mediaUrl = urlData.publicUrl;
+      }
+
       const { error } = await supabase.from("posts").insert({
         user_id: user.id,
         content: newContent.trim(),
+        media_url: mediaUrl,
       });
       if (error) throw error;
       setNewContent("");
+      setSelectedFile(null);
+      setPreviewUrl(null);
       toast({ title: "Publicado! 🎉" });
       await loadPosts();
     } catch (e: any) {
@@ -199,6 +216,17 @@ export default function Connect() {
     } finally {
       setPosting(false);
     }
+  }
+
+  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      toast({ title: "Arquivo muito grande", description: "Máximo de 5MB", variant: "destructive" });
+      return;
+    }
+    setSelectedFile(file);
+    setPreviewUrl(URL.createObjectURL(file));
   }
 
   async function handleLike(postId: string, liked: boolean) {
