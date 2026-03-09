@@ -18,9 +18,12 @@ import {
   AlertDialogTrigger 
 } from "@/components/ui/alert-dialog";
 import { 
+  Popover, PopoverContent, PopoverTrigger 
+} from "@/components/ui/popover";
+import { 
   Plus, BookOpen, ChevronRight, GraduationCap, 
   Loader2, History, ArrowLeft, RefreshCcw, Search,
-  Filter, AlertCircle
+  Filter, AlertCircle, Palette
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
