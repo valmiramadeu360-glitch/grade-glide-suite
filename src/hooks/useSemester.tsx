@@ -85,12 +85,16 @@ export function SemesterProvider({ children }: { children: ReactNode }) {
         .eq("user_id", user.id)
         .eq("archived", false);
 
-      // Passo B: Ativar as matérias do semestre alvo
+      // Passo B: Ativar as matérias do semestre alvo E atualizar semester_label para o atual
       const { error: restoreError } = await supabase
         .from("disciplines")
-        .update({ archived: false })
+        .update({ 
+          archived: false,
+          semester_label: targetLabel  // Atualiza para o semestre que está sendo restaurado
+        })
         .eq("user_id", user.id)
-        .eq("semester_label", targetLabel);
+        .eq("semester_label", targetLabel)
+        .eq("archived", true);  // Só restaura disciplinas que estão arquivadas
 
       if (restoreError) throw restoreError;
 
