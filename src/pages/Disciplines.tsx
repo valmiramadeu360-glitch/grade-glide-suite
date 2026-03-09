@@ -340,32 +340,72 @@ export default function Disciplines({ extraOnly = false }: { extraOnly?: boolean
                     </div>
                   </div>
 
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button variant="ghost" className="h-11 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-amber-500/10 hover:text-amber-500">
-                        <RefreshCcw className="mr-2 h-4 w-4" /> Restaurar Ciclo
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent className="bg-card border-border rounded-[32px] p-8">
-                      <AlertDialogHeader>
-                        <AlertDialogTitle className="text-2xl font-black tracking-tight flex items-center gap-3">
-                          <AlertCircle className="text-amber-500 h-6 w-6" /> Trocar Período Ativo?
-                        </AlertDialogTitle>
-                        <AlertDialogDescription className="font-medium text-base">
-                          Ao restaurar o ciclo <strong>{label}</strong>, as matérias de <strong>{currentLabel}</strong> (atuais) serão arquivadas para dar lugar a estas.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter className="gap-3 mt-6">
-                        <AlertDialogCancel className="h-12 rounded-2xl border-none bg-muted font-bold uppercase text-[10px] tracking-widest">Manter como está</AlertDialogCancel>
-                        <AlertDialogAction 
-                          onClick={() => restoreSemester(label)}
-                          className="h-12 rounded-2xl bg-amber-500 text-white font-black uppercase text-[10px] tracking-widest"
-                        >
-                          Confirmar Troca
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
+                  <Button 
+                    variant="ghost" 
+                    className="h-11 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-amber-500/10 hover:text-amber-500"
+                    onClick={() => {
+                      setRestorePeriodLabel(label);
+                      setRestoreDialogOpen(true);
+                    }}
+                  >
+                    <RefreshCcw className="mr-2 h-4 w-4" /> Restaurar Ciclo
+                  </Button>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {items.map(renderDisciplineCard)}
+                </div>
+              </section>
+            ))
+          )}
+        </TabsContent>
+      </Tabs>
+
+      {/* Restore Period Dialog */}
+      <Dialog open={restoreDialogOpen} onOpenChange={setRestoreDialogOpen}>
+        <DialogContent className="bg-card border-border rounded-[32px] p-8 shadow-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-black tracking-tight flex items-center gap-3">
+              <RefreshCcw className="text-amber-500 h-6 w-6" /> Restaurar Período
+            </DialogTitle>
+            <DialogDescription className="font-medium text-base">
+              Você pode editar o nome do período antes de restaurar. As disciplinas deste período irão para a aba "Em Curso".
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-6 pt-4">
+            <div className="space-y-2">
+              <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Nome do Período</Label>
+              <Input 
+                value={restorePeriodLabel} 
+                onChange={e => setRestorePeriodLabel(e.target.value)}
+                placeholder="Ex: 2026.1, 2025.2..." 
+                className="h-14 rounded-2xl bg-muted/20 border-border/50 text-base font-bold" 
+              />
+            </div>
+            <div className="flex gap-3">
+              <Button 
+                variant="outline"
+                onClick={() => setRestoreDialogOpen(false)}
+                className="flex-1 h-12 rounded-2xl border-border/50 font-bold uppercase text-[10px] tracking-widest"
+              >
+                Cancelar
+              </Button>
+              <Button 
+                onClick={async () => {
+                  if (restorePeriodLabel.trim()) {
+                    await restoreSemester(restorePeriodLabel.trim());
+                    setRestoreDialogOpen(false);
+                  }
+                }}
+                disabled={!restorePeriodLabel.trim() || isSwapping}
+                className="flex-1 h-12 rounded-2xl bg-amber-500 text-white font-black uppercase text-[10px] tracking-widest"
+              >
+                {isSwapping ? <Loader2 className="h-4 w-4 animate-spin" /> : "Restaurar"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
