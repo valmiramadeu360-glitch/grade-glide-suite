@@ -143,6 +143,33 @@ export type Database = {
           },
         ]
       }
+      direct_messages: {
+        Row: {
+          content: string
+          created_at: string
+          id: string
+          read_at: string | null
+          receiver_id: string
+          sender_id: string
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          id?: string
+          read_at?: string | null
+          receiver_id: string
+          sender_id: string
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          id?: string
+          read_at?: string | null
+          receiver_id?: string
+          sender_id?: string
+        }
+        Relationships: []
+      }
       discipline_schedules: {
         Row: {
           day_of_week: number
@@ -389,6 +416,13 @@ export type Database = {
             referencedRelation: "posts"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "post_comments_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "trending_posts"
+            referencedColumns: ["id"]
+          },
         ]
       }
       post_likes: {
@@ -416,6 +450,13 @@ export type Database = {
             columns: ["post_id"]
             isOneToOne: false
             referencedRelation: "posts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "post_likes_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "trending_posts"
             referencedColumns: ["id"]
           },
         ]
@@ -451,6 +492,13 @@ export type Database = {
             columns: ["post_id"]
             isOneToOne: false
             referencedRelation: "posts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "post_reports_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "trending_posts"
             referencedColumns: ["id"]
           },
         ]
@@ -600,7 +648,45 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      trending_posts: {
+        Row: {
+          comments_count: number | null
+          content: string | null
+          created_at: string | null
+          engagement_score: number | null
+          id: string | null
+          likes_count: number | null
+          media_url: string | null
+          tag: string | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          comments_count?: never
+          content?: string | null
+          created_at?: string | null
+          engagement_score?: never
+          id?: string | null
+          likes_count?: never
+          media_url?: string | null
+          tag?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          comments_count?: never
+          content?: string | null
+          created_at?: string | null
+          engagement_score?: never
+          id?: string | null
+          likes_count?: never
+          media_url?: string | null
+          tag?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       [_ in never]: never
