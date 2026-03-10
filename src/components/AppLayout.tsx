@@ -8,8 +8,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { useNavigate } from "react-router-dom";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { User, Bell } from "lucide-react";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { User } from "lucide-react";
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const { mode, primaryColor } = useTheme();
@@ -77,40 +76,19 @@ export function AppLayout({ children }: { children: ReactNode }) {
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 sm:gap-3">
-                {/* Notification Bell */}
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <button className="relative h-10 w-10 sm:h-11 sm:w-11 rounded-xl flex items-center justify-center hover:bg-muted/50 transition-colors" title="Notificações">
-                      <Bell className="h-5 w-5 text-muted-foreground" />
-                      <span className="absolute top-1.5 right-1.5 h-2.5 w-2.5 rounded-full bg-destructive ring-2 ring-background animate-pulse" />
-                    </button>
-                  </PopoverTrigger>
-                  <PopoverContent align="end" className="w-80 rounded-2xl bg-card border-border shadow-2xl p-0 overflow-hidden">
-                    <div className="p-4 border-b border-border/40">
-                      <p className="text-sm font-black text-foreground">Notificações</p>
-                    </div>
-                    <div className="p-8 flex flex-col items-center justify-center text-center">
-                      <Bell className="h-8 w-8 text-muted-foreground/30 mb-2" />
-                      <p className="text-xs font-bold text-muted-foreground">Nenhuma notificação no momento.</p>
-                    </div>
-                  </PopoverContent>
-                </Popover>
-
-                {/* Avatar */}
-                <button 
-                  onClick={() => navigate("/profile")}
-                  className="h-10 w-10 sm:h-11 sm:w-11 rounded-full overflow-hidden border-2 border-border/50 hover:border-primary/50 transition-all shadow-sm hover:shadow-md hover:scale-105 active:scale-95"
-                  title="Meu Perfil"
-                >
-                  <Avatar className="h-full w-full bg-card">
-                    <AvatarImage src={avatarUrl} className="object-cover" />
-                    <AvatarFallback className="bg-primary/10 text-primary">
-                      <User className="h-5 w-5" />
-                    </AvatarFallback>
-                  </Avatar>
-                </button>
-              </div>
+              {/* Botão Redondo com a Foto do Aluno (UX Premium) */}
+              <button 
+                onClick={() => navigate("/profile")}
+                className="h-10 w-10 sm:h-11 sm:w-11 rounded-full overflow-hidden border-2 border-border/50 hover:border-primary/50 transition-all shadow-sm hover:shadow-md hover:scale-105 active:scale-95"
+                title="Meu Perfil"
+              >
+                <Avatar className="h-full w-full bg-card">
+                  <AvatarImage src={avatarUrl} className="object-cover" />
+                  <AvatarFallback className="bg-primary/10 text-primary">
+                    <User className="h-5 w-5" />
+                  </AvatarFallback>
+                </Avatar>
+              </button>
 
             </div>
           </header>

@@ -76,6 +76,8 @@ export function SemesterProvider({ children }: { children: ReactNode }) {
     setIsLoading(true);
 
     try {
+      const activeLabel = currentLabel;
+
       // Passo A: Arquivar as matérias do semestre atual
       await supabase
         .from("disciplines")
@@ -83,29 +85,23 @@ export function SemesterProvider({ children }: { children: ReactNode }) {
         .eq("user_id", user.id)
         .eq("archived", false);
 
-      // Passo B: Restaurar as disciplinas do semestre alvo
-      // CORREÇÃO: atualizar semester_label para o currentLabel (semestre atual ativo)
+      // Passo B: Ativar as matérias do semestre alvo
       const { error: restoreError } = await supabase
         .from("disciplines")
-        .update({ 
-          archived: false,
-          semester_label: currentLabel  // CRÍTICO: usar currentLabel, não targetLabel
-        })
+        .update({ archived: false })
         .eq("user_id", user.id)
-        .eq("semester_label", targetLabel)
-        .eq("archived", true);  // Só restaura disciplinas que estão arquivadas
+        .eq("semester_label", targetLabel);
 
       if (restoreError) throw restoreError;
 
-      // Manter currentLabel como está (não mudar para targetLabel)
+      await setCurrentLabel(targetLabel);
       await loadSemesters();
 
       toast({
         title: "Semestre Restaurado",
-        description: `Disciplinas de ${targetLabel} foram restauradas para ${currentLabel}.`,
+        description: `Agora você está visualizando ${targetLabel} como período ativo.`,
       });
     } catch (error) {
-      console.error("Erro na restauração:", error);
       toast({ title: "Erro na restauração", variant: "destructive" });
     } finally {
       setIsLoading(false);

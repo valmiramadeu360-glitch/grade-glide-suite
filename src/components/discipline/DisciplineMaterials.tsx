@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Link as LinkIcon, FileIcon, ImageIcon, Trash2, ExternalLink, Loader2, CloudOff, Bookmark } from "lucide-react";
+import { Plus, Link as LinkIcon, FileIcon, ImageIcon, Trash2, ExternalLink, Loader2, CloudOff, Bell, Bookmark } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
@@ -25,10 +25,12 @@ export function DisciplineMaterials({ disciplineId }: { disciplineId: string }) 
   const [materials, setMaterials] = useState<Material[]>([]);
   const [open, setOpen] = useState(false);
   
+  // Form State
   const [title, setTitle] = useState("");
   const [type, setType] = useState<string>("link");
   const [url, setUrl] = useState("");
   
+  // Loaders
   const [uploading, setUploading] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [openingId, setOpeningId] = useState<string | null>(null); 
@@ -61,11 +63,11 @@ export function DisciplineMaterials({ disciplineId }: { disciplineId: string }) 
 
   async function addMaterial() {
     if (!title.trim() || !user) {
-      toast({ title: "Identificação obrigatória", description: "Dê um nome para o seu material.", variant: "destructive" });
+      toast({ title: "Título obrigatório", variant: "destructive" });
       return;
     }
     if (isOffline) {
-      toast({ title: "Você está offline", description: "Conecte-se para enviar arquivos para a nuvem.", variant: "destructive" });
+      toast({ title: "Você está offline", description: "Conecte-se para enviar materiais para a nuvem.", variant: "destructive" });
       return;
     }
 
@@ -87,7 +89,7 @@ export function DisciplineMaterials({ disciplineId }: { disciplineId: string }) 
       } else {
         const file = fileRef.current?.files?.[0];
         if (!file) {
-          toast({ title: "Arquivo Ausente", description: "Selecione um PDF ou Imagem no seu dispositivo.", variant: "destructive" });
+          toast({ title: "Selecione um arquivo", variant: "destructive" });
           return;
         }
         
@@ -96,6 +98,7 @@ export function DisciplineMaterials({ disciplineId }: { disciplineId: string }) 
         const fileName = `${Math.random()}.${fileExt}`;
         const path = `${user.id}/${disciplineId}/${Date.now()}_${fileName}`;
         
+        // Faz o Upload no Bucket
         const { error: upErr } = await supabase.storage.from("materials").upload(path, file, {
           contentType: file.type,
           upsert: false
@@ -103,6 +106,7 @@ export function DisciplineMaterials({ disciplineId }: { disciplineId: string }) 
         
         if (upErr) throw upErr;
 
+        // Salva a referência no Banco de Dados
         const isImage = file.type.startsWith("image/");
         const { error: insErr } = await supabase.from("materials").insert({
           discipline_id: disciplineId,
@@ -114,15 +118,15 @@ export function DisciplineMaterials({ disciplineId }: { disciplineId: string }) 
         if (insErr) throw insErr;
       }
 
-      toast({ title: "Material arquivado! 📎" });
+      toast({ title: "Material arquivado! 📎", description: "O link/arquivo já está disponível para estudo." });
       
       setTitle("");
       setUrl("");
-      if (fileRef.current) fileRef.current.value = "";
+      if (fileRef.current) fileRef.current.value = ""; // Limpa o input file
       setOpen(false);
       loadMaterials();
     } catch (error: any) {
-      toast({ title: "Falha na transferência", description: error.message, variant: "destructive" });
+      toast({ title: "Erro ao salvar", description: error.message, variant: "destructive" });
     } finally {
       setUploading(false);
     }
@@ -137,6 +141,7 @@ export function DisciplineMaterials({ disciplineId }: { disciplineId: string }) 
     if (m.file_path) {
       setOpeningId(m.id);
       try {
+        // Tenta gerar uma URL temporária (Signed URL) que dura 60 segundos
         const { data, error } = await supabase.storage.from("materials").createSignedUrl(m.file_path, 60); 
         
         if (error) throw error;
@@ -145,11 +150,12 @@ export function DisciplineMaterials({ disciplineId }: { disciplineId: string }) 
           window.open(data.signedUrl, "_blank");
         }
       } catch (err) {
+        // Fallback para URL pública caso a pasta não seja privada
         const { data: publicData } = supabase.storage.from("materials").getPublicUrl(m.file_path);
         if (publicData?.publicUrl) {
           window.open(publicData.publicUrl, "_blank");
         } else {
-          toast({ title: "Acesso Negado", description: "Arquivo corrompido ou indisponível.", variant: "destructive" });
+          toast({ title: "Acesso Negado", description: "Não foi possível acessar este arquivo no servidor.", variant: "destructive" });
         }
       } finally {
         setOpeningId(null);
@@ -159,19 +165,19 @@ export function DisciplineMaterials({ disciplineId }: { disciplineId: string }) 
 
   async function deleteMaterial(m: Material) {
     if (isOffline) {
-      toast({ title: "Modo Offline", description: "Conecte-se para apagar arquivos do servidor.", variant: "destructive" });
+      toast({ title: "Modo Offline", description: "Não é possível excluir sem internet.", variant: "destructive" });
       return;
     }
-    if (deletingId === m.id) return; // Trava contra duplo clique
-    
-    if (!window.confirm(`Deseja remover permanentemente "${m.title}" do seu acervo?`)) return;
+    if (!window.confirm(`Deseja remover permanentemente o material "${m.title}"?`)) return;
 
     try {
       setDeletingId(m.id);
       
+      // 1. Deleta do Banco de Dados primeiro
       const { error } = await supabase.from("materials").delete().eq("id", m.id);
       if (error) throw error;
       
+      // 2. Se for arquivo físico, remove do Bucket (Storage)
       if (m.file_path) {
         await supabase.storage.from("materials").remove([m.file_path]);
       }
@@ -179,7 +185,7 @@ export function DisciplineMaterials({ disciplineId }: { disciplineId: string }) 
       setMaterials(materials.filter(item => item.id !== m.id));
       toast({ title: "Material excluído" });
     } catch (error: any) {
-      toast({ title: "Erro na exclusão", description: error.message, variant: "destructive" });
+      toast({ title: "Erro ao deletar", description: error.message, variant: "destructive" });
     } finally {
       setDeletingId(null);
     }
@@ -200,22 +206,22 @@ export function DisciplineMaterials({ disciplineId }: { disciplineId: string }) 
 
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button size="sm" disabled={isOffline} className="h-10 sm:h-12 px-5 sm:px-6 rounded-xl shadow-lg shadow-primary/20 font-black text-[10px] sm:text-xs uppercase tracking-widest bg-primary text-primary-foreground hover:bg-primary/90 active:scale-95 transition-all">
+            <Button size="sm" disabled={isOffline} className="h-10 sm:h-12 px-5 sm:px-6 rounded-xl shadow-lg shadow-primary/20 font-black text-[10px] sm:text-xs uppercase tracking-widest bg-primary text-primary-foreground hover:bg-primary/90">
               <Plus className="mr-1.5 h-4 w-4" /> Adicionar
             </Button>
           </DialogTrigger>
-          <DialogContent className="w-[95vw] sm:max-w-[450px] rounded-[32px] bg-card border-border p-6 sm:p-8 shadow-2xl">
-            <DialogHeader className="text-left space-y-1">
-              <DialogTitle className="text-2xl font-black text-foreground tracking-tight">Novo Material</DialogTitle>
-              <DialogDescription className="font-medium text-muted-foreground text-sm">
+          <DialogContent className="w-[95vw] sm:max-w-[450px] rounded-[32px] bg-card border-border p-6 sm:p-8">
+            <DialogHeader className="text-left">
+              <DialogTitle className="text-2xl font-black text-foreground">Novo Material</DialogTitle>
+              <DialogDescription className="font-medium text-muted-foreground text-sm mt-1">
                 Arquive links de Drive, Notion ou faça upload de apostilas em PDF.
               </DialogDescription>
             </DialogHeader>
             
-            <div className="space-y-6 pt-4">
+            <div className="space-y-6 pt-6">
               {isOffline && (
-                <div className="bg-destructive/5 border border-destructive/20 text-destructive p-3 rounded-2xl flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest animate-pulse shadow-inner">
-                  <CloudOff className="h-4 w-4 shrink-0" /> Sem conexão. Ação pausada.
+                <div className="bg-destructive/10 border border-destructive/20 text-destructive p-3 rounded-2xl flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest animate-pulse">
+                  <CloudOff className="h-4 w-4" /> Sem conexão com a nuvem.
                 </div>
               )}
 
@@ -225,19 +231,19 @@ export function DisciplineMaterials({ disciplineId }: { disciplineId: string }) 
                   value={title} 
                   onChange={(e) => setTitle(e.target.value)} 
                   placeholder="Ex: Slides da Aula 01, Drive da Turma..." 
-                  className="h-14 rounded-2xl bg-muted/20 border-border/50 text-base font-bold focus:ring-primary/30 transition-colors" 
+                  className="h-14 rounded-2xl bg-background border-border text-base font-bold focus:ring-primary/20" 
                 />
               </div>
 
               <div className="space-y-2">
                 <Label className="font-black text-[10px] uppercase tracking-widest text-muted-foreground ml-1">Formato do Material</Label>
                 <Select value={type} onValueChange={setType}>
-                  <SelectTrigger className="h-14 rounded-2xl bg-muted/20 border border-border/50 font-bold text-foreground focus:ring-primary/30 transition-colors">
+                  <SelectTrigger className="h-14 rounded-2xl bg-background border border-border font-bold text-foreground focus:ring-primary/20">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="rounded-2xl bg-popover border border-border shadow-2xl">
-                    <SelectItem value="link" className="py-3 font-bold cursor-pointer">URL Externa (Web, Drive) 🌐</SelectItem>
-                    <SelectItem value="file" className="py-3 font-bold cursor-pointer">Upload de Arquivo (PDF, Imagem) 📎</SelectItem>
+                    <SelectItem value="link" className="py-3 font-medium cursor-pointer">URL Externa (Web, Drive) 🌐</SelectItem>
+                    <SelectItem value="file" className="py-3 font-medium cursor-pointer">Upload de Arquivo (PDF, Imagem) 📎</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -249,7 +255,7 @@ export function DisciplineMaterials({ disciplineId }: { disciplineId: string }) 
                     value={url} 
                     onChange={(e) => setUrl(e.target.value)} 
                     placeholder="Ex: docs.google.com/..." 
-                    className="h-14 rounded-2xl bg-muted/20 border-border/50 font-medium focus:ring-primary/30 text-primary transition-colors" 
+                    className="h-14 rounded-2xl bg-background border-border font-medium focus:ring-primary/20 text-primary" 
                   />
                 </div>
               ) : (
@@ -258,16 +264,16 @@ export function DisciplineMaterials({ disciplineId }: { disciplineId: string }) 
                   <Input 
                     ref={fileRef} 
                     type="file" 
-                    className="h-14 rounded-2xl bg-muted/20 border-border/50 cursor-pointer file:mr-4 file:py-2 file:px-5 file:rounded-xl file:border-0 file:text-[10px] file:uppercase file:tracking-widest file:font-black file:bg-primary/10 file:text-primary hover:file:bg-primary hover:file:text-primary-foreground transition-all pt-2.5 focus:ring-primary/30" 
+                    className="h-14 rounded-2xl bg-background border-border cursor-pointer file:mr-4 file:py-2.5 file:px-5 file:rounded-xl file:border-0 file:text-[10px] file:uppercase file:tracking-widest file:font-black file:bg-primary/10 file:text-primary hover:file:bg-primary hover:file:text-primary-foreground transition-all pt-2.5" 
                   />
                 </div>
               )}
               
-              <div className="pt-2">
+              <div className="pt-4">
                 <Button 
                   onClick={addMaterial} 
                   disabled={uploading || isOffline || !title.trim()} 
-                  className="w-full h-14 rounded-2xl font-black uppercase tracking-widest text-xs shadow-xl shadow-primary/20 bg-primary text-primary-foreground hover:bg-primary/90 active:scale-95 transition-all"
+                  className="w-full h-14 rounded-2xl font-black uppercase tracking-widest text-xs shadow-xl shadow-primary/20 bg-primary text-primary-foreground hover:bg-primary/90 active:scale-[0.98] transition-transform"
                 >
                   {uploading ? (
                     <>
@@ -284,8 +290,8 @@ export function DisciplineMaterials({ disciplineId }: { disciplineId: string }) 
       <CardContent className="p-4 sm:p-6 bg-card/30">
         {materials.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-center border-2 border-dashed border-border/50 rounded-[32px] bg-background">
-            <div className="h-20 w-20 rounded-full bg-muted/50 flex items-center justify-center mb-5 shadow-inner">
-              <Bookmark className="h-10 w-10 text-muted-foreground/30" />
+            <div className="h-20 w-20 rounded-full bg-muted/50 flex items-center justify-center mb-4">
+              <Bookmark className="h-10 w-10 text-muted-foreground/40" />
             </div>
             <h3 className="text-xl font-black text-foreground">Repositório Vazio</h3>
             <p className="text-sm font-medium text-muted-foreground mt-2 max-w-[250px]">Adicione os PDFs e links vitais para o estudo desta matéria.</p>
@@ -300,10 +306,10 @@ export function DisciplineMaterials({ disciplineId }: { disciplineId: string }) 
               return (
                 <div 
                   key={m.id} 
-                  className="group flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6 rounded-[24px] p-5 sm:p-6 bg-card border border-border/50 hover:border-primary/40 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all active:scale-[0.99]"
+                  className="group flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6 rounded-[24px] p-5 sm:p-6 bg-background border border-border/50 hover:border-primary/40 hover:shadow-lg hover:-translate-y-1 transition-all"
                 >
                   <div className="flex items-center gap-4 sm:gap-5 flex-1 min-w-0">
-                    <div className="h-12 w-12 sm:h-14 sm:w-14 bg-muted/30 border border-border/50 shadow-inner rounded-2xl flex items-center justify-center shrink-0 group-hover:bg-primary/10 transition-colors">
+                    <div className="h-12 w-12 sm:h-14 sm:w-14 bg-card border border-border/40 shadow-sm rounded-xl flex items-center justify-center shrink-0 group-hover:bg-primary/10 transition-colors">
                       <Icon className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />
                     </div>
                     <div className="flex-1 min-w-0">
@@ -316,17 +322,16 @@ export function DisciplineMaterials({ disciplineId }: { disciplineId: string }) 
                     </div>
                   </div>
                   
-                  <div className="flex items-center justify-end gap-3 mt-4 sm:mt-0 w-full sm:w-auto border-t sm:border-0 border-border/50 pt-4 sm:pt-0">
+                  {/* Botões de Ação */}
+                  <div className="flex items-center justify-end gap-3 mt-2 sm:mt-0 w-full sm:w-auto border-t sm:border-0 border-border/50 pt-4 sm:pt-0">
                     {(m.url || m.file_path) && (
                       <Button
                         variant="outline"
                         onClick={() => openMaterial(m)}
                         disabled={isOpening || isOffline}
                         className={cn(
-                          "h-12 flex-1 sm:flex-none sm:w-auto rounded-xl font-black text-[10px] uppercase tracking-widest transition-all shadow-sm",
-                          m.type === "link" 
-                            ? "bg-primary/10 text-primary border-primary/20 hover:bg-primary hover:text-primary-foreground" 
-                            : "bg-background text-foreground border-border/50 hover:bg-muted"
+                          "h-12 flex-1 sm:flex-none sm:w-auto rounded-xl font-bold text-xs uppercase tracking-widest transition-all shadow-sm",
+                          m.type === "link" ? "bg-primary/10 text-primary border-primary/20 hover:bg-primary hover:text-primary-foreground" : "bg-card text-foreground border-border hover:bg-muted"
                         )}
                         title="Acessar Material"
                       >
@@ -337,9 +342,9 @@ export function DisciplineMaterials({ disciplineId }: { disciplineId: string }) 
                     
                     <Button
                       size="icon"
-                      variant="ghost"
+                      variant="outline"
                       disabled={isDeleting || isOffline}
-                      className="h-12 w-12 shrink-0 rounded-xl text-destructive hover:bg-destructive/10 hover:border-destructive/30 transition-all opacity-100 sm:opacity-0 group-hover:opacity-100 bg-background sm:bg-transparent"
+                      className="h-12 w-12 shrink-0 rounded-xl text-destructive hover:bg-destructive/10 hover:border-destructive/30 border-border bg-card transition-all sm:opacity-0 group-hover:opacity-100"
                       title="Excluir Material"
                       onClick={() => deleteMaterial(m)}
                     >
@@ -356,4 +361,3 @@ export function DisciplineMaterials({ disciplineId }: { disciplineId: string }) 
     </Card>
   );
 }
-

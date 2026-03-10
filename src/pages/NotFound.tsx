@@ -8,7 +8,7 @@ const NotFound = () => {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Log do erro para ajudar a debugar links quebrados no futuro
+    // Log do erro para ajudar você a debugar se houver links quebrados no futuro
     console.error(
       "404 Error: Rota acadêmica inexistente acessada ->", 
       location.pathname
@@ -28,10 +28,10 @@ const NotFound = () => {
 
       <div className="max-w-md space-y-3 animate-in fade-in slide-in-from-bottom-4 duration-700 delay-150">
         <h1 className="text-7xl sm:text-8xl font-black text-foreground tracking-tighter">404</h1>
-        <h2 className="text-2xl sm:text-3xl font-black text-foreground">Rota Não Encontrada</h2>
+        <h2 className="text-2xl sm:text-3xl font-black text-foreground">Página não encontrada</h2>
         <p className="text-muted-foreground text-sm sm:text-base font-medium leading-relaxed px-4">
           Parece que você tentou acessar um conteúdo que não existe, foi movido ou arquivado. 
-          Verifique se o link da disciplina ou material está correto.
+          Verifique se o link do material ou disciplina está correto.
         </p>
       </div>
 
@@ -42,7 +42,7 @@ const NotFound = () => {
           className="border-border bg-card text-foreground hover:bg-muted/50 w-full sm:w-auto px-8 h-14 rounded-2xl font-bold gap-3 shadow-sm active:scale-[0.98] transition-all"
         >
           <ArrowLeft className="h-5 w-5" />
-          Voltar à página anterior
+          Voltar a página anterior
         </Button>
         
         <Button 
