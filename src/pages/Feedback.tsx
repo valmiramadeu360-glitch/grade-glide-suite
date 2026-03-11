@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Card } from "@/components/ui/card";
@@ -11,8 +11,9 @@ import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 import { 
   ArrowLeft, Send, Loader2, 
-  ShieldCheck, Sparkles, AlertCircle
+  ShieldCheck, Sparkles, AlertCircle, Image as ImageIcon, Video, X, Paperclip
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 const CATEGORIES = [
   { value: "improvement", label: "Sugestão de Melhoria" },
@@ -25,26 +26,67 @@ export default function Feedback() {
   const { user } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [category, setCategory] = useState("improvement");
   const [message, setMessage] = useState("");
   const [isAnonymous, setIsAnonymous] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  
+  // Estados para Mídia
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+
+  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Limite de 50MB
+    if (file.size > 50 * 1024 * 1024) {
+      toast({ title: "Arquivo muito grande", description: "O limite de upload é de 50MB.", variant: "destructive" });
+      return;
+    }
+
+    setSelectedFile(file);
+    setPreviewUrl(URL.createObjectURL(file));
+  }
+
+  function clearFile() {
+    setSelectedFile(null);
+    setPreviewUrl(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
 
   async function handleSubmit() {
     if (!message.trim()) {
-      toast({ title: "Mensagem vazia", description: "Por favor, digite seu feedback antes de enviar.", variant: "destructive" });
+      toast({ title: "Mensagem vazia", description: "Por favor, descreva a situação antes de enviar.", variant: "destructive" });
       return;
     }
 
     setSubmitting(true);
 
     try {
-      // 1. Registro no Banco de Dados (Backup local do Supabase)
+      let mediaUrl: string | null = null;
+
+      // 1. Upload da Mídia (Se houver)
+      if (selectedFile) {
+        const fileExt = selectedFile.name.split('.').pop()?.toLowerCase();
+        const fileName = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExt}`;
+        const filePath = `feedbacks/${fileName}`; // Pasta organizada
+        
+        const { error: uploadError } = await supabase.storage.from('feedback_media').upload(filePath, selectedFile);
+        if (uploadError) throw uploadError;
+        
+        const { data: publicUrlData } = supabase.storage.from('feedback_media').getPublicUrl(filePath);
+        mediaUrl = publicUrlData.publicUrl;
+      }
+
+      // 2. Registro no Banco de Dados 
       const payload: any = {
         category,
         message: message.trim(),
         is_anonymous: isAnonymous,
+        media_url: mediaUrl, // Novo campo
       };
 
       if (!isAnonymous && user) {
@@ -54,7 +96,7 @@ export default function Feedback() {
 
       await supabase.from("feedbacks").insert(payload);
 
-      // 2. Envio de E-mail via Web3Forms (A chave já está configurada para seu e-mail)
+      // 3. Disparo de E-mail para Administração
       const categoryLabel = CATEGORIES.find(c => c.value === category)?.label ?? category;
       
       const emailPayload = {
@@ -72,6 +114,8 @@ export default function Feedback() {
           
           MENSAGEM DO USUÁRIO:
           ${message.trim()}
+
+          ${mediaUrl ? `\nANEXO (Print/Vídeo):\n${mediaUrl}` : '\nNenhum anexo enviado.'}
           ------------------------------------------
           Enviado através da Central de Apoio EduFlow 2.0
         `,
@@ -87,21 +131,22 @@ export default function Feedback() {
 
       if (result.success) {
         toast({
-          title: "Feedback Enviado!",
-          description: "Sua mensagem foi entregue à administração do EduFlow. Obrigado!",
+          title: "Recebemos sua mensagem! 🚀",
+          description: "Nossa equipe já foi alertada e vai analisar o seu relato.",
         });
-        // Limpa o formulário após o sucesso
+        // Reset Limpo
         setMessage("");
         setCategory("improvement");
         setIsAnonymous(false);
+        clearFile();
       } else {
-        throw new Error(result.message || "Erro de conexão com o servidor de e-mail.");
+        throw new Error(result.message || "Erro no disparo do e-mail.");
       }
     } catch (error: any) {
       console.error("Erro no feedback:", error);
       toast({ 
-        title: "Erro no envio", 
-        description: "Salvamos sua mensagem no banco local, mas o envio do alerta por e-mail falhou. Tente novamente mais tarde.", 
+        title: "Erro na conexão", 
+        description: "Salvamos sua mensagem no servidor, mas o alerta por e-mail falhou. Nós leremos em breve.", 
         variant: "destructive" 
       });
     } finally {
@@ -112,7 +157,7 @@ export default function Feedback() {
   return (
     <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in duration-700 px-4 sm:px-6 pb-24 sm:pb-32 overflow-x-hidden">
       
-      {/* Header Mobile-First */}
+      {/* Header */}
       <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 pt-6">
         <div className="flex items-center gap-5 w-full sm:w-auto">
           <Button
@@ -134,51 +179,50 @@ export default function Feedback() {
         </div>
       </header>
 
-      {/* Grid de Conteúdo Responsivo */}
+      {/* Grid Principal */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-8 items-start">
         
-        {/* Painel Informativo Lateral */}
+        {/* Painel Informativo */}
         <div className="lg:col-span-2 space-y-6">
-          <Card className="rounded-[32px] border-border/40 bg-primary/5 p-8 sm:p-10 shadow-sm transition-all hover:shadow-md">
+          <Card className="rounded-[32px] border-border/40 bg-primary/5 p-8 sm:p-10 shadow-sm">
             <div className="h-16 w-16 rounded-2xl bg-primary/20 flex items-center justify-center mb-6">
               <Sparkles className="h-8 w-8 text-primary" />
             </div>
-            <h3 className="text-2xl font-black tracking-tight text-foreground">Como Funciona?</h3>
+            <h3 className="text-2xl font-black tracking-tight text-foreground">Ajudar é construir</h3>
             <p className="text-sm font-medium text-muted-foreground leading-relaxed mt-4">
-              Ao enviar um relato de problema ou sugestão, sua mensagem é registrada de forma segura em nosso banco de dados e um alerta imediato é disparado para o e-mail da nossa equipe de administração.
+              Encontrou um bug na tela? Quer sugerir uma funcionalidade matadora? Use este canal. Envie prints ou vídeos para facilitar o nosso trabalho de correção!
             </p>
             
             <div className="pt-8 space-y-5">
-              <div className="flex items-center gap-4 bg-background p-4 rounded-2xl border border-border/50">
+              <div className="flex items-center gap-4 bg-background p-4 rounded-2xl border border-border/50 shadow-sm">
                 <div className="h-10 w-10 rounded-full bg-emerald-500/10 flex items-center justify-center shrink-0">
                   <ShieldCheck className="h-5 w-5 text-emerald-500" />
                 </div>
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-widest text-foreground">Anonimato Garantido</p>
-                  <p className="text-xs text-muted-foreground font-medium mt-0.5">Oculte seus dados se preferir</p>
+                  <p className="text-xs text-muted-foreground font-medium mt-0.5">Sua privacidade intacta</p>
                 </div>
               </div>
 
-              <div className="flex items-center gap-4 bg-background p-4 rounded-2xl border border-border/50">
+              <div className="flex items-center gap-4 bg-background p-4 rounded-2xl border border-border/50 shadow-sm">
                 <div className="h-10 w-10 rounded-full bg-amber-500/10 flex items-center justify-center shrink-0">
                   <AlertCircle className="h-5 w-5 text-amber-500" />
                 </div>
                 <div>
-                  <p className="text-[10px] font-black uppercase tracking-widest text-foreground">Análise Ágil</p>
-                  <p className="text-xs text-muted-foreground font-medium mt-0.5">Bugs são lidos em até 24h</p>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-foreground">Upload de Mídia</p>
+                  <p className="text-xs text-muted-foreground font-medium mt-0.5">Envie fotos ou vídeos do erro</p>
                 </div>
               </div>
             </div>
           </Card>
         </div>
 
-        {/* Formulário Principal de Envio */}
+        {/* Formulário de Envio */}
         <Card className="lg:col-span-3 rounded-[32px] border-border/40 bg-card p-6 sm:p-10 shadow-2xl">
           <div className="space-y-8">
             
-            {/* Seletor de Categoria */}
             <div className="space-y-3">
-              <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Assunto do Contato</Label>
+              <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Assunto do Relato</Label>
               <Select value={category} onValueChange={setCategory}>
                 <SelectTrigger className="h-14 sm:h-16 rounded-2xl bg-muted/30 border-border/40 font-bold text-sm sm:text-base px-5 hover:bg-background transition-colors focus:ring-primary/30">
                   <SelectValue />
@@ -193,54 +237,79 @@ export default function Feedback() {
               </Select>
             </div>
 
-            {/* Caixa de Texto da Mensagem */}
             <div className="space-y-3">
-              <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Detalhes do Feedback</Label>
+              <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Detalhes do Relato</Label>
               <Textarea 
                 value={message}
                 onChange={e => setMessage(e.target.value)}
-                placeholder="Descreva detalhadamente sua experiência, sugestão de melhoria ou o bug que você encontrou..."
-                className="min-h-[200px] sm:min-h-[250px] rounded-[24px] bg-muted/30 border-border/40 font-medium text-sm sm:text-base p-6 resize-none leading-relaxed focus:ring-primary/40 focus:bg-background transition-colors"
+                placeholder="Ex: Quando eu tento abrir a tela de resumos, a tela fica em branco..."
+                className="min-h-[160px] sm:min-h-[200px] rounded-[24px] bg-muted/30 border-border/40 font-medium text-sm sm:text-base p-6 resize-none leading-relaxed focus:ring-primary/40 focus:bg-background transition-colors"
               />
-              <p className="text-right text-[10px] font-bold text-muted-foreground/50">
-                {message.length} caracteres
-              </p>
             </div>
 
-            {/* Controle de Anonimato */}
-            <div className="flex items-center justify-between p-5 sm:p-6 bg-primary/5 rounded-2xl border border-primary/20 transition-colors hover:bg-primary/10 cursor-pointer" onClick={() => setIsAnonymous(!isAnonymous)}>
-              <div className="flex items-center gap-4 sm:gap-5">
-                <div className={`h-12 w-12 rounded-full flex items-center justify-center transition-colors ${isAnonymous ? 'bg-primary/20' : 'bg-muted/50'}`}>
-                  <ShieldCheck className={`h-6 w-6 transition-colors ${isAnonymous ? 'text-primary' : 'text-muted-foreground'}`} />
+            {/* ÁREA DE ANEXO LIMPA E MODERNA */}
+            <div className="space-y-3">
+              <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1 flex items-center gap-2">
+                <Paperclip className="h-3 w-3" /> Anexo (Opcional)
+              </Label>
+              
+              <input type="file" id="feedback-media" accept="image/*,video/*" className="hidden" onChange={handleFileSelect} ref={fileInputRef} />
+              
+              {!previewUrl ? (
+                <div 
+                  onClick={() => document.getElementById('feedback-media')?.click()}
+                  className="w-full h-24 border-2 border-dashed border-border/50 rounded-[20px] bg-muted/10 hover:bg-muted/30 flex flex-col items-center justify-center cursor-pointer transition-colors"
+                >
+                  <div className="flex gap-3 text-muted-foreground mb-1">
+                    <ImageIcon className="h-5 w-5" />
+                    <Video className="h-5 w-5" />
+                  </div>
+                  <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Toque para anexar print ou vídeo</p>
                 </div>
-                <div>
-                  <p className="text-xs sm:text-sm font-black uppercase tracking-widest text-foreground">Enviar Anonimamente</p>
-                  <p className="text-[10px] font-bold text-muted-foreground mt-1">
-                    {isAnonymous ? "Sua identidade está protegida." : "Seu e-mail será enviado à equipe."}
-                  </p>
-                </div>
-              </div>
-              <Switch checked={isAnonymous} onCheckedChange={setIsAnonymous} className="data-[state=checked]:bg-primary" />
-            </div>
-
-            {/* Botão de Disparo */}
-            <Button 
-              onClick={handleSubmit} 
-              disabled={submitting || !message.trim()} 
-              className="w-full h-16 sm:h-18 rounded-[24px] font-black uppercase tracking-widest text-xs sm:text-sm bg-primary text-primary-foreground shadow-xl shadow-primary/20 hover:shadow-2xl hover:-translate-y-1 active:scale-95 transition-all mt-4"
-            >
-              {submitting ? (
-                <Loader2 className="h-6 w-6 animate-spin" />
               ) : (
-                <>
-                  <Send className="mr-3 h-5 w-5" /> 
-                  Despachar Feedback
-                </>
+                <div className="relative w-full rounded-[24px] overflow-hidden border border-border/50 bg-muted/20">
+                  <Button size="icon" variant="destructive" className="absolute top-3 right-3 h-10 w-10 rounded-xl z-10 shadow-lg hover:scale-105 transition-transform" onClick={clearFile}>
+                    <X className="h-5 w-5" />
+                  </Button>
+                  {selectedFile?.type.startsWith('video/') ? (
+                    <video src={previewUrl} controls className="w-full max-h-[300px] object-contain bg-black" />
+                  ) : (
+                    <img src={previewUrl} alt="Pré-visualização" className="w-full max-h-[300px] object-contain" />
+                  )}
+                  <div className="absolute bottom-0 w-full bg-background/80 backdrop-blur-md p-3 border-t border-border/50">
+                    <p className="text-[10px] font-black uppercase tracking-widest truncate">{selectedFile?.name}</p>
+                  </div>
+                </div>
               )}
-            </Button>
+            </div>
+
+            {/* Anonimato e Botão */}
+            <div className="space-y-4 pt-2">
+              <div className="flex items-center justify-between p-5 bg-primary/5 rounded-2xl border border-primary/20 transition-colors hover:bg-primary/10 cursor-pointer" onClick={() => setIsAnonymous(!isAnonymous)}>
+                <div className="flex items-center gap-4">
+                  <div className={cn("h-10 w-10 rounded-full flex items-center justify-center transition-colors", isAnonymous ? 'bg-primary/20' : 'bg-muted/50')}>
+                    <ShieldCheck className={cn("h-5 w-5 transition-colors", isAnonymous ? 'text-primary' : 'text-muted-foreground')} />
+                  </div>
+                  <div>
+                    <p className="text-xs sm:text-sm font-black uppercase tracking-widest text-foreground">Enviar Anonimamente</p>
+                  </div>
+                </div>
+                <Switch checked={isAnonymous} onCheckedChange={setIsAnonymous} className="data-[state=checked]:bg-primary" />
+              </div>
+
+              <Button 
+                onClick={handleSubmit} 
+                disabled={submitting || !message.trim()} 
+                className="w-full h-16 rounded-[24px] font-black uppercase tracking-widest text-xs sm:text-sm bg-primary text-primary-foreground shadow-xl shadow-primary/20 hover:-translate-y-1 active:scale-95 transition-all"
+              >
+                {submitting ? <Loader2 className="h-6 w-6 animate-spin" /> : <><Send className="mr-3 h-5 w-5" /> Despachar Relato</>}
+              </Button>
+            </div>
+
           </div>
         </Card>
       </div>
     </div>
   );
 }
+
