@@ -20,7 +20,7 @@ import {
   BookOpen, Clock, AlertTriangle, 
   CheckCircle2, ArrowRight, Cloud, CloudOff, History, 
   Loader2, Sparkles, RefreshCcw, Calendar as CalendarIcon,
-  Bell, MessageSquare
+  Bell, MessageSquare, HandHelping
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format, isToday, isTomorrow, differenceInDays, startOfDay, isSameDay } from "date-fns";
@@ -69,6 +69,11 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
 
+  // Estados de Notificações e Mensagens
+  const [hasUnreadNotifications, setHasUnreadNotifications] = useState(false);
+  const [hasUnreadMessages, setHasUnreadMessages] = useState(false);
+  const [libraryAlerts, setLibraryAlerts] = useState<any[]>([]);
+
   // Estados do Calendário
   const [calendarDate, setCalendarDate] = useState<Date>(new Date());
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
@@ -102,6 +107,7 @@ export default function Dashboard() {
   async function loadDashboard() {
     setLoading(true);
     try {
+      // 1. Perfil e Semestre
       const { data: profile } = await supabase
         .from("profiles")
         .select("current_semester_label, semester_start, semester_end")
@@ -110,6 +116,7 @@ export default function Dashboard() {
 
       if (profile?.current_semester_label) setActiveSemesterFromProfile(profile.current_semester_label);
 
+      // 2. Disciplinas
       const { data: disciplines } = await supabase
         .from("disciplines")
         .select("id")
@@ -119,6 +126,29 @@ export default function Dashboard() {
       const discIds = (disciplines ?? []).map(d => d.id);
       setDisciplineCount(discIds.length);
 
+      // 3. Notificações e Mensagens (Contagem Real)
+      const { count: notifyCount } = await supabase.from('notifications').select('*', { count: 'exact', head: true }).eq('user_id', user!.id).eq('is_read', false);
+      setHasUnreadNotifications((notifyCount || 0) > 0);
+
+      const { data: dms } = await supabase.from('direct_messages').select('id').eq('receiver_id', user!.id).is('read_at', null).limit(1);
+      setHasUnreadMessages((dms?.length || 0) > 0);
+
+      // 4. Alertas de Biblioteca (Livros vencendo hoje ou amanhã)
+      const { data: books } = await supabase
+        .from('books')
+        .select('title, end_date')
+        .eq('user_id', user!.id)
+        .eq('material_format', 'borrowed')
+        .neq('reading_status', 'returned')
+        .not('end_date', 'is', null);
+      
+      const urgentBooks = (books ?? []).filter(b => {
+        const d = new Date(b.end_date!);
+        return isToday(d) || isTomorrow(d);
+      });
+      setLibraryAlerts(urgentBooks);
+
+      // 5. Horários e Lembretes
       if (discIds.length > 0 && !isHistoricalView) {
         const { data: schedule } = await supabase
           .from("discipline_schedules")
@@ -157,6 +187,7 @@ export default function Dashboard() {
         setAllReminders([]);
       }
 
+      // Progresso
       if (isHistoricalView) {
         setSemesterProgress(100);
       } else if (profile?.semester_start && profile?.semester_end) {
@@ -211,7 +242,6 @@ export default function Dashboard() {
     }
   };
 
-  // Filtros Reativos do Calendário
   const filteredClasses = useMemo(() => {
     const dayOfWeek = calendarDate.getDay();
     return allSchedules
@@ -257,7 +287,7 @@ export default function Dashboard() {
     return (
       <div className="flex h-[100dvh] w-full flex-col items-center justify-center bg-background gap-4">
         <Loader2 className="h-10 w-10 animate-spin text-primary" />
-        <span className="text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground">Carregando Painel...</span>
+        <span className="text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground animate-pulse">Sincronizando Painel...</span>
       </div>
     );
   }
@@ -276,20 +306,19 @@ export default function Dashboard() {
         <AlertDialogContent className="rounded-[32px] bg-card border-border shadow-2xl">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-2xl font-black tracking-tight">Encerrar Período?</AlertDialogTitle>
-            <AlertDialogDescription>As matérias serão arquivadas. Qual será o próximo período? (Ex: 2026.2)</AlertDialogDescription>
+            <AlertDialogDescription>As matérias serão arquivadas para o histórico. Qual o nome do próximo período?</AlertDialogDescription>
           </AlertDialogHeader>
-          <Input value={nextSemesterInput} onChange={e => setNextSemesterInput(e.target.value)} placeholder="Novo Semestre..." className="h-14 rounded-2xl text-center font-black text-lg border-primary/20 bg-muted/20" />
+          <Input value={nextSemesterInput} onChange={e => setNextSemesterInput(e.target.value)} placeholder="Ex: 2026.2" className="h-14 rounded-2xl text-center font-black text-lg border-primary/20 bg-muted/20" />
           <AlertDialogFooter className="mt-4">
             <AlertDialogCancel className="h-12 rounded-2xl border-none font-bold uppercase text-[10px] tracking-widest">Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleEndSemester} disabled={!nextSemesterInput.trim()} className="h-12 rounded-2xl bg-primary font-black uppercase text-[10px] tracking-widest">Arquivar & Iniciar</AlertDialogAction>
+            <AlertDialogAction onClick={handleEndSemester} disabled={!nextSemesterInput.trim()} className="h-12 rounded-2xl bg-primary font-black uppercase text-[10px] tracking-widest">Arquivar e Avançar</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* HEADER RESTAURADO: Com Notificações e Mensagens */}
+      {/* HEADER DINÂMICO */}
       <header className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-8 border-b border-border/40 pb-8">
         <div className="space-y-4 w-full lg:w-auto">
-          {/* Seletor de Semestre + Tag */}
           <div className="flex items-center gap-4">
             <Select value={currentLabel} onValueChange={setCurrentLabel}>
               <SelectTrigger className="w-fit h-10 bg-primary/10 text-primary border-none font-black text-sm rounded-xl px-4 hover:bg-primary/20 shadow-sm transition-colors">
@@ -308,113 +337,92 @@ export default function Dashboard() {
             </span>
           </div>
 
-          {/* Título Gigante */}
           <h1 className="text-5xl sm:text-7xl font-black tracking-tighter text-foreground leading-[1.1]">
             Olá,<br />{userName}! <span className="inline-block animate-wave">👋</span>
           </h1>
-          <p className="text-base font-medium text-muted-foreground max-w-md pt-2">
-            {isHistoricalView 
-              ? `Você está consultando os arquivos e métricas do semestre ${currentLabel}.`
-              : `Você está acompanhando os arquivos e métricas do semestre ${currentLabel}.`
-            }
-          </p>
         </div>
 
-        {/* Coluna Direita (Botões, Nuvem e Ações Rápidas) */}
         <div className="flex flex-col items-start lg:items-end gap-5 w-full lg:w-auto">
-          
-          {/* Linha da Nuvem + Ícones Fixos */}
           <div className="flex items-center justify-between w-full lg:w-auto gap-4">
-            <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest bg-muted/50 px-4 py-2.5 rounded-xl">
+            <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest bg-muted/50 px-4 py-2.5 rounded-xl shadow-sm">
               {isOnline ? (
-                <span className="flex items-center gap-2 text-emerald-500"><Cloud className="h-4 w-4" /> Nuvem Conectada</span>
+                <span className="flex items-center gap-2 text-emerald-500"><Cloud className="h-4 w-4" /> Cloud Sync</span>
               ) : (
-                <span className="flex items-center gap-2 text-amber-500 animate-pulse"><CloudOff className="h-4 w-4" /> Modo Offline</span>
+                <span className="flex items-center gap-2 text-amber-500 animate-pulse"><CloudOff className="h-4 w-4" /> Offline</span>
               )}
             </div>
 
-            {/* Ações Rápidas (Mensagens e Notificações) */}
             <div className="flex items-center gap-2">
               <Button 
                 variant="ghost" 
                 size="icon" 
                 onClick={() => navigate('/messages')}
-                className="relative h-10 w-10 rounded-xl bg-muted/50 hover:bg-primary/10 text-muted-foreground hover:text-primary transition-all active:scale-95"
-                title="Mensagens"
+                className="relative h-12 w-12 rounded-2xl bg-card border border-border/50 hover:bg-primary/10 text-muted-foreground hover:text-primary transition-all active:scale-95"
               >
                 <MessageSquare className="h-5 w-5" />
-                <span className="absolute top-2 right-2 h-2 w-2 rounded-full bg-primary border-2 border-background" />
+                {hasUnreadMessages && <span className="absolute top-3 right-3 h-2.5 w-2.5 rounded-full bg-blue-500 border-2 border-background animate-bounce" />}
               </Button>
 
               <Button 
                 variant="ghost" 
                 size="icon" 
-                className="relative h-10 w-10 rounded-xl bg-muted/50 hover:bg-primary/10 text-muted-foreground hover:text-primary transition-all active:scale-95"
-                title="Notificações"
+                onClick={() => navigate('/settings')}
+                className="relative h-12 w-12 rounded-2xl bg-card border border-border/50 hover:bg-primary/10 text-muted-foreground hover:text-primary transition-all active:scale-95"
               >
                 <Bell className="h-5 w-5" />
-                <span className="absolute top-2 right-2 h-2 w-2 rounded-full bg-destructive border-2 border-background" />
+                {hasUnreadNotifications && <span className="absolute top-3 right-3 h-2.5 w-2.5 rounded-full bg-destructive border-2 border-background animate-pulse" />}
               </Button>
             </div>
           </div>
 
-          {/* Botão Gigante de Data que abre o Calendário */}
           <Dialog open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
             <DialogTrigger asChild>
-              <Button variant="outline" className="h-16 px-6 sm:px-8 rounded-[20px] border-border bg-card hover:bg-muted text-sm sm:text-base font-black tracking-widest uppercase shadow-sm flex items-center gap-4 transition-all active:scale-95 text-foreground w-full sm:w-auto">
+              <Button variant="outline" className="h-16 px-8 rounded-[24px] border-border bg-card hover:bg-muted text-sm font-black tracking-widest uppercase shadow-sm flex items-center gap-4 transition-all active:scale-95 text-foreground w-full sm:w-auto">
                 <CalendarIcon className="h-5 w-5 text-primary" />
                 {format(calendarDate, "EEEE, dd 'de' MMMM", { locale: ptBR })}
               </Button>
             </DialogTrigger>
-            <DialogContent className="w-[95vw] sm:max-w-[400px] bg-card border-border rounded-[32px] p-6 shadow-2xl flex flex-col items-center">
-              <DialogHeader className="w-full">
-                <DialogTitle className="text-center font-black text-2xl mb-2">Selecione uma Data</DialogTitle>
-              </DialogHeader>
-              <div className="w-full flex justify-center mt-2 bg-background border border-border/50 rounded-[24px] p-2 shadow-sm">
-                <Calendar
-                  mode="single"
-                  selected={calendarDate}
-                  onSelect={(date) => {
-                    if(date) {
-                      setCalendarDate(date);
-                      setIsCalendarOpen(false);
-                    }
-                  }}
-                  locale={ptBR}
-                  className="w-full pointer-events-auto"
-                  modifiers={{ hasClass: classDays, hasReminder: reminderDays }}
-                  modifiersClassNames={{ hasClass: "calendar-dot-class", hasReminder: "calendar-dot-reminder" }}
-                />
-              </div>
+            <DialogContent className="w-[95vw] sm:max-w-[400px] bg-card border-border rounded-[32px] p-6 shadow-2xl">
+              <Calendar
+                mode="single"
+                selected={calendarDate}
+                onSelect={(date) => { if(date) { setCalendarDate(date); setIsCalendarOpen(false); } }}
+                locale={ptBR}
+                className="w-full"
+                modifiers={{ hasClass: classDays, hasReminder: reminderDays }}
+                modifiersClassNames={{ hasClass: "calendar-dot-class", hasReminder: "calendar-dot-reminder" }}
+              />
             </DialogContent>
           </Dialog>
-
-          <div className="flex gap-3 w-full sm:w-auto">
-            {isHistoricalView ? (
-              <Button onClick={handleRestoreSemester} className="h-12 w-full sm:w-auto rounded-xl bg-amber-500 text-white font-black text-[10px] uppercase tracking-widest px-6 shadow-lg shadow-amber-500/20 hover:bg-amber-600">
-                <RefreshCcw className="mr-2 h-4 w-4" /> Restaurar
-              </Button>
-            ) : (
-              <Button variant="ghost" onClick={() => setShowEndSemester(true)} className="h-12 w-full sm:w-auto rounded-xl text-[10px] font-black uppercase tracking-widest text-muted-foreground hover:text-destructive hover:bg-destructive/10">
-                <History className="mr-2 h-4 w-4" /> Arquivar
-              </Button>
-            )}
-          </div>
         </div>
       </header>
 
-      {/* Cards de Métricas Restaurados no Padrão da Imagem */}
+      {/* ALERTAS DE BIBLIOTECA (Se existirem) */}
+      {libraryAlerts.length > 0 && (
+        <section className="animate-in slide-in-from-top-4 duration-500">
+           {libraryAlerts.map((book, idx) => (
+             <div key={idx} className="bg-destructive/10 border border-destructive/20 p-5 rounded-[28px] flex items-center justify-between gap-4 mb-3">
+                <div className="flex items-center gap-4">
+                  <div className="h-12 w-12 rounded-xl bg-destructive text-white flex items-center justify-center shadow-lg"><HandHelping className="h-6 w-6" /></div>
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-destructive">Devolução Urgente</p>
+                    <p className="text-sm font-bold text-foreground">O livro "{book.title}" vence {isToday(new Date(book.end_date)) ? 'hoje' : 'amanhã'}!</p>
+                  </div>
+                </div>
+                <Button variant="outline" size="sm" onClick={() => navigate('/disciplines')} className="rounded-xl border-destructive/30 text-destructive font-black text-[10px] uppercase tracking-widest hover:bg-destructive hover:text-white">Ver Matéria</Button>
+             </div>
+           ))}
+        </section>
+      )}
+
+      {/* MÉTRICAS */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 sm:gap-6">
         {[
           { label: "Matérias Registradas", value: disciplineCount, icon: BookOpen, color: "text-primary", bg: "bg-primary/10", path: "/disciplines" },
-          { label: "Aulas Hoje", value: isHistoricalView ? 0 : filteredClasses.length, icon: Clock, color: "text-amber-500", bg: "bg-amber-500/10", path: "/disciplines" },
-          { label: "Prazos Críticos", value: isHistoricalView ? 0 : filteredReminders.length, icon: AlertTriangle, color: "text-destructive", bg: "bg-destructive/10", path: "/reminders" }
+          { label: "Aulas do Dia", value: isHistoricalView ? 0 : filteredClasses.length, icon: Clock, color: "text-amber-500", bg: "bg-amber-500/10", path: "/disciplines" },
+          { label: "Prazos Restantes", value: isHistoricalView ? 0 : filteredReminders.length, icon: AlertTriangle, color: "text-destructive", bg: "bg-destructive/10", path: "/reminders" }
         ].map((stat, i) => (
-          <Card 
-            key={i} 
-            onClick={() => navigate(stat.path)} 
-            className="border-none bg-card shadow-sm hover:shadow-xl transition-all cursor-pointer group rounded-[32px]"
-          >
+          <Card key={i} onClick={() => navigate(stat.path)} className="border-none bg-card shadow-sm hover:shadow-xl transition-all cursor-pointer group rounded-[32px]">
             <CardContent className="p-6 sm:p-8 flex items-center gap-5">
               <div className={cn("h-14 w-14 sm:h-16 sm:w-16 rounded-2xl flex items-center justify-center transition-transform group-hover:scale-110 shadow-inner shrink-0", stat.bg, stat.color)}>
                 <stat.icon className="h-7 w-7 sm:h-8 sm:w-8" />
@@ -429,57 +437,43 @@ export default function Dashboard() {
       </div>
 
       <Card className="border-none bg-card shadow-sm rounded-[32px] overflow-hidden relative">
-        <div className="absolute -right-4 -top-4 opacity-5 pointer-events-none">
-          <Sparkles className="h-32 w-32" />
-        </div>
+        <div className="absolute -right-4 -top-4 opacity-5 pointer-events-none"><Sparkles className="h-32 w-32" /></div>
         <CardContent className="p-8">
           <div className="flex justify-between items-end mb-4">
             <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-primary mb-1">
-                {isHistoricalView ? "Ciclo Concluído" : "Andamento do Semestre"}
-              </p>
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-primary mb-1">{isHistoricalView ? "Ciclo Concluído" : "Andamento do Semestre"}</p>
               <p className="text-4xl sm:text-5xl font-black tracking-tighter text-foreground">{semesterProgress}%</p>
             </div>
           </div>
-          <Progress value={semesterProgress} className="h-3 bg-muted/50 [&>div]:bg-primary shadow-inner rounded-full" />
+          <Progress value={semesterProgress} className="h-3 bg-muted/50 [&>div]:bg-primary shadow-inner rounded-full transition-all duration-1000" />
         </CardContent>
       </Card>
 
-      {/* Lista de Eventos do Dia Filtrado */}
+      {/* EVENTOS DO DIA */}
       <div className="pt-4 space-y-8">
-        <div className="flex items-center justify-between border-b border-border/40 pb-4">
-          <div>
+        <header className="border-b border-border/40 pb-4">
             <h2 className="text-2xl font-black text-foreground capitalize tracking-tight">
               {isToday(calendarDate) ? "Eventos de Hoje" : isTomorrow(calendarDate) ? "Eventos de Amanhã" : format(calendarDate, "EEEE, dd/MM", { locale: ptBR })}
             </h2>
-            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mt-1">Sua programação selecionada</p>
-          </div>
-        </div>
+            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mt-1">Sua agenda personalizada para esta data</p>
+        </header>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          
-          {/* Coluna Aulas */}
           <div className="space-y-4">
-            <h3 className="text-[10px] font-black uppercase tracking-[0.3em] flex items-center gap-2 text-foreground">
-              <Clock className="h-3.5 w-3.5 text-amber-500" /> Grade Horária
-            </h3>
+            <h3 className="text-[10px] font-black uppercase tracking-[0.3em] flex items-center gap-2 text-foreground"><Clock className="h-3.5 w-3.5 text-amber-500" /> Grade Horária</h3>
             {filteredClasses.length === 0 ? (
-              <div className="p-8 rounded-[24px] border-2 border-dashed border-border/40 text-center bg-muted/5">
-                <p className="text-xs font-bold text-muted-foreground italic">Sem aulas cadastradas.</p>
+              <div className="p-8 rounded-[24px] border-2 border-dashed border-border/40 text-center bg-muted/5 opacity-60">
+                <p className="text-xs font-bold text-muted-foreground italic">Sem aulas programadas para este dia.</p>
               </div>
             ) : (
               filteredClasses.map((c, i) => (
-                <Card key={i} onClick={() => navigate(`/disciplines/${c.discipline_id}`)} className="rounded-[24px] bg-card border-border/40 hover:shadow-md cursor-pointer group">
+                <Card key={i} onClick={() => navigate(`/disciplines/${c.discipline_id}`)} className="rounded-[24px] bg-card border border-border/40 hover:border-primary/30 hover:shadow-lg cursor-pointer group transition-all">
                   <CardContent className="p-5 flex items-center gap-5">
-                    <div className="h-12 w-12 rounded-xl flex items-center justify-center text-white text-xl font-black shadow-md shrink-0 group-hover:scale-110 transition-transform" style={{ backgroundColor: c.color }}>
-                      {c.discipline_name.charAt(0)}
-                    </div>
+                    <div className="h-12 w-12 rounded-xl flex items-center justify-center text-white text-xl font-black shadow-md shrink-0 group-hover:scale-110 transition-transform" style={{ backgroundColor: c.color }}>{c.discipline_name.charAt(0)}</div>
                     <div className="flex-1 min-w-0">
                       <p className="text-base font-black truncate text-foreground group-hover:text-primary transition-colors">{c.discipline_name}</p>
                       <div className="flex flex-wrap gap-2 mt-1.5">
-                        <span className="text-[10px] font-bold text-muted-foreground bg-muted/50 px-2.5 py-1 rounded-lg">
-                          {c.start_time.slice(0, 5)} – {c.end_time.slice(0, 5)}
-                        </span>
+                        <span className="text-[10px] font-bold text-muted-foreground bg-muted/50 px-2.5 py-1 rounded-lg">{c.start_time.slice(0, 5)} – {c.end_time.slice(0, 5)}</span>
                         {c.room && <span className="text-[10px] font-bold text-primary bg-primary/10 px-2.5 py-1 rounded-lg">Sala {c.room}</span>}
                       </div>
                     </div>
@@ -490,31 +484,26 @@ export default function Dashboard() {
             )}
           </div>
 
-          {/* Coluna Prazos */}
           <div className="space-y-4">
-            <h3 className="text-[10px] font-black uppercase tracking-[0.3em] flex items-center gap-2 text-destructive">
-              <AlertTriangle className="h-3.5 w-3.5" /> Entregas e Prazos
-            </h3>
+            <h3 className="text-[10px] font-black uppercase tracking-[0.3em] flex items-center gap-2 text-destructive"><AlertTriangle className="h-3.5 w-3.5" /> Prazos e Tarefas</h3>
             {filteredReminders.length === 0 ? (
-              <div className="p-6 rounded-[24px] bg-emerald-500/5 border border-emerald-500/10 flex items-center justify-center gap-3">
+              <div className="p-8 rounded-[24px] bg-emerald-500/5 border border-emerald-500/10 flex items-center justify-center gap-3">
                 <CheckCircle2 className="h-5 w-5 text-emerald-500" />
-                <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600">Sem pendências para a data.</p>
+                <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600">Nada pendente para esta data!</p>
               </div>
             ) : (
               filteredReminders.map((r) => {
                 const urgency = getUrgencyLabel(r.due_date, r.type);
                 return (
-                  <Card key={r.id} onClick={() => navigate('/reminders')} className="group rounded-[24px] bg-card border-border/40 hover:shadow-md cursor-pointer">
+                  <Card key={r.id} onClick={() => navigate('/reminders')} className="group rounded-[24px] bg-card border border-border/40 hover:border-destructive/30 hover:shadow-lg cursor-pointer transition-all">
                     <CardContent className="p-5 flex flex-col gap-3">
                       <div className="flex items-start justify-between gap-4">
                         <p className="font-black text-sm text-foreground group-hover:text-destructive transition-colors">{r.title}</p>
-                        <Badge variant={urgency.variant} className="shrink-0 text-[9px] font-black px-2 py-1 rounded-lg tracking-widest uppercase">
-                          {urgency.text}
-                        </Badge>
+                        <Badge variant={urgency.variant} className="shrink-0 text-[9px] font-black px-2 py-1 rounded-lg tracking-widest uppercase">{urgency.text}</Badge>
                       </div>
                       <div className="flex items-center gap-2 bg-background border border-border/50 px-2.5 py-1.5 rounded-lg w-fit">
                         <div className="h-2 w-2 rounded-full" style={{ backgroundColor: r.discipline_color || '#64748b' }} />
-                        <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground truncate">{r.discipline_name || "Geral"}</span>
+                        <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground truncate">{r.discipline_name || "Contexto Geral"}</span>
                       </div>
                     </CardContent>
                   </Card>
@@ -524,6 +513,16 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+      
+      {/* Botão de Histórico Rápido no Mobile */}
+      {!isHistoricalView && (
+        <div className="flex justify-center pt-8 border-t border-border/40">
+           <Button variant="ghost" onClick={() => navigate('/disciplines')} className="rounded-full text-[10px] font-black uppercase tracking-widest text-muted-foreground gap-2">
+             <History className="h-4 w-4" /> Acessar Ciclos Passados
+           </Button>
+        </div>
+      )}
+
     </div>
   );
 }
