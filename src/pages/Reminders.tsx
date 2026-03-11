@@ -46,10 +46,9 @@ export default function Reminders() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
-  // Estados do Modal
   const [editId, setEditId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
-  const [type, setType] = useState("exam");
+  const [type, setType] = useState("assignment");
   const [dueDate, setDueDate] = useState("");
   const [discId, setDiscId] = useState<string>("none");
 
@@ -76,7 +75,7 @@ export default function Reminders() {
   function openNew() {
     setEditId(null);
     setTitle("");
-    setType("assignment"); // Mudado padrão para 'trabalho' que é mais comum
+    setType("assignment");
     setDueDate("");
     setDiscId("none");
     setOpen(true);
@@ -93,13 +92,11 @@ export default function Reminders() {
 
   async function save() {
     if (!title.trim() || !dueDate || !user) {
-      toast({ title: "Atenção", description: "O título e a data de entrega são obrigatórios.", variant: "destructive" });
+      toast({ title: "Atenção", description: "O título e a data limite são obrigatórios.", variant: "destructive" });
       return;
     }
 
     setSubmitting(true);
-    
-    // Tratamento de fuso horário seguro
     const safeDate = new Date(dueDate);
 
     const payload = {
@@ -113,11 +110,26 @@ export default function Reminders() {
       if (editId) {
         const { error } = await supabase.from("reminders").update(payload).eq("id", editId).eq("user_id", user.id);
         if (error) throw error;
-        toast({ title: "Lembrete atualizado!" });
+        toast({ title: "Lembrete atualizado com sucesso!" });
       } else {
-        const { error } = await supabase.from("reminders").insert({ ...payload, user_id: user.id });
+        const { data: newReminder, error } = await supabase.from("reminders").insert({ ...payload, user_id: user.id }).select().single();
         if (error) throw error;
-        toast({ title: "Prazo adicionado à agenda!" });
+
+        // CORE FIX: Integração com o Sininho (Cria a notificação no sistema)
+        try {
+          await supabase.from("notifications").insert({
+            user_id: user.id,
+            title: `Novo Prazo Agendado: ${typeLabels[type]}`,
+            message: `Você marcou a entrega de "${payload.title}" para ${format(safeDate, "dd/MM 'às' HH:mm", { locale: ptBR })}.`,
+            type: "reminder",
+            related_id: newReminder.id,
+            is_read: false
+          });
+        } catch(notifyErr) {
+          console.warn("Falha silenciosa ao criar notificação", notifyErr);
+        }
+
+        toast({ title: "Prazo adicionado e notificação ativada!" });
       }
       setOpen(false);
       load();
@@ -129,11 +141,9 @@ export default function Reminders() {
   }
 
   async function toggle(r: Reminder) {
-    // Optimistic Update (Ação Imediata na tela)
     const newReminders = reminders.map(item => item.id === r.id ? { ...item, completed: !item.completed } : item);
     setReminders(newReminders);
 
-    // Feedback visual rápido se marcou como concluído
     if (!r.completed) {
        toast({ title: "Tarefa Finalizada! 🎉", description: "Menos uma pendência na sua lista.", duration: 2000 });
     }
@@ -142,18 +152,17 @@ export default function Reminders() {
       const { error } = await supabase.from("reminders").update({ completed: !r.completed }).eq("id", r.id);
       if (error) throw error;
     } catch (error) {
-      // Se falhar no banco, reverte a UI
       toast({ title: "Erro de sincronização", description: "Não foi possível salvar o status.", variant: "destructive" });
       load(); 
     }
   }
 
   async function remove(id: string) {
-    if (!window.confirm("Deseja excluir permanentemente este lembrete?")) return;
+    if (!window.confirm("Deseja descartar este lembrete de vez?")) return;
     try {
       const { error } = await supabase.from("reminders").delete().eq("id", id);
       if (error) throw error;
-      toast({ title: "Lembrete descartado." });
+      toast({ title: "Lembrete apagado." });
       load();
     } catch (error) {
        toast({ title: "Erro ao excluir", variant: "destructive" });
@@ -182,7 +191,7 @@ export default function Reminders() {
     return (
       <div className="flex flex-col items-center justify-center h-[100dvh] gap-4">
         <Loader2 className="h-12 w-12 animate-spin text-primary" />
-        <p className="text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground animate-pulse">Consultando Prazos...</p>
+        <p className="text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground animate-pulse">Sincronizando Prazos...</p>
       </div>
     );
   }
@@ -193,7 +202,6 @@ export default function Reminders() {
   return (
     <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in duration-700 px-4 sm:px-6 pb-24 pt-6 overflow-x-hidden">
       
-      {/* Header Responsivo */}
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div className="flex items-center gap-5 w-full sm:w-auto">
           <Button
@@ -226,7 +234,7 @@ export default function Reminders() {
                 {editId ? "Editar Compromisso" : "Novo Agendamento"}
               </DialogTitle>
               <DialogDescription className="font-medium text-muted-foreground text-sm">
-                Mapeie seus prazos e defina a data limite para a sua tarefa.
+                Mapeie seus prazos e ative o alerta de notificação.
               </DialogDescription>
             </DialogHeader>
             
@@ -249,11 +257,11 @@ export default function Reminders() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent className="rounded-2xl bg-popover border border-border shadow-2xl">
-                      <SelectItem value="exam" className="py-3 font-bold">Prova 📝</SelectItem>
-                      <SelectItem value="assignment" className="py-3 font-bold">Trabalho 📚</SelectItem>
-                      <SelectItem value="seminar" className="py-3 font-bold">Seminário 🎤</SelectItem>
-                      <SelectItem value="presentation" className="py-3 font-bold">Apresentação 🖥️</SelectItem>
-                      <SelectItem value="other" className="py-3 font-bold">Outro 📍</SelectItem>
+                      <SelectItem value="exam" className="py-3 font-bold cursor-pointer">Prova 📝</SelectItem>
+                      <SelectItem value="assignment" className="py-3 font-bold cursor-pointer">Trabalho 📚</SelectItem>
+                      <SelectItem value="seminar" className="py-3 font-bold cursor-pointer">Seminário 🎤</SelectItem>
+                      <SelectItem value="presentation" className="py-3 font-bold cursor-pointer">Apresentação 🖥️</SelectItem>
+                      <SelectItem value="other" className="py-3 font-bold cursor-pointer">Outro 📍</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -263,10 +271,10 @@ export default function Reminders() {
                     <SelectTrigger className="h-14 rounded-2xl bg-muted/20 border border-border/50 font-bold text-foreground focus:ring-primary/30">
                       <SelectValue placeholder="Escolha..." />
                     </SelectTrigger>
-                    <SelectContent className="rounded-2xl bg-popover border border-border shadow-2xl max-h-[250px]">
-                      <SelectItem value="none" className="py-3 font-black text-primary">Contexto Geral</SelectItem>
+                    <SelectContent className="rounded-2xl bg-popover border border-border shadow-2xl max-h-[250px] overflow-y-auto">
+                      <SelectItem value="none" className="py-3 font-black text-primary cursor-pointer">Contexto Geral</SelectItem>
                       {disciplines.map((d) => (
-                        <SelectItem key={d.id} value={d.id} className="py-3 font-bold">{d.name}</SelectItem>
+                        <SelectItem key={d.id} value={d.id} className="py-3 font-bold cursor-pointer">{d.name}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -286,19 +294,17 @@ export default function Reminders() {
               <Button 
                 onClick={save} 
                 disabled={submitting} 
-                className="w-full h-14 rounded-2xl font-black uppercase tracking-widest text-xs mt-2 bg-primary text-primary-foreground hover:bg-primary/90 shadow-xl shadow-primary/20 active:scale-95 transition-all"
+                className="w-full h-14 rounded-[20px] font-black uppercase tracking-widest text-xs mt-2 bg-primary text-primary-foreground shadow-xl shadow-primary/20 hover:-translate-y-1 active:scale-95 transition-all"
               >
-                {submitting ? <Loader2 className="h-5 w-5 animate-spin" /> : editId ? "Atualizar Prazo" : "Salvar na Agenda"}
+                {submitting ? <Loader2 className="h-5 w-5 animate-spin" /> : editId ? "Atualizar Prazo" : <><Bell className="h-4 w-4 mr-2" /> Salvar e Notificar</>}
               </Button>
             </div>
           </DialogContent>
         </Dialog>
       </header>
 
-      {/* Listagem de Tarefas */}
       <div className="space-y-12 mt-10">
         
-        {/* Entregas Pendentes */}
         <section className="space-y-6">
           <div className="flex items-center gap-4 bg-card p-4 rounded-[24px] border border-border/40 shadow-sm w-fit">
             <div className="h-12 w-12 rounded-xl bg-destructive/10 flex items-center justify-center shrink-0">
@@ -368,7 +374,7 @@ export default function Reminders() {
                       </div>
 
                       <div className="flex items-center justify-between sm:flex-col gap-3 w-full sm:w-auto order-2 sm:order-3 sm:items-end">
-                        <Badge variant={badge.variant} className="text-[9px] font-black px-3 py-1 tracking-widest rounded-xl shrink-0 uppercase shadow-sm">
+                        <Badge variant={badge.variant} className="text-[9px] font-black px-3 py-1.5 tracking-widest rounded-xl shrink-0 uppercase shadow-sm">
                           {badge.label}
                         </Badge>
 
@@ -390,7 +396,6 @@ export default function Reminders() {
           )}
         </section>
 
-        {/* Tarefas Concluídas (Histórico) */}
         {done.length > 0 && (
           <section className="space-y-5 pt-10 border-t border-border/30">
             <div className="flex items-center gap-4 px-2">
@@ -404,7 +409,7 @@ export default function Reminders() {
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 opacity-70">
               {done.map((r) => (
-                <div key={r.id} className="flex items-center gap-4 rounded-2xl p-4 sm:p-5 bg-card/50 border border-border/30 group hover:opacity-100 transition-all hover:bg-card">
+                <div key={r.id} className="flex items-center gap-4 rounded-[20px] p-4 sm:p-5 bg-card/50 border border-border/30 group hover:opacity-100 transition-all hover:bg-card hover:shadow-md">
                   <Checkbox 
                     checked={r.completed} 
                     onCheckedChange={() => toggle(r)} 
