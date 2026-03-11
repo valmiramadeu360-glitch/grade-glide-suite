@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
-import { Plus, Trash2, ChevronDown, ChevronRight, Pencil, CloudOff, ListTodo, CheckCircle2 } from "lucide-react";
+import { Plus, Trash2, ChevronDown, ChevronRight, Pencil, CloudOff, ListTodo, CheckCircle2, GripVertical } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
@@ -230,12 +230,12 @@ export function DisciplineChecklist({ disciplineId }: { disciplineId: string }) 
   return (
     <Card className="glass-card border-none shadow-sm bg-card rounded-[32px] overflow-hidden animate-in fade-in duration-500">
       <CardHeader className="pb-5 pt-6 px-6 sm:px-8 border-b border-border/40">
-        <div className="flex flex-col gap-4">
-          <CardTitle className="text-sm font-black uppercase tracking-widest text-foreground flex items-center gap-2">
-            <ListTodo className="h-4 w-4 text-primary" /> Checklist e Edital
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <CardTitle className="text-sm font-black uppercase tracking-widest text-foreground flex items-center gap-2 shrink-0">
+            <ListTodo className="h-4 w-4 text-primary" /> Edital de Estudos
           </CardTitle>
-          <div className="flex items-center gap-4 bg-background border border-border/50 p-4 rounded-2xl shadow-sm">
-            <Progress value={progress} className="flex-1 h-3 sm:h-4 shadow-inner bg-muted [&>div]:bg-primary" />
+          <div className="flex items-center gap-4 bg-background border border-border/50 p-3 sm:p-4 rounded-[20px] shadow-sm w-full sm:w-[350px]">
+            <Progress value={progress} className="flex-1 h-3 sm:h-4 shadow-inner bg-muted [&>div]:bg-primary transition-all duration-1000 ease-out" />
             <span className="text-[10px] sm:text-xs font-black uppercase tracking-widest text-primary shrink-0 flex items-center gap-1.5">
               <CheckCircle2 className="h-4 w-4" /> {completedTasks}/{allTasks}
             </span>
@@ -243,143 +243,181 @@ export function DisciplineChecklist({ disciplineId }: { disciplineId: string }) 
         </div>
       </CardHeader>
 
-      <CardContent className="space-y-6 p-4 sm:p-8">
+      <CardContent className="space-y-6 p-4 sm:p-8 bg-card/30">
         
         {isOffline && (
-          <div className="bg-destructive/10 border border-destructive/20 text-destructive p-4 rounded-2xl flex items-center justify-center gap-3 text-[10px] font-black uppercase tracking-widest animate-pulse shadow-inner">
-            <CloudOff className="h-4 w-4" /> Offline: Algumas ações bloqueadas
+          <div className="bg-destructive/10 border border-destructive/20 text-destructive p-4 rounded-2xl flex items-center justify-center gap-3 text-[10px] font-black uppercase tracking-widest animate-pulse shadow-inner mb-6">
+            <CloudOff className="h-4 w-4 shrink-0" /> Operando Offline. Sincronização suspensa temporariamente.
           </div>
         )}
 
-        <div className="flex gap-3">
+        <div className="flex items-center gap-3 bg-muted/20 p-2 rounded-[24px] border border-border/50 shadow-sm focus-within:border-primary/40 focus-within:ring-1 focus-within:ring-primary/20 transition-all">
           <Input
-            placeholder="Ex: Aula 01 - Teoria Geral..."
-            className="h-14 sm:h-16 rounded-2xl bg-background border-border/50 focus:ring-primary/40 text-base font-bold flex-1 shadow-sm transition-all"
+            placeholder="Adicionar novo tópico ao edital..."
+            className="h-14 sm:h-16 border-none bg-transparent shadow-none focus-visible:ring-0 text-base font-bold px-4"
             value={newItem}
             disabled={isOffline}
             onChange={(e) => setNewItem(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && addItem()}
           />
-          <Button size="icon" onClick={addItem} disabled={isOffline || !newItem.trim()} className="h-14 w-14 sm:h-16 sm:w-16 rounded-2xl shadow-xl shadow-primary/20 shrink-0 bg-primary text-primary-foreground hover:bg-primary/90 transition-all active:scale-95">
-            <Plus className="h-6 w-6 sm:h-7 sm:w-7" />
+          <Button 
+            size="icon" 
+            onClick={addItem} 
+            disabled={isOffline || !newItem.trim()} 
+            className={cn(
+              "h-12 w-12 sm:h-14 sm:w-14 rounded-[20px] shrink-0 transition-all",
+              newItem.trim() ? "bg-primary text-white shadow-lg shadow-primary/20 hover:scale-105 active:scale-95" : "bg-muted text-muted-foreground"
+            )}
+          >
+            <Plus className="h-6 w-6" />
           </Button>
         </div>
 
-        <div className="space-y-4 mt-8">
-          {items.map((item) => (
-            <div key={item.id} className="space-y-2">
-              
-              <div className={cn(
-                "flex items-center gap-3 sm:gap-4 rounded-[20px] p-3 sm:p-4 transition-all border",
-                item.completed ? "bg-muted/10 border-border/20 opacity-60 hover:opacity-100" : "bg-card border-border/50 shadow-sm hover:border-primary/40 hover:shadow-md"
-              )}>
-                
-                <Button size="icon" variant="ghost" className="h-12 w-12 shrink-0 rounded-xl hover:bg-muted/50 transition-colors" onClick={() => toggleExpand(item.id)}>
-                  {item.expanded ? <ChevronDown className="h-6 w-6" /> : <ChevronRight className="h-6 w-6" />}
-                </Button>
-                
-                <Checkbox 
-                  checked={item.completed} 
-                  onCheckedChange={() => toggleItem(item)} 
-                  className="h-7 w-7 sm:h-8 sm:w-8 rounded-xl border-2 border-primary/30 data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500 shadow-inner transition-transform hover:scale-105"
-                />
-
-                {editingItem === item.id ? (
-                  <Input
-                    autoFocus
-                    className="flex-1 h-12 text-base sm:text-lg font-black rounded-xl bg-background border-primary/40 focus:ring-primary/30"
-                    value={editingItemText}
-                    onChange={e => setEditingItemText(e.target.value)}
-                    onBlur={() => saveEditItem(item.id)}
-                    onKeyDown={e => e.key === "Enter" && saveEditItem(item.id)}
-                  />
-                ) : (
-                  <span
-                    className={cn("flex-1 text-base sm:text-lg font-black cursor-pointer select-none leading-tight truncate transition-colors hover:text-primary active:opacity-50", item.completed && "line-through text-muted-foreground")}
-                    onClick={() => startEditItem(item)}
-                  >
-                    {item.title}
-                  </span>
-                )}
-
-                {item.subtopics.length > 0 && (
-                  <span className="text-[10px] bg-background border border-border/50 px-2.5 py-1.5 rounded-lg text-muted-foreground font-black tracking-widest shrink-0 hidden sm:block">
-                    {item.subtopics.filter(s => s.completed).length}/{item.subtopics.length}
-                  </span>
-                )}
-                
-                <div className="flex items-center gap-1 sm:gap-2 shrink-0">
-                  <Button size="icon" variant="ghost" className="h-12 w-12 rounded-xl text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors" onClick={() => startEditItem(item)}>
-                    <Pencil className="h-4 w-4 sm:h-5 sm:w-5" />
-                  </Button>
-                  <Button size="icon" variant="ghost" disabled={isOffline} className="h-12 w-12 rounded-xl text-destructive hover:bg-destructive/10 transition-colors" onClick={() => deleteItem(item.id)}>
-                    <Trash2 className="h-4 w-4 sm:h-5 sm:w-5" />
-                  </Button>
-                </div>
+        <div className="space-y-4 pt-4">
+          {items.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center border-2 border-dashed border-border/50 rounded-[32px] bg-background">
+              <div className="h-20 w-20 rounded-full bg-muted/50 flex items-center justify-center mb-5 shadow-inner">
+                <ListTodo className="h-10 w-10 text-muted-foreground/30" />
               </div>
-
-              {item.expanded && (
-                <div className="ml-5 pl-4 sm:ml-9 sm:pl-6 border-l-2 border-border/40 space-y-3 mb-8 animate-in fade-in slide-in-from-top-4 duration-300">
-                  {item.subtopics.map(sub => (
-                    <div key={sub.id} className={cn(
-                      "flex items-center gap-3 sm:gap-4 rounded-xl p-2 sm:p-3 transition-colors border",
-                      sub.completed ? "bg-transparent border-transparent opacity-50 hover:opacity-100" : "bg-muted/10 border-border/30 hover:border-border/60 hover:bg-muted/30"
-                    )}>
-                      <Checkbox 
-                        checked={sub.completed} 
-                        onCheckedChange={() => toggleSubtopic(item.id, sub)} 
-                        className="h-6 w-6 rounded-[8px] border-primary/30 data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500 hover:scale-105 transition-transform"
-                      />
-                      
-                      {editingSub === sub.id ? (
-                        <Input
-                          autoFocus
-                          className="flex-1 h-10 text-sm font-bold rounded-lg bg-background border-primary/40 focus:ring-primary/20"
-                          value={editingSubText}
-                          onChange={e => setEditingSubText(e.target.value)}
-                          onBlur={() => saveEditSub(item.id, sub.id)}
-                          onKeyDown={e => e.key === "Enter" && saveEditSub(item.id, sub.id)}
-                        />
-                      ) : (
-                        <span
-                          className={cn("flex-1 text-sm sm:text-base font-bold cursor-pointer select-none truncate hover:text-primary transition-colors active:opacity-50", sub.completed && "line-through text-muted-foreground")}
-                          onClick={() => startEditSub(sub)}
-                        >
-                          {sub.title}
-                        </span>
-                      )}
-                      
-                      <div className="flex items-center gap-1 shrink-0">
-                        <Button size="icon" variant="ghost" className="h-10 w-10 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors" onClick={() => startEditSub(sub)}>
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button size="icon" variant="ghost" disabled={isOffline} className="h-10 w-10 rounded-lg text-destructive hover:bg-destructive/10 transition-colors" onClick={() => deleteSubtopic(item.id, sub.id)}>
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
+              <h3 className="text-xl font-black text-foreground">Edital Vazio</h3>
+              <p className="text-sm font-medium text-muted-foreground mt-2 max-w-[250px]">Adicione os tópicos de estudo para começar a progredir.</p>
+            </div>
+          ) : (
+            items.map((item) => (
+              <div key={item.id} className="space-y-2 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                
+                <div className={cn(
+                  "group flex items-center gap-3 sm:gap-4 rounded-[24px] p-3 sm:p-4 transition-all duration-300 border",
+                  item.completed 
+                    ? "bg-muted/10 border-border/20 opacity-60 hover:opacity-100" 
+                    : "bg-card border-border/50 shadow-sm hover:border-primary/40 hover:shadow-md"
+                )}>
                   
-                  <div className="flex gap-3 mt-3 pt-2">
+                  <Button 
+                    size="icon" 
+                    variant="ghost" 
+                    className="h-12 w-12 shrink-0 rounded-xl hover:bg-muted/50 transition-colors text-muted-foreground group-hover:text-foreground" 
+                    onClick={() => toggleExpand(item.id)}
+                  >
+                    {item.expanded ? <ChevronDown className="h-6 w-6" /> : <ChevronRight className="h-6 w-6" />}
+                  </Button>
+                  
+                  <Checkbox 
+                    checked={item.completed} 
+                    onCheckedChange={() => toggleItem(item)} 
+                    className="h-7 w-7 sm:h-8 sm:w-8 rounded-[10px] border-2 border-primary/30 data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500 shadow-inner transition-transform hover:scale-105"
+                  />
+
+                  {editingItem === item.id ? (
                     <Input
-                      placeholder="Criar subtópico..."
-                      className="h-12 text-sm font-bold rounded-xl bg-background border-border/50 focus:ring-primary/30 shadow-sm transition-all"
-                      value={newSubtopics[item.id] ?? ""}
-                      disabled={isOffline}
-                      onChange={e => setNewSubtopics({ ...newSubtopics, [item.id]: e.target.value })}
-                      onKeyDown={e => e.key === "Enter" && addSubtopic(item.id)}
+                      autoFocus
+                      className="flex-1 h-12 text-base sm:text-lg font-black rounded-xl bg-background border-primary/40 focus:ring-primary/30 px-4"
+                      value={editingItemText}
+                      onChange={e => setEditingItemText(e.target.value)}
+                      onBlur={() => saveEditItem(item.id)}
+                      onKeyDown={e => e.key === "Enter" && saveEditItem(item.id)}
                     />
-                    <Button size="icon" variant="secondary" disabled={isOffline || !(newSubtopics[item.id]?.trim())} className="h-12 w-12 rounded-xl shrink-0 border border-border/50 bg-card hover:bg-muted active:scale-95 transition-transform" onClick={() => addSubtopic(item.id)}>
-                      <Plus className="h-5 w-5" />
+                  ) : (
+                    <span
+                      className={cn("flex-1 text-base sm:text-lg font-black cursor-text select-none leading-tight truncate transition-colors hover:text-primary px-2", item.completed && "line-through text-muted-foreground/70 decoration-2")}
+                      onClick={() => startEditItem(item)}
+                      title="Clique para editar"
+                    >
+                      {item.title}
+                    </span>
+                  )}
+
+                  {item.subtopics.length > 0 && (
+                    <span className="text-[10px] bg-muted/50 border border-border/50 px-3 py-1.5 rounded-lg text-muted-foreground font-black tracking-widest shrink-0 hidden sm:block">
+                      {item.subtopics.filter(s => s.completed).length}/{item.subtopics.length}
+                    </span>
+                  )}
+                  
+                  <div className="flex items-center gap-1 sm:gap-2 shrink-0 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Button size="icon" variant="ghost" className="h-10 w-10 sm:h-12 sm:w-12 rounded-xl text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors" onClick={() => startEditItem(item)}>
+                      <Pencil className="h-4 w-4 sm:h-5 sm:w-5" />
+                    </Button>
+                    <Button size="icon" variant="ghost" disabled={isOffline} className="h-10 w-10 sm:h-12 sm:w-12 rounded-xl text-destructive hover:bg-destructive/10 transition-colors" onClick={() => deleteItem(item.id)}>
+                      <Trash2 className="h-4 w-4 sm:h-5 sm:w-5" />
                     </Button>
                   </div>
                 </div>
-              )}
-            </div>
-          ))}
+
+                {item.expanded && (
+                  <div className="ml-7 pl-4 sm:ml-11 sm:pl-6 border-l-2 border-border/40 space-y-3 mb-8 pt-2 animate-in fade-in slide-in-from-top-2 duration-300">
+                    {item.subtopics.map(sub => (
+                      <div key={sub.id} className={cn(
+                        "group/sub flex items-center gap-3 sm:gap-4 rounded-[16px] p-2.5 sm:p-3 transition-colors border",
+                        sub.completed 
+                          ? "bg-transparent border-transparent opacity-50 hover:opacity-100" 
+                          : "bg-muted/10 border-border/30 hover:border-border/60 hover:bg-muted/30 shadow-sm"
+                      )}>
+                        <GripVertical className="h-4 w-4 text-muted-foreground/30 shrink-0 hidden sm:block" />
+                        
+                        <Checkbox 
+                          checked={sub.completed} 
+                          onCheckedChange={() => toggleSubtopic(item.id, sub)} 
+                          className="h-5 w-5 sm:h-6 sm:w-6 rounded-md border-primary/30 data-[state=checked]:bg-emerald-500 data-[state=checked]:border-emerald-500 hover:scale-105 transition-transform shrink-0"
+                        />
+                        
+                        {editingSub === sub.id ? (
+                          <Input
+                            autoFocus
+                            className="flex-1 h-10 text-sm font-bold rounded-lg bg-background border-primary/40 focus:ring-primary/30 px-3"
+                            value={editingSubText}
+                            onChange={e => setEditingSubText(e.target.value)}
+                            onBlur={() => saveEditSub(item.id, sub.id)}
+                            onKeyDown={e => e.key === "Enter" && saveEditSub(item.id, sub.id)}
+                          />
+                        ) : (
+                          <span
+                            className={cn("flex-1 text-sm sm:text-[15px] font-bold cursor-text select-none truncate hover:text-primary transition-colors px-1", sub.completed && "line-through text-muted-foreground")}
+                            onClick={() => startEditSub(sub)}
+                          >
+                            {sub.title}
+                          </span>
+                        )}
+                        
+                        <div className="flex items-center gap-1 shrink-0 opacity-100 sm:opacity-0 group-hover/sub:opacity-100 transition-opacity">
+                          <Button size="icon" variant="ghost" className="h-8 w-8 sm:h-10 sm:w-10 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors" onClick={() => startEditSub(sub)}>
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button size="icon" variant="ghost" disabled={isOffline} className="h-8 w-8 sm:h-10 sm:w-10 rounded-lg text-destructive hover:bg-destructive/10 transition-colors" onClick={() => deleteSubtopic(item.id, sub.id)}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                    
+                    <div className="flex items-center gap-3 mt-4 pt-2 bg-background border border-border/50 p-1.5 rounded-[16px] shadow-sm focus-within:border-primary/30 transition-all">
+                      <Input
+                        placeholder="Adicionar subtópico..."
+                        className="h-10 sm:h-12 text-sm font-bold border-none bg-transparent shadow-none focus-visible:ring-0 px-3"
+                        value={newSubtopics[item.id] ?? ""}
+                        disabled={isOffline}
+                        onChange={e => setNewSubtopics({ ...newSubtopics, [item.id]: e.target.value })}
+                        onKeyDown={e => e.key === "Enter" && addSubtopic(item.id)}
+                      />
+                      <Button 
+                        size="icon" 
+                        variant="secondary" 
+                        disabled={isOffline || !(newSubtopics[item.id]?.trim())} 
+                        className={cn(
+                          "h-10 w-10 sm:h-12 sm:w-12 rounded-[12px] shrink-0 transition-transform active:scale-95",
+                          newSubtopics[item.id]?.trim() ? "bg-primary text-white hover:bg-primary/90" : "bg-muted text-muted-foreground"
+                        )} 
+                        onClick={() => addSubtopic(item.id)}
+                      >
+                        <Plus className="h-4 w-4 sm:h-5 sm:w-5" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))
+          )}
         </div>
       </CardContent>
     </Card>
   );
 }
-
