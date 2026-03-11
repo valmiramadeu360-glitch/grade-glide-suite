@@ -22,7 +22,7 @@ import {
 import { 
   Plus, BookOpen, ChevronRight, GraduationCap, 
   Loader2, History, ArrowLeft, RefreshCcw, Search,
-  Palette, Trash2, AlertTriangle
+  Palette, Trash2, AlertTriangle, Bell, MessageSquare
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
@@ -146,14 +146,12 @@ export default function Disciplines({ extraOnly = false }: { extraOnly?: boolean
     }
   }
 
-  // Lógica Avançada: Restaurar e Renomear para "Em Curso"
   async function handleRestorePeriod() {
     if (!restorePeriodLabel.trim() || !user) return;
     setIsProcessing(true);
     try {
       const newLabel = restorePeriodLabel.trim();
 
-      // 1. Atualiza as matérias (Desarquiva e muda o rótulo pro novo nome)
       const { error: updateError } = await supabase
         .from("disciplines")
         .update({ archived: false, semester_label: newLabel })
@@ -163,7 +161,6 @@ export default function Disciplines({ extraOnly = false }: { extraOnly?: boolean
 
       if (updateError) throw updateError;
 
-      // 2. Define o perfil para focar nesse novo semestre restaurado
       await supabase
         .from("profiles")
         .update({ current_semester_label: newLabel, updated_at: new Date().toISOString() })
@@ -185,7 +182,6 @@ export default function Disciplines({ extraOnly = false }: { extraOnly?: boolean
     }
   }
 
-  // Lógica Avançada: Excluir Período Definitivamente
   async function handleDeletePeriod() {
     if (!user) return;
     setIsProcessing(true);
@@ -262,8 +258,8 @@ export default function Disciplines({ extraOnly = false }: { extraOnly?: boolean
     <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500 pb-24 px-4 sm:px-6 overflow-x-hidden">
       
       {/* 1. Cabeçalho Responsivo */}
-      <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 pt-6">
-        <div className="flex items-center gap-5 w-full md:w-auto">
+      <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 pt-6">
+        <div className="flex items-center gap-5 w-full lg:w-auto">
           <Button 
             variant="ghost" 
             size="icon" 
@@ -282,79 +278,105 @@ export default function Disciplines({ extraOnly = false }: { extraOnly?: boolean
           </div>
         </div>
 
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button className="h-14 sm:h-16 px-8 rounded-2xl bg-primary text-primary-foreground font-black uppercase text-xs tracking-widest shadow-xl shadow-primary/20 active:scale-95 transition-all w-full md:w-auto">
-              <Plus className="mr-2 h-5 w-5" /> Novo Registro
+        <div className="flex flex-col sm:flex-row items-center gap-4 w-full lg:w-auto">
+          {/* Ações Rápidas (Mensagens e Notificações) adicionadas aqui! */}
+          <div className="flex items-center gap-2 w-full sm:w-auto justify-end sm:justify-start">
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              onClick={() => navigate('/messages')}
+              className="relative h-14 w-14 sm:h-16 sm:w-16 rounded-2xl bg-muted/30 hover:bg-primary/10 text-muted-foreground hover:text-primary transition-all active:scale-95"
+              title="Mensagens"
+            >
+              <MessageSquare className="h-6 w-6 sm:h-7 sm:w-7" />
+              <span className="absolute top-3 right-3 h-2 w-2 rounded-full bg-primary border-2 border-background" />
             </Button>
-          </DialogTrigger>
-          <DialogContent className="w-[95vw] sm:max-w-[450px] bg-card border-border rounded-[32px] p-6 sm:p-8 shadow-2xl">
-            <DialogHeader className="text-left space-y-2">
-              <DialogTitle className="text-2xl font-black tracking-tight">Configurar Módulo</DialogTitle>
-              <DialogDescription className="font-medium text-muted-foreground text-sm">
-                Adicione uma nova matéria para o período letivo <strong>{currentLabel}</strong>.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-6 pt-6">
-              <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Nome da Matéria / Curso</Label>
-                <Input 
-                  value={newName} 
-                  onChange={e => setNewName(e.target.value)}
-                  placeholder="Ex: Anatomia Clínica..." 
-                  className="h-14 rounded-2xl bg-muted/20 border-border/50 text-base font-bold focus:ring-primary/40 focus:bg-background transition-colors" 
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Docente (opcional)</Label>
-                <Input 
-                  value={newProfessor} 
-                  onChange={e => setNewProfessor(e.target.value)}
-                  placeholder="Nome do professor" 
-                  className="h-14 rounded-2xl bg-muted/20 border-border/50 text-base font-medium focus:ring-primary/40 focus:bg-background transition-colors" 
-                />
-              </div>
-              <div className="space-y-2">
-                <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Cor do Módulo</Label>
-                <Popover open={colorPickerOpen} onOpenChange={setColorPickerOpen}>
-                  <PopoverTrigger asChild>
-                    <Button 
-                      variant="outline" 
-                      className="h-14 w-full rounded-2xl bg-muted/20 border-border/50 justify-start gap-4 font-bold hover:bg-background transition-colors"
-                    >
-                      <div className="h-6 w-6 rounded-lg shadow-sm" style={{ backgroundColor: newColor }} />
-                      <span className="text-foreground">Selecionar Cor</span>
-                      <Palette className="ml-auto h-5 w-5 text-muted-foreground" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-64 p-4 rounded-[24px] border-border shadow-xl" align="center">
-                    <div className="grid grid-cols-5 gap-3">
-                      {colors.map(c => (
-                        <button
-                          key={c}
-                          type="button"
-                          onClick={() => { setNewColor(c); setColorPickerOpen(false); }}
-                          className={cn(
-                            "h-10 w-10 rounded-xl transition-all active:scale-90",
-                            newColor === c ? "ring-2 ring-primary ring-offset-2 ring-offset-background scale-110 shadow-lg" : "opacity-50 hover:opacity-100 hover:scale-105"
-                          )}
-                          style={{ backgroundColor: c }}
-                        />
-                      ))}
-                    </div>
-                  </PopoverContent>
-                </Popover>
-              </div>
-              <Button 
-                onClick={handleCreate} 
-                disabled={isSubmitting || !newName.trim()} 
-                className="w-full h-14 mt-4 rounded-2xl font-black uppercase tracking-widest text-xs bg-primary text-primary-foreground shadow-lg shadow-primary/20 active:scale-95 transition-all"
-              >
-                {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : "Salvar Registro"}
+
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              className="relative h-14 w-14 sm:h-16 sm:w-16 rounded-2xl bg-muted/30 hover:bg-primary/10 text-muted-foreground hover:text-primary transition-all active:scale-95"
+              title="Notificações"
+            >
+              <Bell className="h-6 w-6 sm:h-7 sm:w-7" />
+              <span className="absolute top-3 right-3 h-2 w-2 rounded-full bg-destructive border-2 border-background" />
+            </Button>
+          </div>
+
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+              <Button className="h-14 sm:h-16 px-8 rounded-2xl bg-primary text-primary-foreground font-black uppercase text-xs tracking-widest shadow-xl shadow-primary/20 active:scale-95 transition-all w-full sm:w-auto">
+                <Plus className="mr-2 h-5 w-5" /> Novo Registro
               </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+            </DialogTrigger>
+            <DialogContent className="w-[95vw] sm:max-w-[450px] bg-card border-border rounded-[32px] p-6 sm:p-8 shadow-2xl">
+              <DialogHeader className="text-left space-y-2">
+                <DialogTitle className="text-2xl font-black tracking-tight">Configurar Módulo</DialogTitle>
+                <DialogDescription className="font-medium text-muted-foreground text-sm">
+                  Adicione uma nova matéria para o período letivo <strong>{currentLabel}</strong>.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-6 pt-6">
+                <div className="space-y-2">
+                  <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Nome da Matéria / Curso</Label>
+                  <Input 
+                    value={newName} 
+                    onChange={e => setNewName(e.target.value)}
+                    placeholder="Ex: Anatomia Clínica..." 
+                    className="h-14 rounded-2xl bg-muted/20 border-border/50 text-base font-bold focus:ring-primary/40 focus:bg-background transition-colors" 
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Docente (opcional)</Label>
+                  <Input 
+                    value={newProfessor} 
+                    onChange={e => setNewProfessor(e.target.value)}
+                    placeholder="Nome do professor" 
+                    className="h-14 rounded-2xl bg-muted/20 border-border/50 text-base font-medium focus:ring-primary/40 focus:bg-background transition-colors" 
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Cor do Módulo</Label>
+                  <Popover open={colorPickerOpen} onOpenChange={setColorPickerOpen}>
+                    <PopoverTrigger asChild>
+                      <Button 
+                        variant="outline" 
+                        className="h-14 w-full rounded-2xl bg-muted/20 border-border/50 justify-start gap-4 font-bold hover:bg-background transition-colors"
+                      >
+                        <div className="h-6 w-6 rounded-lg shadow-sm" style={{ backgroundColor: newColor }} />
+                        <span className="text-foreground">Selecionar Cor</span>
+                        <Palette className="ml-auto h-5 w-5 text-muted-foreground" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-64 p-4 rounded-[24px] border-border shadow-xl" align="center">
+                      <div className="grid grid-cols-5 gap-3">
+                        {colors.map(c => (
+                          <button
+                            key={c}
+                            type="button"
+                            onClick={() => { setNewColor(c); setColorPickerOpen(false); }}
+                            className={cn(
+                              "h-10 w-10 rounded-xl transition-all active:scale-90",
+                              newColor === c ? "ring-2 ring-primary ring-offset-2 ring-offset-background scale-110 shadow-lg" : "opacity-50 hover:opacity-100 hover:scale-105"
+                            )}
+                            style={{ backgroundColor: c }}
+                          />
+                        ))}
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                <Button 
+                  onClick={handleCreate} 
+                  disabled={isSubmitting || !newName.trim()} 
+                  className="w-full h-14 mt-4 rounded-2xl font-black uppercase tracking-widest text-xs bg-primary text-primary-foreground shadow-lg shadow-primary/20 active:scale-95 transition-all"
+                >
+                  {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : "Salvar Registro"}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </div>
       </header>
 
       {/* 2. Barra de Busca */}
@@ -528,4 +550,3 @@ export default function Disciplines({ extraOnly = false }: { extraOnly?: boolean
     </div>
   );
 }
-
