@@ -27,7 +27,10 @@ const NotFound = () => {
       </div>
 
       <div className="max-w-md space-y-3 animate-in fade-in slide-in-from-bottom-4 duration-700 delay-150">
-        <h1 className="text-7xl sm:text-8xl font-black text-foreground tracking-tighter">404</h1>
+        {/* Adicionado um sutil hover 3D no texto 404 */}
+        <h1 className="text-8xl sm:text-9xl font-black text-foreground tracking-tighter drop-shadow-sm hover:-translate-y-2 transition-transform duration-500 cursor-default">
+          404
+        </h1>
         <h2 className="text-2xl sm:text-3xl font-black text-foreground">Rota Não Encontrada</h2>
         <p className="text-muted-foreground text-sm sm:text-base font-medium leading-relaxed px-4">
           Parece que você tentou acessar um conteúdo que não existe, foi movido ou arquivado. 
@@ -39,7 +42,8 @@ const NotFound = () => {
         <Button 
           variant="outline" 
           onClick={() => navigate(-1)}
-          className="border-border bg-card text-foreground hover:bg-muted/50 w-full sm:w-auto px-8 h-14 rounded-2xl font-bold gap-3 shadow-sm active:scale-[0.98] transition-all"
+          aria-label="Voltar à página anterior"
+          className="border-border bg-card text-foreground hover:bg-muted w-full sm:w-auto px-8 h-14 rounded-2xl font-bold gap-3 shadow-sm active:scale-95 transition-all"
         >
           <ArrowLeft className="h-5 w-5" />
           Voltar à página anterior
@@ -47,7 +51,8 @@ const NotFound = () => {
         
         <Button 
           onClick={() => navigate("/")}
-          className="bg-primary text-primary-foreground hover:bg-primary/90 shadow-xl shadow-primary/20 w-full sm:w-auto px-8 h-14 rounded-2xl font-black uppercase tracking-widest text-[10px] sm:text-xs gap-3 active:scale-[0.98] transition-all"
+          aria-label="Ir para o Dashboard"
+          className="bg-primary text-primary-foreground hover:bg-primary/90 shadow-xl shadow-primary/20 w-full sm:w-auto px-8 h-14 rounded-[20px] font-black uppercase tracking-widest text-[10px] sm:text-xs gap-3 active:scale-95 transition-all"
         >
           <Home className="h-5 w-5" />
           Ir para o Dashboard
@@ -62,3 +67,4 @@ const NotFound = () => {
 };
 
 export default NotFound;
+
