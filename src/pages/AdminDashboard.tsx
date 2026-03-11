@@ -1,4 +1,4 @@
-// 2. Puxa as mensagens de Feedback { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
@@ -166,7 +166,7 @@ export default function AdminDashboard() {
             ) : (
               reports.map(r => (
                 <div key={r.id} className="bg-slate-900 border border-red-500/30 p-6 rounded-[24px]">
-                   <p className="text-red-400 text-xs font-black uppercase tracking-widest mb-2"> Motivo da Denúncia:   {r.reason}</p> <p className="text-red-400 text-xs font-black uppercase tracking-widest mb-2"> Motivo da Denúncia:   {r.reason}</p> <p className="text-red-400 text-xs font-black uppercase tracking-widest mb-2"> Motivo da Denúncia:   {r.reason}</p> <p className="text-red-400 text-xs font-black uppercase tracking-widest mb-2"> Motivo da Denúncia:   {r.reason}</p>
+                  <p className="text-red-400 text-xs font-black uppercase tracking-widest mb-2">Motivo da Denúncia: {r.reason}</p>
                   <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 mb-4">
                     <p className="text-sm text-slate-300 italic">"{r.posts?.content}"</p>
                   </div>
@@ -175,7 +175,7 @@ export default function AdminDashboard() {
                       <Trash2 className="h-4 w-4 mr-2" /> Excluir Post
                     </Button>
                     <Button variant="outline" className="border-slate-700 hover:bg-slate-800 text-white rounded-xl h-10 text-[10px] font-black uppercase tracking-widest flex-1">
-                       <CheckCircle2 className="h-4 w-4 mr-2" />   Ignorar (Falso Alarme)   <CheckCircle2 className="h-4 w-4 mr-2" />   Ignorar (Falso Alarme)   <CheckCircle2 className="h-4 w-4 mr-2" />   Ignorar (Falso Alarme)   <CheckCircle2 className="h-4 w-4 mr-2" />   Ignorar (Falso Alarme) 
+                      <CheckCircle2 className="h-4 w-4 mr-2" /> Ignorar (Falso Alarme)
                     </Button>
                   </div>
                 </div>
