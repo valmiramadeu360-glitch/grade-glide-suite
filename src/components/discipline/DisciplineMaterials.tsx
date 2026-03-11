@@ -6,8 +6,11 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Link as LinkIcon, FileIcon, ImageIcon, Trash2, ExternalLink, Loader2, CloudOff, Bookmark } from "lucide-react";
+import { 
+  Plus, Link as LinkIcon, FileText, ImageIcon, Trash2, 
+  ExternalLink, Loader2, CloudOff, Bookmark, Video, 
+  Mic, Music, PlayCircle, Eye, X
+} from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
@@ -26,7 +29,7 @@ export function DisciplineMaterials({ disciplineId }: { disciplineId: string }) 
   const [open, setOpen] = useState(false);
   
   const [title, setTitle] = useState("");
-  const [type, setType] = useState<string>("link");
+  const [type, setType] = useState<string | null>(null); // Inicia vazio para forçar a escolha
   const [url, setUrl] = useState("");
   
   const [uploading, setUploading] = useState(false);
@@ -41,9 +44,7 @@ export function DisciplineMaterials({ disciplineId }: { disciplineId: string }) 
     const handleOffline = () => setIsOffline(true);
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
-
     loadMaterials();
-
     return () => {
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
@@ -59,22 +60,29 @@ export function DisciplineMaterials({ disciplineId }: { disciplineId: string }) 
     setMaterials(data ?? []);
   }
 
+  const handleTypeSelect = (selectedType: string) => {
+    setType(selectedType);
+    if (selectedType !== 'link') {
+      setTimeout(() => fileRef.current?.click(), 100);
+    }
+  };
+
   async function addMaterial() {
-    if (!title.trim() || !user) {
-      toast({ title: "Identificação obrigatória", description: "Dê um nome para o seu material.", variant: "destructive" });
+    if (!title.trim() || !user || !type) {
+      toast({ title: "Campos obrigatórios", description: "Defina um título e escolha o formato.", variant: "destructive" });
       return;
     }
     if (isOffline) {
-      toast({ title: "Você está offline", description: "Conecte-se para enviar arquivos para a nuvem.", variant: "destructive" });
+      toast({ title: "Modo Offline", description: "Conecte-se para sincronizar arquivos.", variant: "destructive" });
       return;
     }
 
     try {
+      setUploading(true);
+
       if (type === "link") {
         let formattedUrl = url.trim();
-        if (formattedUrl && !/^https?:\/\//i.test(formattedUrl)) {
-          formattedUrl = `https://${formattedUrl}`;
-        }
+        if (formattedUrl && !/^https?:\/\//i.test(formattedUrl)) formattedUrl = `https://${formattedUrl}`;
 
         const { error } = await supabase.from("materials").insert({
           discipline_id: disciplineId,
@@ -86,47 +94,47 @@ export function DisciplineMaterials({ disciplineId }: { disciplineId: string }) 
         if (error) throw error;
       } else {
         const file = fileRef.current?.files?.[0];
-        if (!file) {
-          toast({ title: "Arquivo Ausente", description: "Selecione um PDF ou Imagem no seu dispositivo.", variant: "destructive" });
-          return;
-        }
+        if (!file) throw new Error("Nenhum arquivo selecionado.");
         
-        setUploading(true);
         const fileExt = file.name.split('.').pop();
         const fileName = `${Math.random()}.${fileExt}`;
         const path = `${user.id}/${disciplineId}/${Date.now()}_${fileName}`;
         
-        const { error: upErr } = await supabase.storage.from("materials").upload(path, file, {
-          contentType: file.type,
-          upsert: false
-        });
-        
+        const { error: upErr } = await supabase.storage.from("materials").upload(path, file);
         if (upErr) throw upErr;
 
-        const isImage = file.type.startsWith("image/");
+        // Detecção de tipo refinada
+        let detectedType = "file";
+        if (file.type.startsWith("image/")) detectedType = "image";
+        else if (file.type.startsWith("video/")) detectedType = "video";
+        else if (file.type.startsWith("audio/")) detectedType = "audio";
+
         const { error: insErr } = await supabase.from("materials").insert({
           discipline_id: disciplineId,
           user_id: user.id,
           title: title.trim(),
-          type: isImage ? "image" : "file",
+          type: detectedType,
           file_path: path,
         });
         if (insErr) throw insErr;
       }
 
       toast({ title: "Material arquivado! 📎" });
-      
-      setTitle("");
-      setUrl("");
-      if (fileRef.current) fileRef.current.value = "";
-      setOpen(false);
+      resetForm();
       loadMaterials();
     } catch (error: any) {
-      toast({ title: "Falha na transferência", description: error.message, variant: "destructive" });
+      toast({ title: "Erro no upload", description: error.message, variant: "destructive" });
     } finally {
       setUploading(false);
     }
   }
+
+  const resetForm = () => {
+    setTitle("");
+    setUrl("");
+    setType(null);
+    setOpen(false);
+  };
 
   async function openMaterial(m: Material) {
     if (m.type === "link" && m.url) {
@@ -137,20 +145,11 @@ export function DisciplineMaterials({ disciplineId }: { disciplineId: string }) 
     if (m.file_path) {
       setOpeningId(m.id);
       try {
-        const { data, error } = await supabase.storage.from("materials").createSignedUrl(m.file_path, 60); 
-        
+        const { data, error } = await supabase.storage.from("materials").createSignedUrl(m.file_path, 3600); 
         if (error) throw error;
-        
-        if (data?.signedUrl) {
-          window.open(data.signedUrl, "_blank");
-        }
+        window.open(data.signedUrl, "_blank");
       } catch (err) {
-        const { data: publicData } = supabase.storage.from("materials").getPublicUrl(m.file_path);
-        if (publicData?.publicUrl) {
-          window.open(publicData.publicUrl, "_blank");
-        } else {
-          toast({ title: "Acesso Negado", description: "Arquivo corrompido ou indisponível.", variant: "destructive" });
-        }
+        toast({ title: "Erro ao abrir", description: "Não foi possível gerar o link de acesso.", variant: "destructive" });
       } finally {
         setOpeningId(null);
       }
@@ -158,34 +157,37 @@ export function DisciplineMaterials({ disciplineId }: { disciplineId: string }) 
   }
 
   async function deleteMaterial(m: Material) {
-    if (isOffline) {
-      toast({ title: "Modo Offline", description: "Conecte-se para apagar arquivos do servidor.", variant: "destructive" });
-      return;
-    }
-    if (deletingId === m.id) return; // Trava contra duplo clique
-    
-    if (!window.confirm(`Deseja remover permanentemente "${m.title}" do seu acervo?`)) return;
+    if (isOffline) return;
+    if (!window.confirm(`Excluir permanentemente "${m.title}"?`)) return;
 
     try {
       setDeletingId(m.id);
-      
-      const { error } = await supabase.from("materials").delete().eq("id", m.id);
-      if (error) throw error;
-      
-      if (m.file_path) {
-        await supabase.storage.from("materials").remove([m.file_path]);
-      }
-      
+      await supabase.from("materials").delete().eq("id", m.id);
+      if (m.file_path) await supabase.storage.from("materials").remove([m.file_path]);
       setMaterials(materials.filter(item => item.id !== m.id));
-      toast({ title: "Material excluído" });
+      toast({ title: "Removido com sucesso" });
     } catch (error: any) {
-      toast({ title: "Erro na exclusão", description: error.message, variant: "destructive" });
+      toast({ title: "Erro na exclusão", variant: "destructive" });
     } finally {
       setDeletingId(null);
     }
   }
 
-  const iconMap = { link: LinkIcon, file: FileIcon, image: ImageIcon };
+  const iconMap: Record<string, any> = { 
+    link: LinkIcon, 
+    file: FileText, 
+    image: ImageIcon, 
+    video: Video, 
+    audio: Music 
+  };
+
+  const getActionLabel = (type: string) => {
+    if (type === "video") return "Assistir";
+    if (type === "audio") return "Ouvir";
+    if (type === "image") return "Ver Foto";
+    if (type === "link") return "Abrir Link";
+    return "Ver Arquivo";
+  };
 
   return (
     <Card className="glass-card border-none shadow-sm bg-card rounded-[32px] overflow-hidden animate-in fade-in duration-500">
@@ -193,9 +195,9 @@ export function DisciplineMaterials({ disciplineId }: { disciplineId: string }) 
       <CardHeader className="pb-5 pt-6 px-6 sm:px-8 flex flex-row items-center justify-between border-b border-border/40 shrink-0">
         <div>
           <CardTitle className="text-sm font-black uppercase tracking-widest text-foreground flex items-center gap-2">
-            <Bookmark className="h-4 w-4 text-primary" /> Materiais e Mídia
+            <Bookmark className="h-4 w-4 text-primary" /> Repositório Multimídia
           </CardTitle>
-          <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest mt-1">Links, PDFs e Documentos</p>
+          <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest mt-1">Aulas, Gravações e PDFs</p>
         </div>
 
         <Dialog open={open} onOpenChange={setOpen}>
@@ -204,76 +206,63 @@ export function DisciplineMaterials({ disciplineId }: { disciplineId: string }) 
               <Plus className="mr-1.5 h-4 w-4" /> Adicionar
             </Button>
           </DialogTrigger>
-          <DialogContent className="w-[95vw] sm:max-w-[450px] rounded-[32px] bg-card border-border p-6 sm:p-8 shadow-2xl">
-            <DialogHeader className="text-left space-y-1">
+          <DialogContent className="w-[95vw] sm:max-w-[480px] rounded-[32px] bg-card border-border p-6 sm:p-8 shadow-2xl">
+            <DialogHeader className="text-left">
               <DialogTitle className="text-2xl font-black text-foreground tracking-tight">Novo Material</DialogTitle>
-              <DialogDescription className="font-medium text-muted-foreground text-sm">
-                Arquive links de Drive, Notion ou faça upload de apostilas em PDF.
-              </DialogDescription>
+              <DialogDescription className="font-medium text-muted-foreground text-sm">Escolha o formato do conteúdo que deseja arquivar.</DialogDescription>
             </DialogHeader>
             
             <div className="space-y-6 pt-4">
-              {isOffline && (
-                <div className="bg-destructive/5 border border-destructive/20 text-destructive p-3 rounded-2xl flex items-center justify-center gap-2 text-[10px] font-black uppercase tracking-widest animate-pulse shadow-inner">
-                  <CloudOff className="h-4 w-4 shrink-0" /> Sem conexão. Ação pausada.
+              <div className="space-y-2">
+                <Label className="font-black text-[10px] uppercase tracking-widest text-muted-foreground ml-1">Título do Material</Label>
+                <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Ex: Gravação da Revisão..." className="h-14 rounded-2xl bg-muted/20 border-border/50 text-base font-bold focus:ring-primary/30" />
+              </div>
+
+              <div className="space-y-3">
+                <Label className="font-black text-[10px] uppercase tracking-widest text-muted-foreground ml-1">Selecione o Formato</Label>
+                <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+                  {[
+                    { id: 'link', icon: Globe, label: 'Link', color: 'text-blue-500' },
+                    { id: 'file', icon: FileText, label: 'PDF', color: 'text-red-500' },
+                    { id: 'image', icon: ImageIcon, label: 'Foto', color: 'text-emerald-500' },
+                    { id: 'video', icon: Video, label: 'Vídeo', color: 'text-purple-500' },
+                    { id: 'audio', icon: Mic, label: 'Áudio', color: 'text-orange-500' },
+                  ].map((option) => (
+                    <button
+                      key={option.id}
+                      onClick={() => handleTypeSelect(option.id)}
+                      className={cn(
+                        "flex flex-col items-center justify-center p-3 rounded-2xl border-2 transition-all gap-1.5 active:scale-95",
+                        type === option.id ? "border-primary bg-primary/5 shadow-inner" : "border-border/50 bg-muted/10 hover:bg-muted/30"
+                      )}
+                    >
+                      <option.icon className={cn("h-6 w-6", option.color)} />
+                      <span className="text-[9px] font-black uppercase tracking-tighter">{option.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {type === "link" && (
+                <div className="space-y-2 animate-in fade-in zoom-in-95">
+                  <Label className="font-black text-[10px] uppercase tracking-widest text-muted-foreground ml-1">URL (Drive, YouTube, Notion)</Label>
+                  <Input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://..." className="h-14 rounded-2xl bg-muted/20 border-border/50 text-primary font-medium" />
                 </div>
               )}
 
-              <div className="space-y-2">
-                <Label className="font-black text-[10px] uppercase tracking-widest text-muted-foreground ml-1">Título de Identificação</Label>
-                <Input 
-                  value={title} 
-                  onChange={(e) => setTitle(e.target.value)} 
-                  placeholder="Ex: Slides da Aula 01, Drive da Turma..." 
-                  className="h-14 rounded-2xl bg-muted/20 border-border/50 text-base font-bold focus:ring-primary/30 transition-colors" 
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label className="font-black text-[10px] uppercase tracking-widest text-muted-foreground ml-1">Formato do Material</Label>
-                <Select value={type} onValueChange={setType}>
-                  <SelectTrigger className="h-14 rounded-2xl bg-muted/20 border border-border/50 font-bold text-foreground focus:ring-primary/30 transition-colors">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent className="rounded-2xl bg-popover border border-border shadow-2xl">
-                    <SelectItem value="link" className="py-3 font-bold cursor-pointer">URL Externa (Web, Drive) 🌐</SelectItem>
-                    <SelectItem value="file" className="py-3 font-bold cursor-pointer">Upload de Arquivo (PDF, Imagem) 📎</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {type === "link" ? (
-                <div className="space-y-2 animate-in fade-in zoom-in-95 duration-200">
-                  <Label className="font-black text-[10px] uppercase tracking-widest text-muted-foreground ml-1">Endereço Web (URL)</Label>
-                  <Input 
-                    value={url} 
-                    onChange={(e) => setUrl(e.target.value)} 
-                    placeholder="Ex: docs.google.com/..." 
-                    className="h-14 rounded-2xl bg-muted/20 border-border/50 font-medium focus:ring-primary/30 text-primary transition-colors" 
-                  />
-                </div>
-              ) : (
-                <div className="space-y-2 animate-in fade-in zoom-in-95 duration-200">
-                  <Label className="font-black text-[10px] uppercase tracking-widest text-muted-foreground ml-1">Selecionar do Dispositivo</Label>
-                  <Input 
-                    ref={fileRef} 
-                    type="file" 
-                    className="h-14 rounded-2xl bg-muted/20 border-border/50 cursor-pointer file:mr-4 file:py-2 file:px-5 file:rounded-xl file:border-0 file:text-[10px] file:uppercase file:tracking-widest file:font-black file:bg-primary/10 file:text-primary hover:file:bg-primary hover:file:text-primary-foreground transition-all pt-2.5 focus:ring-primary/30" 
-                  />
+              {type && type !== "link" && (
+                <div className="p-4 bg-primary/5 rounded-2xl border border-dashed border-primary/30 flex flex-col items-center gap-2">
+                  <FileText className="h-8 w-8 text-primary/40" />
+                  <p className="text-[10px] font-black uppercase text-primary">Arquivo Selecionado para Upload</p>
+                  <input ref={fileRef} type="file" className="hidden" onChange={(e) => setTitle(title || e.target.files?.[0]?.name.split('.')[0] || "")} />
+                  <Button variant="ghost" size="sm" className="h-8 text-[9px] uppercase font-black" onClick={() => fileRef.current?.click()}>Trocar Arquivo</Button>
                 </div>
               )}
               
-              <div className="pt-2">
-                <Button 
-                  onClick={addMaterial} 
-                  disabled={uploading || isOffline || !title.trim()} 
-                  className="w-full h-14 rounded-2xl font-black uppercase tracking-widest text-xs shadow-xl shadow-primary/20 bg-primary text-primary-foreground hover:bg-primary/90 active:scale-95 transition-all"
-                >
-                  {uploading ? (
-                    <>
-                      <Loader2 className="mr-2 h-5 w-5 animate-spin" /> Transferindo...
-                    </>
-                  ) : "Salvar no Repositório"}
+              <div className="flex gap-3 pt-2">
+                <Button variant="ghost" onClick={resetForm} className="flex-1 h-14 rounded-2xl font-black uppercase tracking-widest text-[10px]">Cancelar</Button>
+                <Button onClick={addMaterial} disabled={uploading || !type || !title.trim()} className="flex-[2] h-14 rounded-2xl font-black uppercase tracking-widest text-[10px] shadow-xl shadow-primary/20 bg-primary">
+                  {uploading ? <Loader2 className="h-5 w-5 animate-spin" /> : "Confirmar e Salvar"}
                 </Button>
               </div>
             </div>
@@ -283,70 +272,51 @@ export function DisciplineMaterials({ disciplineId }: { disciplineId: string }) 
       
       <CardContent className="p-4 sm:p-6 bg-card/30">
         {materials.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-center border-2 border-dashed border-border/50 rounded-[32px] bg-background">
-            <div className="h-20 w-20 rounded-full bg-muted/50 flex items-center justify-center mb-5 shadow-inner">
-              <Bookmark className="h-10 w-10 text-muted-foreground/30" />
-            </div>
-            <h3 className="text-xl font-black text-foreground">Repositório Vazio</h3>
-            <p className="text-sm font-medium text-muted-foreground mt-2 max-w-[250px]">Adicione os PDFs e links vitais para o estudo desta matéria.</p>
+          <div className="flex flex-col items-center justify-center py-20 text-center border-2 border-dashed border-border/50 rounded-[32px] bg-background">
+            <PlayCircle className="h-12 w-12 text-muted-foreground/20 mb-4" />
+            <h3 className="text-xl font-black text-foreground">Sem mídias</h3>
+            <p className="text-sm font-medium text-muted-foreground mt-2">Centralize aqui seus links e gravações de aula.</p>
           </div>
         ) : (
-          <div className="grid gap-3 sm:gap-4">
+          <div className="grid gap-4">
             {materials.map((m) => {
-              const Icon = iconMap[m.type as keyof typeof iconMap] ?? FileIcon;
-              const isDeleting = deletingId === m.id;
+              const Icon = iconMap[m.type] ?? FileText;
               const isOpening = openingId === m.id;
 
               return (
-                <div 
-                  key={m.id} 
-                  className="group flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6 rounded-[24px] p-5 sm:p-6 bg-card border border-border/50 hover:border-primary/40 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all active:scale-[0.99]"
-                >
-                  <div className="flex items-center gap-4 sm:gap-5 flex-1 min-w-0">
-                    <div className="h-12 w-12 sm:h-14 sm:w-14 bg-muted/30 border border-border/50 shadow-inner rounded-2xl flex items-center justify-center shrink-0 group-hover:bg-primary/10 transition-colors">
-                      <Icon className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />
+                <div key={m.id} className="group flex flex-col sm:flex-row sm:items-center gap-5 p-5 rounded-[28px] bg-card border border-border/50 hover:border-primary/40 shadow-sm transition-all hover:shadow-lg">
+                  <div className="flex items-center gap-4 flex-1 min-w-0">
+                    <div className="h-14 w-14 bg-muted/30 border border-border shadow-inner rounded-2xl flex items-center justify-center shrink-0 group-hover:bg-primary/10 transition-colors">
+                      <Icon className="h-7 w-7 text-primary" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-base sm:text-lg font-black text-foreground truncate leading-tight group-hover:text-primary transition-colors">
-                        {m.title}
-                      </p>
-                      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mt-1">
-                        Formato: {m.type === "link" ? "Link Web" : "Documento/Arquivo"}
-                      </p>
+                      <p className="text-base sm:text-lg font-black text-foreground truncate group-hover:text-primary transition-colors">{m.title}</p>
+                      <Badge variant="outline" className="mt-1 text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md opacity-70">
+                        {m.type}
+                      </Badge>
                     </div>
                   </div>
                   
-                  <div className="flex items-center justify-end gap-3 mt-4 sm:mt-0 w-full sm:w-auto border-t sm:border-0 border-border/50 pt-4 sm:pt-0">
-                    {(m.url || m.file_path) && (
-                      <Button
-                        variant="outline"
-                        onClick={() => openMaterial(m)}
-                        disabled={isOpening || isOffline}
-                        className={cn(
-                          "h-12 flex-1 sm:flex-none sm:w-auto rounded-xl font-black text-[10px] uppercase tracking-widest transition-all shadow-sm",
-                          m.type === "link" 
-                            ? "bg-primary/10 text-primary border-primary/20 hover:bg-primary hover:text-primary-foreground" 
-                            : "bg-background text-foreground border-border/50 hover:bg-muted"
-                        )}
-                        title="Acessar Material"
-                      >
-                        {isOpening ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <ExternalLink className="h-4 w-4 mr-2" />}
-                        {m.type === "link" ? "Acessar Link" : "Visualizar Arquivo"}
-                      </Button>
-                    )}
+                  <div className="flex items-center justify-end gap-3 shrink-0 border-t sm:border-0 border-border/50 pt-4 sm:pt-0">
+                    <Button
+                      variant="outline"
+                      onClick={() => openMaterial(m)}
+                      disabled={isOpening}
+                      className="h-12 px-6 rounded-xl font-black text-[10px] uppercase tracking-widest bg-background border-border/50 hover:bg-primary hover:text-white transition-all shadow-sm"
+                    >
+                      {isOpening ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <PlayCircle className="h-4 w-4 mr-2" />}
+                      {getActionLabel(m.type)}
+                    </Button>
                     
                     <Button
                       size="icon"
                       variant="ghost"
-                      disabled={isDeleting || isOffline}
-                      className="h-12 w-12 shrink-0 rounded-xl text-destructive hover:bg-destructive/10 hover:border-destructive/30 transition-all opacity-100 sm:opacity-0 group-hover:opacity-100 bg-background sm:bg-transparent"
-                      title="Excluir Material"
+                      className="h-12 w-12 rounded-xl text-destructive hover:bg-destructive/10 transition-all opacity-100 sm:opacity-0 group-hover:opacity-100"
                       onClick={() => deleteMaterial(m)}
                     >
-                      {isDeleting ? <Loader2 className="h-5 w-5 animate-spin" /> : <Trash2 className="h-5 w-5" />}
+                      <Trash2 className="h-5 w-5" />
                     </Button>
                   </div>
-
                 </div>
               );
             })}
@@ -356,4 +326,3 @@ export function DisciplineMaterials({ disciplineId }: { disciplineId: string }) 
     </Card>
   );
 }
-
