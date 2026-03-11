@@ -45,6 +45,7 @@ export default function Disciplines({ extraOnly = false }: { extraOnly?: boolean
   
   const [allDisciplines, setAllDisciplines] = useState<Discipline[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState("active");
   const [open, setOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false); 
@@ -144,41 +145,49 @@ export default function Disciplines({ extraOnly = false }: { extraOnly?: boolean
     }
   }
 
-  // MELHORIA IMPLEMENTADA: Restauração com atualização de estado global
+  // ATUALIZAÇÃO SUPREMA: Força a restauração para a aba ativa com sincronização de label
   async function handleRestorePeriod() {
     if (!restorePeriodLabel.trim() || !user) return;
     setIsProcessing(true);
+    
     try {
       const newLabel = restorePeriodLabel.trim();
 
-      // 1. Atualiza as matérias (Desarquiva e muda o rótulo pro novo nome)
+      // 1. Atualiza as matérias no banco (Força desarquivamento e novo nome)
       const { error: updateError } = await supabase
         .from("disciplines")
-        .update({ archived: false, semester_label: newLabel })
+        .update({ 
+          archived: false, 
+          semester_label: newLabel 
+        })
         .eq("user_id", user.id)
-        .eq("semester_label", restoreTargetLabel)
-        .eq("archived", true);
+        .eq("semester_label", restoreTargetLabel); // Restaura todas desse rótulo
 
       if (updateError) throw updateError;
 
-      // 2. Sincroniza o Perfil do usuário com o novo nome
-      await supabase
+      // 2. Atualiza o perfil para que o app foque nesse novo semestre
+      const { error: profileError } = await supabase
         .from("profiles")
         .update({ current_semester_label: newLabel, updated_at: new Date().toISOString() })
         .eq("user_id", user.id);
 
+      if (profileError) throw profileError;
+
+      // 3. SINCRONIZAÇÃO DE ESTADO LOCAL (Vital para aparecer na aba 'Em Curso')
+      if (setCurrentLabel) {
+        await setCurrentLabel(newLabel);
+      }
+
       toast({ 
-        title: "Período Restaurado! 🚀", 
-        description: `Matérias movidas para "Em Curso" como "${newLabel}".` 
+        title: "Ciclo Reativado! 🚀", 
+        description: `As matérias de "${restoreTargetLabel}" agora são o seu período ativo: "${newLabel}".` 
       });
 
       setRestoreDialogOpen(false);
-      
-      // 3. ATUALIZAÇÃO CRÍTICA: Muda o label global ANTES de recarregar a lista
-      if (setCurrentLabel) setCurrentLabel(newLabel);
+      setActiveTab("active"); // Volta automaticamente para a aba "Em Curso"
+
+      // 4. RECARGA FINAL
       if (loadSemesters) await loadSemesters();
-      
-      // 4. Recarrega as matérias do banco para o estado local refletir a mudança
       await loadDisciplines();
 
     } catch (e: any) {
@@ -261,16 +270,12 @@ export default function Disciplines({ extraOnly = false }: { extraOnly?: boolean
   }
 
   return (
-    <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500 pb-24 px-4 sm:px-6 overflow-x-hidden">
+    <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500 pb-24 px-4 sm:px-6 overflow-x-hidden pt-6">
       
-      <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 pt-6">
+      {/* Cabeçalho */}
+      <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
         <div className="flex items-center gap-5 w-full lg:w-auto">
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            onClick={() => navigate(-1)}
-            className="h-14 w-14 sm:h-16 sm:w-16 rounded-2xl bg-muted/30 hover:bg-muted border border-border/40 shrink-0 transition-colors"
-          >
+          <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="h-14 w-14 sm:h-16 sm:w-16 rounded-2xl bg-muted/30 border border-border/40 shrink-0 transition-colors">
             <ArrowLeft className="h-6 w-6 text-foreground" />
           </Button>
           <div className="min-w-0 flex-1">
@@ -285,96 +290,56 @@ export default function Disciplines({ extraOnly = false }: { extraOnly?: boolean
 
         <div className="flex flex-col sm:flex-row items-center gap-4 w-full lg:w-auto">
           <div className="flex items-center gap-2 w-full sm:w-auto justify-end sm:justify-start">
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              onClick={() => navigate('/messages')}
-              className="relative h-14 w-14 sm:h-16 sm:w-16 rounded-2xl bg-muted/30 hover:bg-primary/10 text-muted-foreground hover:text-primary transition-all active:scale-95"
-              title="Mensagens"
-            >
-              <MessageSquare className="h-6 w-6 sm:h-7 sm:w-7" />
-              <span className="absolute top-3 right-3 h-2 w-2 rounded-full bg-primary border-2 border-background" />
-            </Button>
-
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              className="relative h-14 w-14 sm:h-16 sm:w-16 rounded-2xl bg-muted/30 hover:bg-primary/10 text-muted-foreground hover:text-primary transition-all active:scale-95"
-              title="Notificações"
-            >
-              <Bell className="h-6 w-6 sm:h-7 sm:w-7" />
-              <span className="absolute top-3 right-3 h-2 w-2 rounded-full bg-destructive border-2 border-background" />
-            </Button>
+             <Button variant="ghost" size="icon" onClick={() => navigate('/messages')} className="relative h-14 w-14 sm:h-16 sm:w-16 rounded-2xl bg-muted/30 hover:bg-primary/10 text-muted-foreground hover:text-primary transition-all active:scale-95">
+                <MessageSquare className="h-6 w-6 sm:h-7 sm:w-7" />
+                <span className="absolute top-3 right-3 h-2 w-2 rounded-full bg-primary border-2 border-background" />
+             </Button>
+             <Button variant="ghost" size="icon" className="relative h-14 w-14 sm:h-16 sm:w-16 rounded-2xl bg-muted/30 hover:bg-primary/10 text-muted-foreground hover:text-primary transition-all active:scale-95">
+                <Bell className="h-6 w-6 sm:h-7 sm:w-7" />
+                <span className="absolute top-3 right-3 h-2 w-2 rounded-full bg-destructive border-2 border-background" />
+             </Button>
           </div>
 
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-              <Button className="h-14 sm:h-16 px-8 rounded-2xl bg-primary text-primary-foreground font-black uppercase text-xs tracking-widest shadow-xl shadow-primary/20 active:scale-95 transition-all w-full sm:w-auto">
+              <Button className="h-14 sm:h-16 px-8 rounded-2xl bg-primary text-white font-black uppercase text-xs tracking-widest shadow-xl shadow-primary/20 active:scale-95 transition-all w-full sm:w-auto">
                 <Plus className="mr-2 h-5 w-5" /> Novo Registro
               </Button>
             </DialogTrigger>
             <DialogContent className="w-[95vw] sm:max-w-[450px] bg-card border-border rounded-[32px] p-6 sm:p-8 shadow-2xl">
               <DialogHeader className="text-left space-y-2">
-                <DialogTitle className="text-2xl font-black tracking-tight">Configurar Módulo</DialogTitle>
-                <DialogDescription className="font-medium text-muted-foreground text-sm">
-                  Adicione uma nova matéria para o período letivo <strong>{currentLabel}</strong>.
-                </DialogDescription>
+                <DialogTitle className="text-2xl font-black tracking-tight">Novo Módulo</DialogTitle>
+                <DialogDescription className="font-medium text-muted-foreground text-sm">Adicione para o período <strong>{currentLabel}</strong>.</DialogDescription>
               </DialogHeader>
               <div className="space-y-6 pt-6">
                 <div className="space-y-2">
-                  <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Nome da Matéria / Curso</Label>
-                  <Input 
-                    value={newName} 
-                    onChange={e => setNewName(e.target.value)}
-                    placeholder="Ex: Anatomia Clínica..." 
-                    className="h-14 rounded-2xl bg-muted/20 border-border/50 text-base font-bold focus:ring-primary/40 focus:bg-background transition-colors" 
-                  />
+                  <Label className="text-[10px] font-black uppercase tracking-widest ml-1">Nome da Matéria</Label>
+                  <Input value={newName} onChange={e => setNewName(e.target.value)} placeholder="Ex: Anatomia Clínica..." className="h-14 rounded-2xl bg-muted/20 border-border/50 text-base font-bold focus:ring-primary/40" />
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Docente (opcional)</Label>
-                  <Input 
-                    value={newProfessor} 
-                    onChange={e => setNewProfessor(e.target.value)}
-                    placeholder="Nome do professor" 
-                    className="h-14 rounded-2xl bg-muted/20 border-border/50 text-base font-medium focus:ring-primary/40 focus:bg-background transition-colors" 
-                  />
+                  <Label className="text-[10px] font-black uppercase tracking-widest ml-1">Docente</Label>
+                  <Input value={newProfessor} onChange={e => setNewProfessor(e.target.value)} placeholder="Nome do professor" className="h-14 rounded-2xl bg-muted/20 border-border/50 text-base font-medium focus:ring-primary/40" />
                 </div>
                 <div className="space-y-2">
-                  <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Cor do Módulo</Label>
+                  <Label className="text-[10px] font-black uppercase tracking-widest ml-1">Cor</Label>
                   <Popover open={colorPickerOpen} onOpenChange={setColorPickerOpen}>
                     <PopoverTrigger asChild>
-                      <Button 
-                        variant="outline" 
-                        className="h-14 w-full rounded-2xl bg-muted/20 border-border/50 justify-start gap-4 font-bold hover:bg-background transition-colors"
-                      >
+                      <Button variant="outline" className="h-14 w-full rounded-2xl bg-muted/20 border-border/50 justify-start gap-4 font-bold hover:bg-background transition-colors">
                         <div className="h-6 w-6 rounded-lg shadow-sm" style={{ backgroundColor: newColor }} />
                         <span className="text-foreground">Selecionar Cor</span>
                         <Palette className="ml-auto h-5 w-5 text-muted-foreground" />
                       </Button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-64 p-4 rounded-[24px] border-border shadow-xl" align="center">
+                    <PopoverContent className="w-64 p-4 rounded-[24px] border-border shadow-xl">
                       <div className="grid grid-cols-5 gap-3">
                         {colors.map(c => (
-                          <button
-                            key={c}
-                            type="button"
-                            onClick={() => { setNewColor(c); setColorPickerOpen(false); }}
-                            className={cn(
-                              "h-10 w-10 rounded-xl transition-all active:scale-90",
-                              newColor === c ? "ring-2 ring-primary ring-offset-2 ring-offset-background scale-110 shadow-lg" : "opacity-50 hover:opacity-100 hover:scale-105"
-                            )}
-                            style={{ backgroundColor: c }}
-                          />
+                          <button key={c} type="button" onClick={() => { setNewColor(c); setColorPickerOpen(false); }} className={cn("h-10 w-10 rounded-xl transition-all active:scale-90", newColor === c ? "ring-2 ring-primary ring-offset-2 ring-offset-background scale-110 shadow-lg" : "opacity-50 hover:opacity-100")} style={{ backgroundColor: c }} />
                         ))}
                       </div>
                     </PopoverContent>
                   </Popover>
                 </div>
-                <Button 
-                  onClick={handleCreate} 
-                  disabled={isSubmitting || !newName.trim()} 
-                  className="w-full h-14 mt-4 rounded-2xl font-black uppercase tracking-widest text-xs bg-primary text-primary-foreground shadow-lg shadow-primary/20 active:scale-95 transition-all"
-                >
+                <Button onClick={handleCreate} disabled={isSubmitting || !newName.trim()} className="w-full h-14 rounded-2xl font-black uppercase tracking-widest text-xs bg-primary shadow-lg shadow-primary/20">
                   {isSubmitting ? <Loader2 className="h-5 w-5 animate-spin" /> : "Salvar Registro"}
                 </Button>
               </div>
@@ -383,40 +348,25 @@ export default function Disciplines({ extraOnly = false }: { extraOnly?: boolean
         </div>
       </header>
 
+      {/* Busca */}
       <div className="relative group max-w-2xl">
         <Search className="absolute left-5 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground group-focus-within:text-primary transition-colors" />
-        <Input 
-          placeholder="Buscar módulo ou docente..." 
-          value={searchQuery}
-          onChange={e => setSearchQuery(e.target.value)}
-          className="h-16 pl-14 pr-6 rounded-[24px] bg-card border-border/40 shadow-sm text-base sm:text-lg font-bold placeholder:font-medium placeholder:text-muted-foreground/50 focus:ring-primary/40 focus:bg-background transition-all"
-        />
+        <Input placeholder="Buscar módulo ou docente..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="h-16 pl-14 pr-6 rounded-[24px] bg-card border-border/40 shadow-sm text-base sm:text-lg font-bold" />
       </div>
 
-      <Tabs defaultValue="active" className="w-full space-y-8">
+      {/* Abas */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full space-y-8">
         <TabsList className="bg-card/50 backdrop-blur-sm border border-border/40 p-1.5 rounded-[20px] h-auto w-full sm:w-fit grid grid-cols-2 shadow-sm">
-          <TabsTrigger value="active" className="rounded-xl font-black text-[10px] sm:text-[11px] uppercase tracking-widest px-4 sm:px-10 py-3.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md transition-all">
-            Em Curso
-          </TabsTrigger>
-          <TabsTrigger value="archive" className="rounded-xl font-black text-[10px] sm:text-[11px] uppercase tracking-widest px-4 sm:px-10 py-3.5 data-[state=active]:bg-muted data-[state=active]:shadow-md transition-all">
-            Histórico
-          </TabsTrigger>
+          <TabsTrigger value="active" className="rounded-xl font-black text-[10px] uppercase tracking-widest px-4 sm:px-10 py-3.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all">Em Curso</TabsTrigger>
+          <TabsTrigger value="archive" className="rounded-xl font-black text-[10px] uppercase tracking-widest px-4 sm:px-10 py-3.5 data-[state=active]:bg-muted transition-all">Histórico</TabsTrigger>
         </TabsList>
 
         <TabsContent value="active" className="animate-in fade-in slide-in-from-bottom-4 duration-500 m-0">
           {activeDisciplines.length === 0 ? (
             <div className="py-24 px-6 rounded-[40px] border-2 border-dashed border-border/40 flex flex-col items-center text-center bg-card/20">
-              <div className="h-20 w-20 rounded-3xl bg-muted/50 flex items-center justify-center mb-6 shadow-inner">
-                {extraOnly ? <GraduationCap className="h-10 w-10 text-muted-foreground/30" /> : <BookOpen className="h-10 w-10 text-muted-foreground/30" />}
-              </div>
-              <h3 className="text-xl sm:text-2xl font-black text-foreground">
-                {searchQuery ? "Nenhum resultado" : "Nenhum módulo ativo"}
-              </h3>
-              <p className="text-sm font-medium text-muted-foreground mt-2 max-w-sm">
-                {searchQuery 
-                  ? "Tente buscar por outro nome ou verifique a aba de Histórico." 
-                  : `Inicie um novo ciclo clicando em "Novo Registro" para o período ${currentLabel}.`}
-              </p>
+              <BookOpen className="h-14 w-14 text-muted-foreground/30 mb-4" />
+              <h3 className="text-xl sm:text-2xl font-black text-foreground">Nenhum módulo ativo</h3>
+              <p className="text-sm font-medium text-muted-foreground mt-2 max-w-sm">Inicie um novo ciclo clicando em "Novo Registro" para o período {currentLabel}.</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6">
@@ -430,28 +380,23 @@ export default function Disciplines({ extraOnly = false }: { extraOnly?: boolean
             <div className="py-24 px-6 text-center flex flex-col items-center bg-card/20 rounded-[40px] border border-border/30">
               <History className="h-14 w-14 text-muted-foreground/20 mb-4" />
               <h3 className="text-xl font-black text-foreground">Arquivo Vazio</h3>
-              <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground mt-2">Sem registros passados</p>
             </div>
           ) : (
             archivedBySemester.map(([label, items]) => (
               <section key={label} className="space-y-6 bg-card/20 p-6 rounded-[32px] border border-border/30">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 px-2">
                   <div className="flex items-center gap-4">
-                    <div className="h-14 w-14 rounded-2xl bg-muted border border-border/50 flex items-center justify-center shrink-0 shadow-inner">
-                      <History className="h-7 w-7 text-muted-foreground" />
-                    </div>
+                    <History className="h-7 w-7 text-muted-foreground" />
                     <div>
-                      <h3 className="text-2xl sm:text-3xl font-black tracking-tighter text-foreground">{label}</h3>
-                      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mt-1">
-                        {items.length} Matérias Arquivadas
-                      </p>
+                      <h3 className="text-2xl sm:text-3xl font-black tracking-tighter">{label}</h3>
+                      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">{items.length} Matérias Arquivadas</p>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-3 w-full md:w-auto">
                     <Button 
                       variant="outline" 
-                      className="flex-1 md:flex-none h-12 rounded-xl text-[10px] font-black uppercase tracking-widest border-amber-500/20 text-amber-500 hover:bg-amber-500/10 hover:text-amber-500 active:scale-95 transition-all shadow-sm"
+                      className="flex-1 md:flex-none h-12 rounded-xl text-[10px] font-black uppercase border-amber-500/20 text-amber-500 hover:bg-amber-500/10"
                       onClick={() => {
                         setRestoreTargetLabel(label);
                         setRestorePeriodLabel(label); 
@@ -460,15 +405,7 @@ export default function Disciplines({ extraOnly = false }: { extraOnly?: boolean
                     >
                       <RefreshCcw className="mr-2 h-4 w-4" /> Restaurar
                     </Button>
-                    <Button 
-                      variant="outline" 
-                      className="h-12 w-12 shrink-0 rounded-xl border-destructive/20 text-destructive hover:bg-destructive/10 bg-background hover:border-destructive/40 active:scale-90 transition-all shadow-sm"
-                      onClick={() => {
-                        setDeleteTargetLabel(label);
-                        setDeleteDialogOpen(true);
-                      }}
-                      title="Excluir Período"
-                    >
+                    <Button variant="outline" className="h-12 w-12 rounded-xl border-destructive/20 text-destructive hover:bg-destructive/10" onClick={() => { setDeleteTargetLabel(label); setDeleteDialogOpen(true); }}>
                       <Trash2 className="h-5 w-5" />
                     </Button>
                   </div>
@@ -483,7 +420,7 @@ export default function Disciplines({ extraOnly = false }: { extraOnly?: boolean
         </TabsContent>
       </Tabs>
 
-      {/* Modal de Restauração */}
+      {/* Modais */}
       <Dialog open={restoreDialogOpen} onOpenChange={setRestoreDialogOpen}>
         <DialogContent className="w-[95vw] sm:max-w-[400px] bg-card border-border rounded-[32px] p-6 sm:p-8 shadow-2xl">
           <DialogHeader className="text-left space-y-2">
@@ -491,23 +428,17 @@ export default function Disciplines({ extraOnly = false }: { extraOnly?: boolean
               <RefreshCcw className="text-amber-500 h-6 w-6" /> Reativar Ciclo
             </DialogTitle>
             <DialogDescription className="font-medium text-muted-foreground text-sm">
-              As matérias voltarão para a aba "Em Curso". Você pode atualizar o nome do período abaixo.
+              As matérias de <strong>{restoreTargetLabel}</strong> voltarão para a aba "Em Curso". Você pode atualizar o nome do período abaixo.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-6 pt-4">
             <div className="space-y-2">
               <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Identificador do Período</Label>
-              <Input 
-                value={restorePeriodLabel} 
-                onChange={e => setRestorePeriodLabel(e.target.value)}
-                className="h-14 rounded-2xl bg-muted/20 border-border/50 text-lg font-black text-center focus:ring-amber-500/40 transition-colors" 
-              />
+              <Input value={restorePeriodLabel} onChange={e => setRestorePeriodLabel(e.target.value)} className="h-14 rounded-2xl bg-muted/20 border-border/50 text-lg font-black text-center focus:ring-amber-500/40" />
             </div>
             <div className="flex gap-3 pt-2">
-              <Button variant="outline" onClick={() => setRestoreDialogOpen(false)} className="flex-1 h-12 rounded-2xl border-border/50 font-bold uppercase text-[10px] tracking-widest hover:bg-muted">
-                Cancelar
-              </Button>
-              <Button onClick={handleRestorePeriod} disabled={!restorePeriodLabel.trim() || isProcessing} className="flex-1 h-12 rounded-2xl bg-amber-500 text-white hover:bg-amber-600 font-black uppercase text-[10px] tracking-widest active:scale-95 transition-all shadow-lg shadow-amber-500/20">
+              <Button variant="outline" onClick={() => setRestoreDialogOpen(false)} className="flex-1 h-12 rounded-2xl border-border/50 font-bold uppercase text-[10px]">Cancelar</Button>
+              <Button onClick={handleRestorePeriod} disabled={!restorePeriodLabel.trim() || isProcessing} className="flex-1 h-12 rounded-2xl bg-amber-500 text-white hover:bg-amber-600 font-black uppercase text-[10px]">
                 {isProcessing ? <Loader2 className="h-4 w-4 animate-spin" /> : "Confirmar"}
               </Button>
             </div>
@@ -519,33 +450,20 @@ export default function Disciplines({ extraOnly = false }: { extraOnly?: boolean
         <AlertDialogContent className="w-[95vw] sm:max-w-[420px] rounded-[32px] bg-card border-destructive/20 shadow-2xl">
           <AlertDialogHeader>
             <div className="flex items-center gap-4 mb-2">
-              <div className="h-12 w-12 rounded-xl bg-destructive/10 flex items-center justify-center shrink-0">
-                <AlertTriangle className="h-6 w-6 text-destructive" />
-              </div>
-              <AlertDialogTitle className="text-xl font-black tracking-tight text-destructive text-left">
-                Destruir Período?
-              </AlertDialogTitle>
+              <AlertTriangle className="h-6 w-6 text-destructive" />
+              <AlertDialogTitle className="text-xl font-black text-destructive text-left">Excluir Período?</AlertDialogTitle>
             </div>
-            <AlertDialogDescription className="font-medium text-muted-foreground text-left text-sm">
-              Você está prestes a deletar permanentemente o ciclo <strong className="text-foreground">{deleteTargetLabel}</strong> e todas as matérias contidas nele. Esta ação <strong className="text-destructive">não pode ser desfeita</strong>.
-            </AlertDialogDescription>
+            <AlertDialogDescription className="text-muted-foreground text-left text-sm">Esta ação apagará permanentemente o ciclo <strong>{deleteTargetLabel}</strong>. Não há como desfazer.</AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter className="gap-3 sm:gap-0 mt-4">
-            <AlertDialogCancel className="h-12 rounded-2xl border-none font-bold uppercase text-[10px] tracking-widest bg-muted/50 hover:bg-muted">
-              Cancelar
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDeletePeriod}
-              disabled={isProcessing}
-              className="h-12 rounded-2xl bg-destructive text-white font-black uppercase text-[10px] tracking-widest hover:bg-destructive/90 active:scale-95 transition-all"
-            >
-              {isProcessing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Trash2 className="h-4 w-4 mr-2" />}
-              Sim, Excluir Tudo
+          <AlertDialogFooter className="gap-3 mt-4">
+            <AlertDialogCancel className="h-12 rounded-2xl border-none font-bold uppercase text-[10px] bg-muted/50">Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeletePeriod} disabled={isProcessing} className="h-12 rounded-2xl bg-destructive text-white hover:bg-destructive/90 font-black uppercase text-[10px]">
+              {isProcessing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Trash2 className="h-4 w-4 mr-2" />} Sim, Excluir
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
     </div>
   );
 }
+
