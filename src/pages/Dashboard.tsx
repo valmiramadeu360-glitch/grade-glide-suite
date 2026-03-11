@@ -20,7 +20,7 @@ import {
   BookOpen, Clock, AlertTriangle, 
   CheckCircle2, ArrowRight, Cloud, CloudOff, History, 
   Loader2, Sparkles, RefreshCcw, Calendar as CalendarIcon,
-  ChevronDown
+  Bell, MessageSquare
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format, isToday, isTomorrow, differenceInDays, startOfDay, isSameDay } from "date-fns";
@@ -286,7 +286,7 @@ export default function Dashboard() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* HEADER RESTAURADO: Fiel à Imagem */}
+      {/* HEADER RESTAURADO: Com Notificações e Mensagens */}
       <header className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-8 border-b border-border/40 pb-8">
         <div className="space-y-4 w-full lg:w-auto">
           {/* Seletor de Semestre + Tag */}
@@ -320,14 +320,42 @@ export default function Dashboard() {
           </p>
         </div>
 
-        {/* Coluna Direita (Botões e Nuvem) */}
+        {/* Coluna Direita (Botões, Nuvem e Ações Rápidas) */}
         <div className="flex flex-col items-start lg:items-end gap-5 w-full lg:w-auto">
-          <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest">
-            {isOnline ? (
-              <span className="flex items-center gap-2 text-emerald-500"><Cloud className="h-4 w-4" /> Nuvem Conectada</span>
-            ) : (
-              <span className="flex items-center gap-2 text-amber-500 animate-pulse"><CloudOff className="h-4 w-4" /> Modo Offline</span>
-            )}
+          
+          {/* Linha da Nuvem + Ícones Fixos */}
+          <div className="flex items-center justify-between w-full lg:w-auto gap-4">
+            <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest bg-muted/50 px-4 py-2.5 rounded-xl">
+              {isOnline ? (
+                <span className="flex items-center gap-2 text-emerald-500"><Cloud className="h-4 w-4" /> Nuvem Conectada</span>
+              ) : (
+                <span className="flex items-center gap-2 text-amber-500 animate-pulse"><CloudOff className="h-4 w-4" /> Modo Offline</span>
+              )}
+            </div>
+
+            {/* Ações Rápidas (Mensagens e Notificações) */}
+            <div className="flex items-center gap-2">
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                onClick={() => navigate('/messages')}
+                className="relative h-10 w-10 rounded-xl bg-muted/50 hover:bg-primary/10 text-muted-foreground hover:text-primary transition-all active:scale-95"
+                title="Mensagens"
+              >
+                <MessageSquare className="h-5 w-5" />
+                <span className="absolute top-2 right-2 h-2 w-2 rounded-full bg-primary border-2 border-background" />
+              </Button>
+
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="relative h-10 w-10 rounded-xl bg-muted/50 hover:bg-primary/10 text-muted-foreground hover:text-primary transition-all active:scale-95"
+                title="Notificações"
+              >
+                <Bell className="h-5 w-5" />
+                <span className="absolute top-2 right-2 h-2 w-2 rounded-full bg-destructive border-2 border-background" />
+              </Button>
+            </div>
           </div>
 
           {/* Botão Gigante de Data que abre o Calendário */}
