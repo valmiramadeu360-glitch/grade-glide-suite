@@ -5,8 +5,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { Mail, Lock, User, GraduationCap, Loader2, ArrowLeft, Eye, EyeOff } from "lucide-react";
+import { Mail, Lock, User, GraduationCap, Loader2, ArrowLeft, Eye, EyeOff, ShieldCheck } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+
+// E-mail master definido para acesso administrativo
+const ADMIN_EMAIL = "eduflow.adm.academy@gmail.com";
 
 export default function Auth() {
   const [loading, setLoading] = useState(false);
@@ -53,12 +56,23 @@ export default function Auth() {
         
       } else {
         // Fluxo de Login
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
-        // O redirecionamento acontece automaticamente via AuthProvider
+
+        // VERIFICAÇÃO DE ADMINISTRADOR: Intercepta o e-mail Master
+        if (data.user?.email === ADMIN_EMAIL) {
+          toast({ 
+            title: "Acesso Administrativo 🛡️", 
+            description: "Bem-vindo ao Painel de Comando Supremo do EduFlow.",
+            className: "bg-emerald-500 text-white border-none"
+          });
+          // Futuramente: navigate('/admin-dashboard')
+        } else {
+          toast({ title: "Bem-vindo de volta! 📚" });
+        }
+        // O redirecionamento normal para alunos acontece automaticamente via AuthProvider
       }
     } catch (error: any) {
-      // Tradução amigável de erros do Supabase para o Estudante
       let errorMessage = error.message;
       if (errorMessage.includes("Invalid login credentials")) errorMessage = "E-mail ou senha incorretos.";
       if (errorMessage.includes("Password should be at least")) errorMessage = "A senha deve ter no mínimo 6 caracteres.";
@@ -86,7 +100,6 @@ export default function Auth() {
   };
 
   return (
-    // Uso de 100dvh garante que a tela fique perfeita no iOS
     <div className="min-h-[100dvh] flex flex-col items-center justify-center bg-background p-4 relative overflow-hidden">
       
       <Button 
@@ -109,17 +122,22 @@ export default function Auth() {
       </div>
 
       <Card className="w-full max-w-md border-border bg-card/80 backdrop-blur-2xl shadow-2xl rounded-[32px] overflow-hidden relative z-10">
-        <div className="h-1.5 w-full bg-primary transition-colors duration-300" />
+        
+        {/* Detalhe de cor que muda se o usuário digitar o e-mail de admin */}
+        <div className={`h-1.5 w-full transition-colors duration-500 ${email === ADMIN_EMAIL ? 'bg-emerald-500' : 'bg-primary'}`} />
+        
         <CardHeader className="space-y-2 pt-8 text-center">
-          <CardTitle className="text-3xl font-black text-foreground tracking-tight">
-            {isResetPassword ? "Redefinir Senha" : isSignUp ? "Criar Conta" : "Acessar Conta"}
+          <CardTitle className="text-3xl font-black text-foreground tracking-tight flex items-center justify-center gap-2">
+            {isResetPassword ? "Redefinir Senha" : isSignUp ? "Criar Conta" : email === ADMIN_EMAIL ? <><ShieldCheck className="h-6 w-6 text-emerald-500" /> Acesso Restrito</> : "Acessar Conta"}
           </CardTitle>
           <CardDescription className="text-muted-foreground font-medium text-sm px-4">
             {isResetPassword 
               ? "Digite seu e-mail para receber o link de recuperação de acesso."
               : isSignUp
                 ? "Cadastre-se para começar a organizar e metrificar seus estudos."
-                : "Entre para gerenciar sua vida acadêmica e seus prazos."}
+                : email === ADMIN_EMAIL 
+                  ? "Insira a chave de acesso do administrador."
+                  : "Entre para gerenciar sua vida acadêmica e seus prazos."}
           </CardDescription>
         </CardHeader>
 
@@ -144,12 +162,12 @@ export default function Auth() {
 
             <div className="space-y-2">
               <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">
-                {isResetPassword ? "E-mail de Cadastro" : "E-mail Acadêmico"}
+                {isResetPassword ? "E-mail de Cadastro" : "E-mail de Acesso"}
               </Label>
               <div className="relative group">
-                <Mail className="absolute left-4 top-3.5 h-5 w-5 text-muted-foreground group-focus-within:text-primary transition-colors duration-300" />
+                <Mail className={`absolute left-4 top-3.5 h-5 w-5 transition-colors duration-300 ${email === ADMIN_EMAIL ? 'text-emerald-500' : 'text-muted-foreground group-focus-within:text-primary'}`} />
                 <Input
-                  className="pl-12 h-14 bg-muted/30 border-border text-foreground rounded-2xl focus:ring-primary/40 focus:bg-background transition-all font-medium text-base"
+                  className={`pl-12 h-14 bg-muted/30 border-border text-foreground rounded-2xl transition-all font-medium text-base ${email === ADMIN_EMAIL ? 'focus:ring-emerald-500/40 focus:bg-background' : 'focus:ring-primary/40 focus:bg-background'}`}
                   type="email"
                   placeholder="seu@email.com"
                   value={email}
@@ -164,9 +182,9 @@ export default function Auth() {
               <div className="space-y-2 animate-in fade-in slide-in-from-right-4 duration-300">
                 <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Senha Segura</Label>
                 <div className="relative group">
-                  <Lock className="absolute left-4 top-3.5 h-5 w-5 text-muted-foreground group-focus-within:text-primary transition-colors duration-300" />
+                  <Lock className={`absolute left-4 top-3.5 h-5 w-5 transition-colors duration-300 ${email === ADMIN_EMAIL ? 'text-emerald-500' : 'text-muted-foreground group-focus-within:text-primary'}`} />
                   <Input
-                    className="pl-12 pr-12 h-14 bg-muted/30 border-border text-foreground rounded-2xl focus:ring-primary/40 focus:bg-background transition-all font-medium text-base"
+                    className={`pl-12 pr-12 h-14 bg-muted/30 border-border text-foreground rounded-2xl transition-all font-medium text-base ${email === ADMIN_EMAIL ? 'focus:ring-emerald-500/40 focus:bg-background' : 'focus:ring-primary/40 focus:bg-background'}`}
                     type={showPassword ? "text" : "password"}
                     placeholder="No mínimo 6 caracteres"
                     value={password}
@@ -189,7 +207,7 @@ export default function Auth() {
 
           <CardFooter className="flex flex-col gap-5 pb-8 pt-4 px-6 sm:px-8">
             <Button
-              className="w-full h-14 rounded-2xl font-black uppercase tracking-widest text-xs shadow-xl shadow-primary/20 transition-all hover:scale-[1.02] active:scale-95 bg-primary text-primary-foreground hover:bg-primary/90"
+              className={`w-full h-14 rounded-2xl font-black uppercase tracking-widest text-xs shadow-xl transition-all hover:scale-[1.02] active:scale-95 text-white ${email === ADMIN_EMAIL ? 'bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/20' : 'bg-primary hover:bg-primary/90 shadow-primary/20'}`}
               type="submit"
               disabled={loading}
             >
@@ -199,6 +217,8 @@ export default function Auth() {
                 "Enviar Link de Recuperação"
               ) : isSignUp ? (
                 "Cadastrar no EduFlow"
+              ) : email === ADMIN_EMAIL ? (
+                "Autenticar Administrador"
               ) : (
                 "Entrar no EduFlow"
               )}
