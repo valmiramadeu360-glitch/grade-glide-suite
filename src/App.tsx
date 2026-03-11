@@ -8,6 +8,7 @@ import { ThemeProvider } from "@/hooks/useTheme";
 import { SemesterProvider } from "@/hooks/useSemester";
 import { AppLayout } from "@/components/AppLayout";
 
+// Importação das Páginas
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
 import Disciplines from "./pages/Disciplines";
@@ -19,6 +20,7 @@ import Feedback from "./pages/Feedback";
 import Connect from "./pages/Connect";
 import Messages from "./pages/Messages";
 import NotFound from "./pages/NotFound";
+import AdminDashboard from "./pages/AdminDashboard"; // <-- Importação do Painel Admin
 
 // Configuração do motor de dados (Performance BI)
 const queryClient = new QueryClient({
@@ -96,6 +98,9 @@ const App = () => (
                 <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
                 <Route path="/feedback" element={<ProtectedRoute><Feedback /></ProtectedRoute>} />
                 
+                {/* Rota Protegida Administrativa */}
+                <Route path="/admin" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
+                
                 {/* Fallback de Erro */}
                 <Route path="*" element={<NotFound />} />
               </Routes>
@@ -119,4 +124,3 @@ const App = () => (
 );
 
 export default App;
-
