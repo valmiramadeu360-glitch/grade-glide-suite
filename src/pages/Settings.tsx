@@ -56,28 +56,35 @@ export default function Settings() {
 
   async function loadSettings() {
     try {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("profiles")
         .select("*")
         .eq("user_id", user?.id)
         .maybeSingle();
 
+      if (error) throw error;
+
       if (data) {
         setProfileId(data.id);
-        setSemesterStart(data.semester_start ?? "");
-        setSemesterEnd(data.semester_end ?? "");
+        // Garantimos que não vem undefined para não quebrar o Input tipo 'date'
+        setSemesterStart(data.semester_start || "");
+        setSemesterEnd(data.semester_end || "");
+        
         setPushEnabled(data.notification_push ?? true);
         setEmailEnabled(data.notification_email ?? true);
-        setNotifyStart(data.notification_start_time ?? "09:00");
-        setNotifyEnd(data.notification_end_time ?? "18:00");
-        setNotifyVolume("3");
-        setNotifyFrequency(data.notification_frequency ?? "daily");
+        setNotifyStart(data.notification_start_time || "09:00");
+        setNotifyEnd(data.notification_end_time || "18:00");
+        setNotifyVolume(data.notification_volume?.toString() || "3");
+        setNotifyFrequency(data.notification_frequency || "daily");
       }
+    } catch (err) {
+      console.error("Erro ao carregar configurações", err);
     } finally {
       setLoading(false);
     }
   }
 
+  // CORE FIX: Ajuste do Payload e Tratamento de Erros
   async function handleSave() {
     if (!user) return;
     setSaving(true);
@@ -100,10 +107,19 @@ export default function Settings() {
         .update(payload)
         .eq("user_id", user.id);
 
-      if (error) throw error;
-      toast({ title: "Sistema Atualizado", description: "Suas preferências globais foram salvas." });
+      if (error) {
+        // Se a coluna não existir, o erro vai explodir aqui e o Toast avisará!
+        throw error;
+      }
+      
+      toast({ title: "Sistema Atualizado", description: "Suas preferências globais foram salvas com sucesso." });
     } catch (e: any) {
-      toast({ title: "Falha na sincronização", description: e.message, variant: "destructive" });
+      console.error("Erro no Update:", e);
+      toast({ 
+        title: "Falha na sincronização", 
+        description: "Não foi possível salvar os dados. Verifique a estrutura do banco (Profiles).", 
+        variant: "destructive" 
+      });
     } finally {
       setSaving(false);
     }
@@ -114,22 +130,23 @@ export default function Settings() {
     setDeleting(true);
     
     try {
-      // 1. Limpeza Ativa: Força a deleção dos dados relacionais caso o banco não tenha cascade
+      // 1. Limpeza Ativa (Prevenção de Orfãos)
       await Promise.all([
         supabase.from("disciplines").delete().eq("user_id", user!.id),
         supabase.from("reminders").delete().eq("user_id", user!.id),
+        // supabase.from("posts").delete().eq("user_id", user!.id) <-- Pode apagar posts tbm se quiser
       ]);
       
       // 2. Deleta o perfil
-      await supabase.from("profiles").delete().eq("user_id", user!.id);
-      
-      // 3. O usuário em si (tabela auth) muitas vezes precisa de uma RPC/Edge Function 
-      // ou intervenção do admin para apagar por completo. O SignOut é garantido:
+      const { error: profileError } = await supabase.from("profiles").delete().eq("user_id", user!.id);
+      if (profileError) throw profileError;
+
+      // 3. Destrói o login (Isso desloga, mas a exclusão completa requer trigger no Supabase)
       await supabase.auth.signOut();
       
       toast({ 
         title: "Acesso Encerrado", 
-        description: "Sua conta e dados foram removidos da plataforma." 
+        description: "Sua conta e dados foram removidos da plataforma EduFlow." 
       });
       
       navigate("/auth");
@@ -151,7 +168,7 @@ export default function Settings() {
   }
 
   return (
-    <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in duration-700 pb-24 px-4 sm:px-6 overflow-x-hidden">
+    <div className="max-w-5xl mx-auto space-y-8 animate-in fade-in duration-700 pb-24 px-4 sm:px-6 overflow-x-hidden pt-6">
       
       {/* Modal Danger Zone (Exclusão) */}
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
@@ -199,7 +216,7 @@ export default function Settings() {
       </AlertDialog>
 
       {/* Header Responsivo */}
-      <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 pt-6">
+      <header className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div className="flex items-center gap-5 w-full md:w-auto">
           <Button
             variant="ghost"
@@ -236,7 +253,7 @@ export default function Settings() {
             <div className="grid grid-cols-1 gap-4">
               <div className="flex items-center justify-between p-5 bg-background rounded-2xl border border-border/50 shadow-sm transition-colors hover:bg-muted/10">
                 <div className="flex items-center gap-4">
-                  <div className="h-10 w-10 rounded-xl bg-emerald-500/10 flex items-center justify-center">
+                  <div className="h-10 w-10 rounded-xl bg-emerald-500/10 flex items-center justify-center shrink-0">
                     <Smartphone className="h-5 w-5 text-emerald-500" />
                   </div>
                   <span className="text-xs font-black uppercase tracking-widest">Push Mobile</span>
@@ -245,7 +262,7 @@ export default function Settings() {
               </div>
               <div className="flex items-center justify-between p-5 bg-background rounded-2xl border border-border/50 shadow-sm transition-colors hover:bg-muted/10">
                 <div className="flex items-center gap-4">
-                  <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                  <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
                     <Mail className="h-5 w-5 text-primary" />
                   </div>
                   <span className="text-xs font-black uppercase tracking-widest">E-mail Semanal</span>
@@ -257,9 +274,9 @@ export default function Settings() {
             <div className="space-y-3">
               <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Janela de Disponibilidade</Label>
               <div className="flex items-center gap-3 bg-muted/20 p-2 rounded-[20px] border border-border/40">
-                <Input type="time" value={notifyStart} onChange={e => setNotifyStart(e.target.value)} className="h-12 border-none bg-transparent font-black shadow-none focus-visible:ring-0" />
+                <Input type="time" value={notifyStart} onChange={e => setNotifyStart(e.target.value)} className="h-12 border-none bg-transparent font-black shadow-none focus-visible:ring-0 text-center sm:text-left" />
                 <div className="h-8 w-px bg-border/50" />
-                <Input type="time" value={notifyEnd} onChange={e => setNotifyEnd(e.target.value)} className="h-12 border-none bg-transparent font-black shadow-none focus-visible:ring-0" />
+                <Input type="time" value={notifyEnd} onChange={e => setNotifyEnd(e.target.value)} className="h-12 border-none bg-transparent font-black shadow-none focus-visible:ring-0 text-center sm:text-left" />
               </div>
             </div>
 
@@ -278,8 +295,8 @@ export default function Settings() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="bg-popover border-border shadow-2xl rounded-2xl">
-                    <SelectItem value="daily" className="font-bold py-3 uppercase text-[10px] tracking-widest">Diário</SelectItem>
-                    <SelectItem value="weekly" className="font-bold py-3 uppercase text-[10px] tracking-widest">Semanal</SelectItem>
+                    <SelectItem value="daily" className="font-bold py-3 uppercase text-[10px] tracking-widest cursor-pointer">Diário</SelectItem>
+                    <SelectItem value="weekly" className="font-bold py-3 uppercase text-[10px] tracking-widest cursor-pointer">Semanal</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -296,7 +313,7 @@ export default function Settings() {
             
             <div className="flex items-center justify-between p-5 bg-background rounded-2xl border border-border/50 transition-colors hover:bg-muted/10 cursor-pointer" onClick={() => setMode(mode === 'dark' ? 'light' : 'dark')}>
               <div className="flex items-center gap-4">
-                <div className={cn("h-10 w-10 rounded-xl flex items-center justify-center transition-colors", mode === 'dark' ? "bg-primary/10 text-primary" : "bg-amber-500/10 text-amber-500")}>
+                <div className={cn("h-10 w-10 rounded-xl flex items-center justify-center transition-colors shrink-0", mode === 'dark' ? "bg-primary/10 text-primary" : "bg-amber-500/10 text-amber-500")}>
                   {mode === 'dark' ? <Moon className="h-5 w-5" /> : <Sun className="h-5 w-5" />}
                 </div>
                 <div>
@@ -311,7 +328,7 @@ export default function Settings() {
             <div className="flex items-center justify-between p-5 bg-primary/5 rounded-2xl border border-primary/20">
               <div className="flex items-center gap-4">
                 <div 
-                  className="h-10 w-10 rounded-xl shadow-inner border border-black/10 dark:border-white/10" 
+                  className="h-10 w-10 rounded-xl shadow-inner border border-black/10 dark:border-white/10 shrink-0" 
                   style={{ backgroundColor: `hsl(${primaryColor.hue}, ${primaryColor.saturation}%, ${primaryColor.lightness}%)` }} 
                 />
                 <div>
@@ -321,7 +338,7 @@ export default function Settings() {
               </div>
               <Popover open={colorPopoverOpen} onOpenChange={setColorPopoverOpen}>
                 <PopoverTrigger asChild>
-                  <Button variant="outline" size="icon" className="h-12 w-12 rounded-xl border-primary/20 bg-background hover:bg-primary/10 transition-colors">
+                  <Button variant="outline" size="icon" className="h-12 w-12 rounded-xl border-primary/20 bg-background hover:bg-primary/10 transition-colors shrink-0">
                     <Palette className="h-5 w-5 text-primary" />
                   </Button>
                 </PopoverTrigger>
@@ -340,6 +357,7 @@ export default function Settings() {
                           primaryColor.label === c.label ? "ring-2 ring-foreground ring-offset-2 ring-offset-background scale-110" : "hover:scale-105 opacity-80 hover:opacity-100"
                         )}
                         style={{ backgroundColor: `hsl(${c.hue}, ${c.saturation}%, ${c.lightness}%)` }}
+                        title={c.label}
                       />
                     ))}
                   </div>
