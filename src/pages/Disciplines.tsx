@@ -47,13 +47,13 @@ export default function Disciplines({ extraOnly = false }: { extraOnly?: boolean
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isProcessing, setIsProcessing] = useState(false); // Novo estado para loaders de massa
+  const [isProcessing, setIsProcessing] = useState(false); 
   const [searchQuery, setSearchQuery] = useState("");
   
   // Estados de Restauração
   const [restoreDialogOpen, setRestoreDialogOpen] = useState(false);
-  const [restoreTargetLabel, setRestoreTargetLabel] = useState(""); // Qual período será restaurado
-  const [restorePeriodLabel, setRestorePeriodLabel] = useState(""); // Novo nome
+  const [restoreTargetLabel, setRestoreTargetLabel] = useState(""); 
+  const [restorePeriodLabel, setRestorePeriodLabel] = useState(""); 
 
   // Estados de Exclusão
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -92,7 +92,6 @@ export default function Disciplines({ extraOnly = false }: { extraOnly?: boolean
     }
   }
 
-  // Filtragem Dinâmica (Semestre Atual + Pesquisa)
   const activeDisciplines = useMemo(() => {
     return allDisciplines.filter(d => 
       !d.archived && 
@@ -101,7 +100,6 @@ export default function Disciplines({ extraOnly = false }: { extraOnly?: boolean
     );
   }, [allDisciplines, currentLabel, searchQuery]);
 
-  // Histórico Agrupado (Com Pesquisa)
   const archivedBySemester = useMemo(() => {
     const archived = allDisciplines.filter(d => 
       d.archived && 
@@ -146,12 +144,14 @@ export default function Disciplines({ extraOnly = false }: { extraOnly?: boolean
     }
   }
 
+  // MELHORIA IMPLEMENTADA: Restauração com atualização de estado global
   async function handleRestorePeriod() {
     if (!restorePeriodLabel.trim() || !user) return;
     setIsProcessing(true);
     try {
       const newLabel = restorePeriodLabel.trim();
 
+      // 1. Atualiza as matérias (Desarquiva e muda o rótulo pro novo nome)
       const { error: updateError } = await supabase
         .from("disciplines")
         .update({ archived: false, semester_label: newLabel })
@@ -161,6 +161,7 @@ export default function Disciplines({ extraOnly = false }: { extraOnly?: boolean
 
       if (updateError) throw updateError;
 
+      // 2. Sincroniza o Perfil do usuário com o novo nome
       await supabase
         .from("profiles")
         .update({ current_semester_label: newLabel, updated_at: new Date().toISOString() })
@@ -168,13 +169,18 @@ export default function Disciplines({ extraOnly = false }: { extraOnly?: boolean
 
       toast({ 
         title: "Período Restaurado! 🚀", 
-        description: `As matérias foram movidas para "Em Curso" sob o ciclo ${newLabel}.` 
+        description: `Matérias movidas para "Em Curso" como "${newLabel}".` 
       });
 
       setRestoreDialogOpen(false);
+      
+      // 3. ATUALIZAÇÃO CRÍTICA: Muda o label global ANTES de recarregar a lista
       if (setCurrentLabel) setCurrentLabel(newLabel);
       if (loadSemesters) await loadSemesters();
+      
+      // 4. Recarrega as matérias do banco para o estado local refletir a mudança
       await loadDisciplines();
+
     } catch (e: any) {
       toast({ title: "Erro na restauração", description: e.message, variant: "destructive" });
     } finally {
@@ -257,7 +263,6 @@ export default function Disciplines({ extraOnly = false }: { extraOnly?: boolean
   return (
     <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500 pb-24 px-4 sm:px-6 overflow-x-hidden">
       
-      {/* 1. Cabeçalho Responsivo */}
       <header className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 pt-6">
         <div className="flex items-center gap-5 w-full lg:w-auto">
           <Button 
@@ -279,7 +284,6 @@ export default function Disciplines({ extraOnly = false }: { extraOnly?: boolean
         </div>
 
         <div className="flex flex-col sm:flex-row items-center gap-4 w-full lg:w-auto">
-          {/* Ações Rápidas (Mensagens e Notificações) adicionadas aqui! */}
           <div className="flex items-center gap-2 w-full sm:w-auto justify-end sm:justify-start">
             <Button 
               variant="ghost" 
@@ -379,7 +383,6 @@ export default function Disciplines({ extraOnly = false }: { extraOnly?: boolean
         </div>
       </header>
 
-      {/* 2. Barra de Busca */}
       <div className="relative group max-w-2xl">
         <Search className="absolute left-5 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground group-focus-within:text-primary transition-colors" />
         <Input 
@@ -390,7 +393,6 @@ export default function Disciplines({ extraOnly = false }: { extraOnly?: boolean
         />
       </div>
 
-      {/* 3. Abas de Grade e Histórico */}
       <Tabs defaultValue="active" className="w-full space-y-8">
         <TabsList className="bg-card/50 backdrop-blur-sm border border-border/40 p-1.5 rounded-[20px] h-auto w-full sm:w-fit grid grid-cols-2 shadow-sm">
           <TabsTrigger value="active" className="rounded-xl font-black text-[10px] sm:text-[11px] uppercase tracking-widest px-4 sm:px-10 py-3.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground data-[state=active]:shadow-md transition-all">
@@ -401,7 +403,6 @@ export default function Disciplines({ extraOnly = false }: { extraOnly?: boolean
           </TabsTrigger>
         </TabsList>
 
-        {/* Tab: Em Curso */}
         <TabsContent value="active" className="animate-in fade-in slide-in-from-bottom-4 duration-500 m-0">
           {activeDisciplines.length === 0 ? (
             <div className="py-24 px-6 rounded-[40px] border-2 border-dashed border-border/40 flex flex-col items-center text-center bg-card/20">
@@ -424,7 +425,6 @@ export default function Disciplines({ extraOnly = false }: { extraOnly?: boolean
           )}
         </TabsContent>
 
-        {/* Tab: Histórico com Nova Lógica */}
         <TabsContent value="archive" className="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-500 m-0">
           {archivedBySemester.length === 0 ? (
             <div className="py-24 px-6 text-center flex flex-col items-center bg-card/20 rounded-[40px] border border-border/30">
@@ -454,7 +454,7 @@ export default function Disciplines({ extraOnly = false }: { extraOnly?: boolean
                       className="flex-1 md:flex-none h-12 rounded-xl text-[10px] font-black uppercase tracking-widest border-amber-500/20 text-amber-500 hover:bg-amber-500/10 hover:text-amber-500 active:scale-95 transition-all shadow-sm"
                       onClick={() => {
                         setRestoreTargetLabel(label);
-                        setRestorePeriodLabel(label); // Auto-preenche com o nome antigo
+                        setRestorePeriodLabel(label); 
                         setRestoreDialogOpen(true);
                       }}
                     >
@@ -483,7 +483,7 @@ export default function Disciplines({ extraOnly = false }: { extraOnly?: boolean
         </TabsContent>
       </Tabs>
 
-      {/* Modal 1: Restauração Interativa */}
+      {/* Modal de Restauração */}
       <Dialog open={restoreDialogOpen} onOpenChange={setRestoreDialogOpen}>
         <DialogContent className="w-[95vw] sm:max-w-[400px] bg-card border-border rounded-[32px] p-6 sm:p-8 shadow-2xl">
           <DialogHeader className="text-left space-y-2">
@@ -491,7 +491,7 @@ export default function Disciplines({ extraOnly = false }: { extraOnly?: boolean
               <RefreshCcw className="text-amber-500 h-6 w-6" /> Reativar Ciclo
             </DialogTitle>
             <DialogDescription className="font-medium text-muted-foreground text-sm">
-              As matérias voltarão para a aba "Em Curso". Você pode atualizar o nome do período abaixo se desejar.
+              As matérias voltarão para a aba "Em Curso". Você pode atualizar o nome do período abaixo.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-6 pt-4">
@@ -515,7 +515,6 @@ export default function Disciplines({ extraOnly = false }: { extraOnly?: boolean
         </DialogContent>
       </Dialog>
 
-      {/* Modal 2: Exclusão Permanente (Danger Zone) */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent className="w-[95vw] sm:max-w-[420px] rounded-[32px] bg-card border-destructive/20 shadow-2xl">
           <AlertDialogHeader>
