@@ -43,8 +43,8 @@ export default function Auth() {
         setIsResetPassword(false); 
         
       } else if (isSignUp) {
-        // Fluxo de Cadastro
-        const { error } = await supabase.auth.signUp({
+        // Fluxo de Cadastro - CORRIGIDO PARA LIDAR COM VERIFICAÇÃO DE E-MAIL
+        const { data, error } = await supabase.auth.signUp({
           email,
           password,
           options: { data: { full_name: fullName } },
@@ -52,7 +52,19 @@ export default function Auth() {
         
         if (error) throw error;
         
-        toast({ title: "Sucesso!", description: "Verifique seu e-mail para confirmar o cadastro." });
+        // Verifica se a sessão foi criada imediatamente (confirmação desativada) ou não
+        if (data.session) {
+           toast({ title: "Conta Criada!", description: "Bem-vindo ao EduFlow." });
+           // O AuthProvider cuidará do redirecionamento
+        } else {
+           toast({ 
+             title: "Quase lá!", 
+             description: "Enviamos um link de confirmação para o seu e-mail. Por favor, verifique sua caixa de entrada (ou spam) para ativar a conta.",
+             duration: 6000 // Toast um pouco mais longo para o usuário ler
+           });
+           // Volta para a tela de login para o usuário logar após confirmar
+           setIsSignUp(false);
+        }
         
       } else {
         // Fluxo de Login
@@ -66,17 +78,18 @@ export default function Auth() {
             description: "Bem-vindo ao Painel de Comando Supremo do EduFlow.",
             className: "bg-emerald-500 text-white border-none"
           });
-          // Futuramente: navigate('/admin-dashboard')
+          navigate('/admin'); // Redireciona o admin
         } else {
           toast({ title: "Bem-vindo de volta! 📚" });
+          navigate('/'); // Redireciona o aluno
         }
-        // O redirecionamento normal para alunos acontece automaticamente via AuthProvider
       }
     } catch (error: any) {
       let errorMessage = error.message;
       if (errorMessage.includes("Invalid login credentials")) errorMessage = "E-mail ou senha incorretos.";
       if (errorMessage.includes("Password should be at least")) errorMessage = "A senha deve ter no mínimo 6 caracteres.";
       if (errorMessage.includes("User already registered")) errorMessage = "Este e-mail já está cadastrado no sistema.";
+      if (errorMessage.includes("Email not confirmed")) errorMessage = "Você precisa confirmar seu e-mail antes de fazer login.";
 
       toast({ title: "Atenção", description: errorMessage, variant: "destructive" });
     } finally {
