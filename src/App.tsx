@@ -7,6 +7,9 @@ import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { ThemeProvider } from "@/hooks/useTheme";
 import { SemesterProvider } from "@/hooks/useSemester";
 import { AppLayout } from "@/components/AppLayout";
+import { useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
 // Importação das Páginas
 import Auth from "./pages/Auth";
@@ -20,26 +23,65 @@ import Feedback from "./pages/Feedback";
 import Connect from "./pages/Connect";
 import Messages from "./pages/Messages";
 import NotFound from "./pages/NotFound";
-import AdminDashboard from "./pages/AdminDashboard"; // <-- Importação do Painel Admin
+import AdminDashboard from "./pages/AdminDashboard";
 
-// Configuração do motor de dados (Performance BI)
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       retry: 2,
-      refetchOnWindowFocus: false, // Evita recargas desnecessárias ao trocar de aba
-      staleTime: 1000 * 60 * 5,    // Mantém os dados frescos por 5 minutos
+      refetchOnWindowFocus: false,
+      staleTime: 1000 * 60 * 5,
     },
   },
 });
 
 /**
- * Filtro de Segurança: Impede acesso de deslogados
+ * Filtro de Segurança Avançado: Impede acesso de deslogados e usuários BANIDOS
  */
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
+  const { toast } = useToast();
+  const [isBanned, setIsBanned] = useState<boolean | null>(null);
+  const [checkingBan, setCheckingBan] = useState(true);
 
-  if (loading) {
+  useEffect(() => {
+    async function checkUserStatus() {
+      if (!user) {
+        setCheckingBan(false);
+        return;
+      }
+
+      try {
+        // Busca o status de banimento direto no banco
+        const { data, error } = await supabase
+          .from("profiles")
+          .select("is_banned")
+          .eq("user_id", user.id)
+          .maybeSingle();
+
+        if (data?.is_banned) {
+          setIsBanned(true);
+          await supabase.auth.signOut();
+          toast({
+            title: "Acesso Negado 🚫",
+            description: "Esta conta foi suspensa por violar as diretrizes da comunidade.",
+            variant: "destructive",
+          });
+        } else {
+          setIsBanned(false);
+        }
+      } catch (err) {
+        console.error("Erro ao verificar status do usuário:", err);
+        setIsBanned(false);
+      } finally {
+        setCheckingBan(false);
+      }
+    }
+
+    checkUserStatus();
+  }, [user, toast]);
+
+  if (loading || checkingBan) {
     return (
       <div className="flex h-[100dvh] w-full items-center justify-center bg-background transition-colors duration-500">
         <div className="flex flex-col items-center gap-6 animate-in fade-in duration-700">
@@ -48,19 +90,15 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
             <div className="absolute h-6 w-6 bg-primary/10 rounded-full animate-pulse" />
           </div>
           <div className="text-center space-y-2">
-            <p className="text-[11px] font-black uppercase tracking-[0.4em] text-primary leading-none">
-              EduFlow Academy
-            </p>
-            <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-muted-foreground/60 italic">
-              Sincronizando sua jornada...
-            </p>
+            <p className="text-[11px] font-black uppercase tracking-[0.4em] text-primary leading-none">EduFlow Academy</p>
+            <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-muted-foreground/60 italic">Sincronizando segurança...</p>
           </div>
         </div>
       </div>
     );
   }
 
-  if (!user) return <Navigate to="/auth" replace />;
+  if (!user || isBanned) return <Navigate to="/auth" replace />;
 
   return <AppLayout>{children}</AppLayout>;
 }
@@ -105,10 +143,9 @@ const App = () => (
                 <Route path="*" element={<NotFound />} />
               </Routes>
               
-              {/* Notificações do Sistema */}
               <Toaster />
               <Sonner 
-                position="top-center" // Melhor visibilidade no mobile (fica no topo)
+                position="top-center"
                 closeButton 
                 richColors 
                 expand={false}
