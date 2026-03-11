@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { LayoutDashboard, BookOpen, Bell, Settings, Sparkles, LogOut, User, MessageSquare, Globe, Mail } from "lucide-react";
+import { LayoutDashboard, BookOpen, Bell, Settings, Sparkles, LogOut, User, MessageSquare, Globe } from "lucide-react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -18,11 +18,11 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 
+// Lista de navegação atualizada: "Mensagens" removida daqui
 const mainItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Minhas Disciplinas", url: "/disciplines", icon: BookOpen },
   { title: "Connect", url: "/connect", icon: Globe },
-  { title: "Mensagens", url: "/messages", icon: Mail },
   { title: "Cursos Extras", url: "/extra-courses", icon: Sparkles },
   { title: "Cronograma", url: "/reminders", icon: Bell },
   { title: "Configurações", url: "/settings", icon: Settings },
@@ -38,7 +38,7 @@ export function AppSidebar() {
   
   const [avatarUrl, setAvatarUrl] = useState("");
 
-  // Busca a foto de perfil inicial e escuta mudanças em tempo real
+  // Carrega a foto de perfil e escuta atualizações
   useEffect(() => {
     if (user) {
       supabase
@@ -60,7 +60,7 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="icon" className="border-r border-sidebar-border bg-sidebar shadow-2xl">
       <SidebarContent className="custom-scrollbar">
-        {/* Header do App no Menu */}
+        {/* Header do App */}
         <div className={cn(
           "flex items-center gap-3.5 px-4 py-6 transition-all",
           collapsed ? "justify-center" : "justify-start"
@@ -78,12 +78,11 @@ export function AppSidebar() {
 
         <SidebarGroup>
           <SidebarGroupLabel className="px-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 mb-2">
-            Navegação
+            Navegação Principal
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu className="space-y-1.5 px-2">
               {mainItems.map((item) => {
-                // Lógica afiada para detectar se a rota está ativa
                 const isActive = location.pathname === item.url || 
                                  (item.url !== "/" && location.pathname.startsWith(item.url));
                 
@@ -113,8 +112,7 @@ export function AppSidebar() {
       </SidebarContent>
 
       {/* Footer com Perfil e Logout */}
-      <SidebarFooter className="border-t border-sidebar-border bg-sidebar/80 p-4 backdrop-blur-md pb-[calc(1rem+env(safe-area-inset-bottom))]">
-        
+      <SidebarFooter className="border-t border-sidebar-border bg-sidebar/80 p-4 backdrop-blur-md">
         {!collapsed && user && (
           <div 
             onClick={() => navigate("/profile")}
@@ -147,7 +145,6 @@ export function AppSidebar() {
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
-
       </SidebarFooter>
     </Sidebar>
   );
