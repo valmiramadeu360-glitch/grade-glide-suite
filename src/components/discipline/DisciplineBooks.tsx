@@ -8,10 +8,11 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Trash2, BookOpenCheck, Loader2, Pencil, BookOpen, FileText, HandHelping, CloudOff, CalendarDays } from "lucide-react";
+import { Plus, Trash2, BookOpenCheck, Loader2, Pencil, BookOpen, FileText, HandHelping, CloudOff, CalendarDays, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { format } from "date-fns";
+import { format, isPast, isToday } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { cn } from "@/lib/utils";
 
 interface Book {
   id: string;
@@ -36,7 +37,7 @@ const STATUS_OPTIONS = [
 const FORMAT_OPTIONS = [
   { value: "pdf", label: "Arquivo PDF", icon: FileText },
   { value: "physical", label: "Livro Físico", icon: BookOpen },
-  { value: "borrowed", label: "Emprestado (Biblioteca)", icon: HandHelping },
+  { value: "borrowed", label: "Emprestado da Biblioteca", icon: HandHelping },
 ];
 
 export function DisciplineBooks({ disciplineId }: { disciplineId: string }) {
@@ -89,7 +90,6 @@ export function DisciplineBooks({ disciplineId }: { disciplineId: string }) {
     setEditingBook(book);
     setTitle(book.title);
     setAuthor(book.author || "");
-    // Ajuste de fuso horário para preencher inputs de data corretamente
     setStartDate(book.start_date ? book.start_date.split('T')[0] : "");
     setEndDate(book.end_date ? book.end_date.split('T')[0] : "");
     setReadingStatus(book.reading_status);
@@ -117,6 +117,13 @@ export function DisciplineBooks({ disciplineId }: { disciplineId: string }) {
       toast({ title: "O título é obrigatório", variant: "destructive" });
       return;
     }
+    
+    // Trava de segurança para livros da biblioteca
+    if (materialFormat === "borrowed" && !endDate) {
+       toast({ title: "Data de Devolução Ausente", description: "Para livros da biblioteca, informe o prazo de devolução para ativarmos o alarme.", variant: "destructive" });
+       return;
+    }
+
     if (isOffline) {
       toast({ title: "Modo Offline", description: "Conecte-se para salvar novos livros.", variant: "destructive" });
       return;
@@ -127,10 +134,8 @@ export function DisciplineBooks({ disciplineId }: { disciplineId: string }) {
     const tPages = totalPages ? parseInt(totalPages) : null;
     let pRead = pagesRead ? parseInt(pagesRead) : null;
     
-    // Trava lógica para gamificação realista
     if (tPages && pRead && pRead > tPages) pRead = tPages;
 
-    // Conversão segura de datas para evitar erros de Postgres no Supabase
     const payload = {
       title: title.trim(),
       author: author.trim() || null,
@@ -154,7 +159,34 @@ export function DisciplineBooks({ disciplineId }: { disciplineId: string }) {
           user_id: user.id,
         });
         if (error) throw error;
+        
         toast({ title: "Material adicionado à biblioteca!" });
+
+        // INTEGRAÇÃO DE ALERTAS (Se for da biblioteca e tiver data final)
+        if (materialFormat === "borrowed" && endDate) {
+            const dueDate = new Date(endDate);
+            // Cria um lembrete na tabela reminders
+            const { data: reminderData } = await supabase.from("reminders").insert({
+                user_id: user.id,
+                discipline_id: disciplineId,
+                title: `Devolver livro: ${title.trim()}`,
+                type: "other",
+                due_date: dueDate.toISOString(),
+            }).select().single();
+
+            // Adiciona a notificação do sistema
+            if (reminderData) {
+                await supabase.from("notifications").insert({
+                    user_id: user.id,
+                    title: "Alerta de Devolução 📚",
+                    message: `O prazo para devolver o livro "${title.trim()}" à biblioteca encerra no dia ${format(dueDate, "dd/MM")}.`,
+                    type: "reminder",
+                    related_id: reminderData.id,
+                    is_read: false
+                });
+            }
+            toast({ title: "Alarme da Biblioteca Ativado 🔔", description: "Criamos um lembrete no seu cronograma para a devolução." });
+        }
       }
       setOpen(false);
       loadBooks();
@@ -179,7 +211,6 @@ export function DisciplineBooks({ disciplineId }: { disciplineId: string }) {
     }
   }
 
-  // Componente de Gráfico Gauge (Mantido e otimizado)
   const GaugeChart = ({ current, max }: { current: number; max: number }) => {
     const safeMax = max > 0 ? max : 1;
     let percentage = (current / safeMax) * 100;
@@ -218,14 +249,13 @@ export function DisciplineBooks({ disciplineId }: { disciplineId: string }) {
     );
   };
 
-  // Helper para formatar a data sem sofrer com timezone do UTC
   const formatDateFriendly = (dateStr: string) => {
     const [year, month, day] = dateStr.split('T')[0].split('-');
     return format(new Date(parseInt(year), parseInt(month) - 1, parseInt(day)), "dd MMM", { locale: ptBR });
   };
 
   return (
-    <Card className="glass-card border-none shadow-sm bg-card rounded-[32px] overflow-hidden animate-in fade-in duration-500">
+    <Card className="border-none shadow-sm bg-card rounded-[32px] overflow-hidden animate-in fade-in duration-500">
       <CardHeader className="pb-5 pt-6 px-6 sm:px-8 flex flex-row items-center justify-between border-b border-border/40 shrink-0">
         <div>
           <CardTitle className="text-sm font-black uppercase tracking-widest text-foreground flex items-center gap-2">
@@ -240,7 +270,7 @@ export function DisciplineBooks({ disciplineId }: { disciplineId: string }) {
               <Plus className="mr-2 h-4 w-4" /> Cadastrar Mídia
             </Button>
           </DialogTrigger>
-          <DialogContent className="w-[95vw] sm:max-w-[450px] rounded-[32px] max-h-[90vh] overflow-y-auto no-scrollbar bg-card border-border p-6 sm:p-8 shadow-2xl">
+          <DialogContent className="w-[95vw] sm:max-w-[450px] rounded-[32px] max-h-[90vh] overflow-y-auto custom-scrollbar bg-card border-border p-6 sm:p-8 shadow-2xl">
             <DialogHeader className="text-left space-y-1">
               <DialogTitle className="text-2xl font-black text-foreground tracking-tight">{editingBook ? "Editar Detalhes" : "Novo Material"}</DialogTitle>
               <DialogDescription className="font-medium text-muted-foreground text-sm">Registre livros ou artigos para metrificar suas leituras.</DialogDescription>
@@ -297,6 +327,16 @@ export function DisciplineBooks({ disciplineId }: { disciplineId: string }) {
                 </div>
               </div>
 
+              {/* Informação Dinâmica Inteligente */}
+              {materialFormat === "borrowed" && !editingBook && (
+                 <div className="bg-amber-500/10 border border-amber-500/20 p-4 rounded-2xl flex gap-3 items-start animate-in fade-in zoom-in-95">
+                    <AlertCircle className="h-5 w-5 text-amber-500 shrink-0" />
+                    <p className="text-[10px] text-amber-600 font-bold uppercase tracking-widest leading-relaxed">
+                       Você selecionou <strong>"Biblioteca"</strong>. Informe o prazo de devolução abaixo para ativarmos um alarme na sua agenda automaticamente!
+                    </p>
+                 </div>
+              )}
+
               {/* Box de Gamificação de Leitura */}
               <div className="p-5 bg-card border border-border/50 rounded-[20px] space-y-4 shadow-sm">
                 <div className="flex items-center gap-2 text-primary font-black uppercase tracking-widest text-[10px]">
@@ -317,13 +357,26 @@ export function DisciplineBooks({ disciplineId }: { disciplineId: string }) {
               <div className="grid grid-cols-2 gap-5">
                 <div className="space-y-2">
                   <Label className="font-black text-[10px] uppercase tracking-widest text-muted-foreground ml-1">Data de Início</Label>
-                  <Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="h-14 rounded-2xl bg-muted/20 border-border/50 font-bold text-sm [color-scheme:dark] md:[color-scheme:light] dark:[color-scheme:dark] cursor-pointer" />
+                  <Input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} className="h-14 rounded-2xl bg-muted/20 border-border/50 font-bold text-sm [color-scheme:dark] md:[color-scheme:light] dark:[color-scheme:dark] cursor-pointer px-4" />
                 </div>
+                
+                {/* RÓTULO E CAMPO DINÂMICOS - MÁGICA DA UX AQUI */}
                 <div className="space-y-2">
-                  <Label className="font-black text-[10px] uppercase tracking-widest text-muted-foreground ml-1 flex justify-between">
-                    Término <span className="text-muted-foreground/40 font-medium tracking-normal capitalize">(Opcional)</span>
+                  <Label className={cn("font-black text-[10px] uppercase tracking-widest ml-1 flex justify-between transition-colors", materialFormat === "borrowed" ? "text-amber-500" : "text-muted-foreground")}>
+                    {materialFormat === "borrowed" ? "Devolução" : "Término"} 
+                    <span className="text-muted-foreground/40 font-medium tracking-normal capitalize">
+                      {materialFormat === "borrowed" ? "(Obrigatório para alarme)" : "(Opcional)"}
+                    </span>
                   </Label>
-                  <Input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="h-14 rounded-2xl bg-muted/20 border-border/50 font-bold text-sm [color-scheme:dark] md:[color-scheme:light] dark:[color-scheme:dark] cursor-pointer" />
+                  <Input 
+                    type="date" 
+                    value={endDate} 
+                    onChange={e => setEndDate(e.target.value)} 
+                    className={cn(
+                      "h-14 rounded-2xl bg-muted/20 font-bold text-sm [color-scheme:dark] md:[color-scheme:light] dark:[color-scheme:dark] cursor-pointer px-4 transition-all",
+                      materialFormat === "borrowed" ? "border-amber-500/40 focus:ring-amber-500/30" : "border-border/50 focus:ring-primary/30"
+                    )} 
+                  />
                 </div>
               </div>
               
@@ -353,17 +406,21 @@ export function DisciplineBooks({ disciplineId }: { disciplineId: string }) {
 
               const total = book.total_pages || 0;
               const read = book.pages_read || 0;
+              
+              const isBorrowed = book.material_format === "borrowed";
+              const isReturned = book.reading_status === "returned";
+              const isLate = isBorrowed && !isReturned && book.end_date && isPast(new Date(book.end_date)) && !isToday(new Date(book.end_date));
 
               return (
-                <div key={book.id} className="group flex flex-col sm:flex-row sm:items-center gap-5 sm:gap-6 rounded-[28px] p-5 sm:p-6 bg-card border border-border/50 hover:border-primary/40 shadow-sm hover:shadow-xl hover:-translate-y-1 active:scale-[0.99] transition-all">
+                <div key={book.id} className={cn("group flex flex-col sm:flex-row sm:items-center gap-5 sm:gap-6 rounded-[28px] p-5 sm:p-6 bg-card border hover:border-primary/40 shadow-sm hover:shadow-xl hover:-translate-y-1 active:scale-[0.99] transition-all", isLate ? "border-destructive/40 bg-destructive/5" : "border-border/50")}>
                   
                   <div className="flex items-start sm:items-center gap-4 sm:gap-5 flex-1 min-w-0">
-                    <div className="h-14 w-14 sm:h-16 sm:w-16 bg-muted/30 border border-border shadow-inner rounded-2xl flex items-center justify-center shrink-0 group-hover:bg-primary/10 transition-colors">
-                      <FormatIcon className="h-7 w-7 text-primary" />
+                    <div className={cn("h-14 w-14 sm:h-16 sm:w-16 bg-muted/30 border border-border shadow-inner rounded-2xl flex items-center justify-center shrink-0 transition-colors", isLate ? "bg-destructive/10 border-destructive/20 text-destructive" : "group-hover:bg-primary/10 text-primary")}>
+                      <FormatIcon className="h-7 w-7" />
                     </div>
                     
                     <div className="flex-1 min-w-0 space-y-1.5">
-                      <p className="font-black text-base sm:text-lg text-foreground truncate leading-tight group-hover:text-primary transition-colors">
+                      <p className={cn("font-black text-base sm:text-lg truncate leading-tight transition-colors", isLate ? "text-destructive" : "text-foreground group-hover:text-primary")}>
                         {book.title}
                       </p>
                       <p className="text-[10px] sm:text-xs font-bold text-muted-foreground truncate uppercase tracking-widest">
@@ -371,16 +428,22 @@ export function DisciplineBooks({ disciplineId }: { disciplineId: string }) {
                       </p>
                       
                       <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-2.5">
-                        <Badge variant="outline" className={`text-[9px] sm:text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-lg ${statusInfo.color}`}>
-                          {statusInfo.label}
+                        <Badge variant="outline" className={`text-[9px] sm:text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-lg ${isLate ? "bg-destructive text-white border-none" : statusInfo.color}`}>
+                          {isLate ? "Atrasado!" : statusInfo.label}
                         </Badge>
                         
                         {(book.start_date || book.end_date) && (
-                          <div className="flex items-center gap-2 text-[9px] sm:text-[10px] font-bold text-muted-foreground bg-muted/50 px-2.5 py-1 rounded-lg">
+                          <div className={cn("flex items-center gap-2 text-[9px] sm:text-[10px] font-bold px-2.5 py-1 rounded-lg", isLate ? "bg-destructive/10 text-destructive" : "bg-muted/50 text-muted-foreground")}>
                             <CalendarDays className="h-3.5 w-3.5" />
                             {book.start_date && <span>{formatDateFriendly(book.start_date)}</span>}
                             {book.start_date && book.end_date && <span className="opacity-50">→</span>}
-                            {book.end_date ? <span>{formatDateFriendly(book.end_date)}</span> : <span className="text-primary">Lendo</span>}
+                            {book.end_date ? (
+                              <span className={cn(isBorrowed && !isReturned && "font-black uppercase tracking-widest")}>
+                                {isBorrowed && !isReturned ? `Devolver: ${formatDateFriendly(book.end_date)}` : formatDateFriendly(book.end_date)}
+                              </span>
+                            ) : (
+                              <span className="text-primary">Lendo</span>
+                            )}
                           </div>
                         )}
                       </div>
@@ -429,4 +492,3 @@ export function DisciplineBooks({ disciplineId }: { disciplineId: string }) {
     </Card>
   );
 }
-
