@@ -20,7 +20,7 @@ import {
   BookOpen, Clock, AlertTriangle, 
   CheckCircle2, ArrowRight, Cloud, CloudOff, History, 
   Loader2, Sparkles, RefreshCcw, Calendar as CalendarIcon,
-  Bell, MessageSquare, HandHelping
+  HandHelping
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format, isToday, isTomorrow, differenceInDays, startOfDay, isSameDay } from "date-fns";
@@ -68,10 +68,6 @@ export default function Dashboard() {
   const [disciplineCount, setDisciplineCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
-
-  // Estados de Notificações e Mensagens
-  const [hasUnreadNotifications, setHasUnreadNotifications] = useState(false);
-  const [hasUnreadMessages, setHasUnreadMessages] = useState(false);
   const [libraryAlerts, setLibraryAlerts] = useState<any[]>([]);
 
   // Estados do Calendário
@@ -107,7 +103,6 @@ export default function Dashboard() {
   async function loadDashboard() {
     setLoading(true);
     try {
-      // 1. Perfil e Semestre
       const { data: profile } = await supabase
         .from("profiles")
         .select("current_semester_label, semester_start, semester_end")
@@ -116,7 +111,6 @@ export default function Dashboard() {
 
       if (profile?.current_semester_label) setActiveSemesterFromProfile(profile.current_semester_label);
 
-      // 2. Disciplinas
       const { data: disciplines } = await supabase
         .from("disciplines")
         .select("id")
@@ -126,14 +120,7 @@ export default function Dashboard() {
       const discIds = (disciplines ?? []).map(d => d.id);
       setDisciplineCount(discIds.length);
 
-      // 3. Notificações e Mensagens (Contagem Real)
-      const { count: notifyCount } = await supabase.from('notifications').select('*', { count: 'exact', head: true }).eq('user_id', user!.id).eq('is_read', false);
-      setHasUnreadNotifications((notifyCount || 0) > 0);
-
-      const { data: dms } = await supabase.from('direct_messages').select('id').eq('receiver_id', user!.id).is('read_at', null).limit(1);
-      setHasUnreadMessages((dms?.length || 0) > 0);
-
-      // 4. Alertas de Biblioteca (Livros vencendo hoje ou amanhã)
+      // Alertas de Biblioteca
       const { data: books } = await supabase
         .from('books')
         .select('title, end_date')
@@ -148,7 +135,6 @@ export default function Dashboard() {
       });
       setLibraryAlerts(urgentBooks);
 
-      // 5. Horários e Lembretes
       if (discIds.length > 0 && !isHistoricalView) {
         const { data: schedule } = await supabase
           .from("discipline_schedules")
@@ -187,7 +173,6 @@ export default function Dashboard() {
         setAllReminders([]);
       }
 
-      // Progresso
       if (isHistoricalView) {
         setSemesterProgress(100);
       } else if (profile?.semester_start && profile?.semester_end) {
@@ -298,8 +283,6 @@ export default function Dashboard() {
       <style dangerouslySetInnerHTML={{__html: `
         .calendar-dot-class::after { content: ''; position: absolute; bottom: 4px; left: calc(50% - 6px); width: 5px; height: 5px; border-radius: 50%; background-color: #f59e0b; }
         .calendar-dot-reminder::after { content: ''; position: absolute; bottom: 4px; left: calc(50% + 1px); width: 5px; height: 5px; border-radius: 50%; background-color: #ef4444; }
-        @keyframes wave { 0% { transform: rotate(0deg); } 10% { transform: rotate(14deg); } 20% { transform: rotate(-8deg); } 30% { transform: rotate(14deg); } 40% { transform: rotate(-4deg); } 50% { transform: rotate(10deg); } 60%, 100% { transform: rotate(0deg); } }
-        .animate-wave { animation: wave 2s infinite; transform-origin: 70% 70%; }
       `}} />
 
       <AlertDialog open={showEndSemester} onOpenChange={setShowEndSemester}>
@@ -316,7 +299,7 @@ export default function Dashboard() {
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* HEADER DINÂMICO */}
+      {/* HEADER DA PÁGINA (Limpo, sem ícones duplicados) */}
       <header className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-8 border-b border-border/40 pb-8">
         <div className="space-y-4 w-full lg:w-auto">
           <div className="flex items-center gap-4">
@@ -351,28 +334,6 @@ export default function Dashboard() {
                 <span className="flex items-center gap-2 text-amber-500 animate-pulse"><CloudOff className="h-4 w-4" /> Offline</span>
               )}
             </div>
-
-            <div className="flex items-center gap-2">
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                onClick={() => navigate('/messages')}
-                className="relative h-12 w-12 rounded-2xl bg-card border border-border/50 hover:bg-primary/10 text-muted-foreground hover:text-primary transition-all active:scale-95"
-              >
-                <MessageSquare className="h-5 w-5" />
-                {hasUnreadMessages && <span className="absolute top-3 right-3 h-2.5 w-2.5 rounded-full bg-blue-500 border-2 border-background animate-bounce" />}
-              </Button>
-
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                onClick={() => navigate('/settings')}
-                className="relative h-12 w-12 rounded-2xl bg-card border border-border/50 hover:bg-primary/10 text-muted-foreground hover:text-primary transition-all active:scale-95"
-              >
-                <Bell className="h-5 w-5" />
-                {hasUnreadNotifications && <span className="absolute top-3 right-3 h-2.5 w-2.5 rounded-full bg-destructive border-2 border-background animate-pulse" />}
-              </Button>
-            </div>
           </div>
 
           <Dialog open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
@@ -397,7 +358,7 @@ export default function Dashboard() {
         </div>
       </header>
 
-      {/* ALERTAS DE BIBLIOTECA (Se existirem) */}
+      {/* ALERTAS DE BIBLIOTECA */}
       {libraryAlerts.length > 0 && (
         <section className="animate-in slide-in-from-top-4 duration-500">
            {libraryAlerts.map((book, idx) => (
