@@ -160,7 +160,7 @@ setActiveTab("active");
 
 setRestoreDialogOpen(false);
 
-toast({ title: "Período restaurado", description: ${data?.length || 0} disciplinas movidas });
+toast({ title: "Período restaurado", description: `${data?.length || 0} disciplinas movidas` });
 
 } catch (e: any) {
 
@@ -218,74 +218,15 @@ setIsProcessing(false);
 
 }
 
-const renderCard = (d: Discipline) => (
 
-<Card key={d.id} onClick={() => navigate(/disciplines/${d.id})} className="cursor-pointer"
+  if (loading || isSwapping) {
+    return <div className="p-6 text-center text-muted-foreground">Carregando...</div>;
+  }
 
-{extraOnly ? <GraduationCap style={{ color: d.color }} /> : <BookOpen style={{ color: d.color }} /> }
-
-{d.name} 
-
-{d.professor || "Professor não informado"} 
-
-);
-
-if (loading || isSwapping) {
-
-return (
-
-);
-
+  return (
+    <div className="p-6 text-center text-muted-foreground space-y-2">
+      <p>Página de Disciplinas temporariamente indisponível — restaure pelo histórico.</p>
+      <p className="text-xs">Total: {allDisciplines.length} · Período atual: {currentLabel}</p>
+    </div>
+  );
 }
-
-return (
-
-<Button variant="ghost" size="icon" onClick={() => navigate(-1)}
-
-{extraOnly ? "Cursos Extras" : "Disciplinas"} 
-
-Período atual: {currentLabel} 
-
-Novo Registro Nova Disciplina Adicionar ao período {currentLabel} 
-
-<Input placeholder="Nome da disciplina" value={newName} onChange={e => setNewName(e.target.value)} />
-
-<Input placeholder="Professor" value={newProfessor} onChange={e => setNewProfessor(e.target.value)} />
-
-<Button onClick={handleCreate} disabled={isSubmitting} className="w-full"
-
-{isSubmitting ? : "Salvar"}
-
-<Input placeholder="Buscar disciplina" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="pl-10" />
-
-Em Curso Histórico 
-
-{activeDisciplines.length === 0 ?
-
-Nenhuma disciplina ativa 
-
-:
-
-{activeDisciplines.map(renderCard)} 
-
-}
-
-{archivedBySemester.map(([label, items]) => (
-
-{label} 
-
-<Button variant="outline" onClick={() => { setRestoreTargetLabel(label); setRestorePeriodLabel(label === "Sem Período" ? "" : label); setRestoreDialogOpen(true); }}
-
-Restaurar 
-
-<Button variant="destructive" onClick={() => { setDeleteTargetLabel(label); setDeleteDialogOpen(true); }}
-
-{items.map(renderCard)} 
-
-))}
-
-);
-
-}
-
-
