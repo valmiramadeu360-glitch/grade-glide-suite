@@ -85,6 +85,33 @@ export default function Dashboard() {
 
   const userName = user?.user_metadata?.full_name?.split(" ")[0] || "Estudante";
 
+  const filteredClasses = useMemo(() => {
+    const dow = calendarDate.getDay();
+    return allSchedules.filter((s) => s.day_of_week === dow);
+  }, [allSchedules, calendarDate]);
+
+  const filteredReminders = useMemo(() => {
+    return allReminders.filter((r: any) => {
+      try {
+        const d = new Date(r.due_date);
+        return d.toDateString() === calendarDate.toDateString();
+      } catch {
+        return false;
+      }
+    });
+  }, [allReminders, calendarDate]);
+
+  function getUrgencyLabel(dueDate: string, type?: string) {
+    try {
+      const d = new Date(dueDate);
+      if (isToday(d)) return type ? `Hoje · ${type}` : "Hoje";
+      if (isTomorrow(d)) return type ? `Amanhã · ${type}` : "Amanhã";
+      return d.toLocaleDateString("pt-BR");
+    } catch {
+      return "";
+    }
+  }
+
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
