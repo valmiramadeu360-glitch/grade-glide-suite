@@ -69,7 +69,7 @@ export default function Profile() {
           course: data.course ?? "",
           is_public: data.is_public ?? true,
         });
-        setSocialLinks(data.social_links ?? []);
+        setSocialLinks((Array.isArray(data.social_links) ? data.social_links : []) as any);
         setAvatarUrl(data.avatar_url ?? "");
       }
     } finally {

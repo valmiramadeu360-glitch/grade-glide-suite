@@ -9,8 +9,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { 
   Plus, Link as LinkIcon, FileText, ImageIcon, Trash2, 
   ExternalLink, Loader2, CloudOff, Bookmark, Video, 
-  Mic, Music, PlayCircle, Eye, X
+  Mic, Music, PlayCircle, Eye, X, Globe
 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
