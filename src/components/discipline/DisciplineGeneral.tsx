@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Trash2, Save, CloudOff, Loader2, Bell, Clock, MapPin, User, GraduationCap, Target } from "lucide-react";
+import { Plus, Trash2, Save, CloudOff, Loader2, Bell, Clock, MapPin, User, GraduationCap, Target, Calendar } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const DAYS = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
