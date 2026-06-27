@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useTheme } from "@/hooks/useTheme";
-import { Card } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { 
-  Save, Loader2, Calendar, Palette, Moon, 
+  Save, Loader2, Calendar, Palette, Moon, CheckCircle2,
   Sun, BellRing, Mail, Smartphone, ArrowLeft,
   Volume2, Trash2, AlertTriangle, Settings2, FileText, Shield
 } from "lucide-react";
