@@ -339,4 +339,12 @@ async function sendGlobalNotification() {
 
     }
 
+  }
+
+  return (
+    <div className="p-6 text-center text-muted-foreground">
+      <p>Painel Admin temporariamente indisponível — restaure esta página pelo histórico.</p>
+      <p className="text-xs mt-2">Usuários: {usersCount} · Feedbacks: {feedbacks.length} · Reports: {reports.length}</p>
+    </div>
+  );
 }
