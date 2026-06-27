@@ -177,7 +177,7 @@ async function handleDeletePost(reportId: string, postId: string) {
 
       await supabase
         .from("post_reports")
-        .update({ status: "ignored" })
+        .update({ status: "dismissed" })
         .eq("id", reportId);
 
       setReports(reports.filter(r => r.id !== reportId));

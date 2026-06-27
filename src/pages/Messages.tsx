@@ -162,8 +162,8 @@ export default function Messages() {
     if (conv) {
       setSelectedProfile({ full_name: conv.full_name, avatar_url: conv.avatar_url, course: conv.course });
     } else {
-      const { data } = await supabase.from("profiles").select("full_name, avatar_url, course, is_verified").eq("user_id", userId).single();
-      setSelectedProfile(data);
+      const { data } = await supabase.from("profiles").select("full_name, avatar_url, course").eq("user_id", userId).single();
+      if (data) setSelectedProfile(data as any);
     }
 
     // Carrega Histórico
