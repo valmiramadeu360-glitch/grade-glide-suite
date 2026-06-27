@@ -260,6 +260,7 @@ export type Database = {
           email: string | null
           id: string
           is_anonymous: boolean | null
+          media_url: string | null
           message: string
           user_id: string | null
         }
@@ -269,6 +270,7 @@ export type Database = {
           email?: string | null
           id?: string
           is_anonymous?: boolean | null
+          media_url?: string | null
           message: string
           user_id?: string | null
         }
@@ -278,10 +280,47 @@ export type Database = {
           email?: string | null
           id?: string
           is_anonymous?: boolean | null
+          media_url?: string | null
           message?: string
           user_id?: string | null
         }
         Relationships: []
+      }
+      followers: {
+        Row: {
+          created_at: string | null
+          follower_id: string | null
+          following_id: string | null
+          id: string
+        }
+        Insert: {
+          created_at?: string | null
+          follower_id?: string | null
+          following_id?: string | null
+          id?: string
+        }
+        Update: {
+          created_at?: string | null
+          follower_id?: string | null
+          following_id?: string | null
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "followers_follower_id_fkey"
+            columns: ["follower_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "followers_following_id_fkey"
+            columns: ["following_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
       }
       follows: {
         Row: {
@@ -382,6 +421,36 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      notifications: {
+        Row: {
+          content: string | null
+          created_at: string | null
+          id: string
+          is_read: boolean | null
+          title: string
+          type: string | null
+          user_id: string | null
+        }
+        Insert: {
+          content?: string | null
+          created_at?: string | null
+          id?: string
+          is_read?: boolean | null
+          title: string
+          type?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          content?: string | null
+          created_at?: string | null
+          id?: string
+          is_read?: boolean | null
+          title?: string
+          type?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
       }
       post_comments: {
         Row: {
@@ -543,15 +612,19 @@ export type Database = {
           current_semester_label: string | null
           full_name: string | null
           id: string
+          is_banned: boolean | null
+          is_public: boolean | null
           notification_email: boolean | null
           notification_end_time: string | null
           notification_frequency: string | null
           notification_push: boolean | null
           notification_start_time: string | null
+          notification_volume: number | null
           portfolio_url: string | null
           semester: number | null
           semester_end: string | null
           semester_start: string | null
+          social_links: Json | null
           study_plans: string | null
           university: string | null
           updated_at: string
@@ -566,15 +639,19 @@ export type Database = {
           current_semester_label?: string | null
           full_name?: string | null
           id?: string
+          is_banned?: boolean | null
+          is_public?: boolean | null
           notification_email?: boolean | null
           notification_end_time?: string | null
           notification_frequency?: string | null
           notification_push?: boolean | null
           notification_start_time?: string | null
+          notification_volume?: number | null
           portfolio_url?: string | null
           semester?: number | null
           semester_end?: string | null
           semester_start?: string | null
+          social_links?: Json | null
           study_plans?: string | null
           university?: string | null
           updated_at?: string
@@ -589,15 +666,19 @@ export type Database = {
           current_semester_label?: string | null
           full_name?: string | null
           id?: string
+          is_banned?: boolean | null
+          is_public?: boolean | null
           notification_email?: boolean | null
           notification_end_time?: string | null
           notification_frequency?: string | null
           notification_push?: boolean | null
           notification_start_time?: string | null
+          notification_volume?: number | null
           portfolio_url?: string | null
           semester?: number | null
           semester_end?: string | null
           semester_start?: string | null
+          social_links?: Json | null
           study_plans?: string | null
           university?: string | null
           updated_at?: string
@@ -642,6 +723,36 @@ export type Database = {
             columns: ["discipline_id"]
             isOneToOne: false
             referencedRelation: "disciplines"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      saved_posts: {
+        Row: {
+          post_id: string
+          user_id: string
+        }
+        Insert: {
+          post_id: string
+          user_id: string
+        }
+        Update: {
+          post_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saved_posts_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "posts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "saved_posts_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "trending_posts"
             referencedColumns: ["id"]
           },
         ]
