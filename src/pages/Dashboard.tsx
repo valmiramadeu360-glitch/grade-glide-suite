@@ -101,14 +101,14 @@ export default function Dashboard() {
     });
   }, [allReminders, calendarDate]);
 
-  function getUrgencyLabel(dueDate: string, type?: string) {
+  function getUrgencyLabel(dueDate: string, type?: string): { variant: "default" | "secondary" | "destructive" | "outline"; text: string } {
     try {
       const d = new Date(dueDate);
-      if (isToday(d)) return type ? `Hoje · ${type}` : "Hoje";
-      if (isTomorrow(d)) return type ? `Amanhã · ${type}` : "Amanhã";
-      return d.toLocaleDateString("pt-BR");
+      if (isToday(d)) return { variant: "destructive", text: type ? `Hoje · ${type}` : "Hoje" };
+      if (isTomorrow(d)) return { variant: "default", text: type ? `Amanhã · ${type}` : "Amanhã" };
+      return { variant: "secondary", text: d.toLocaleDateString("pt-BR") };
     } catch {
-      return "";
+      return { variant: "outline", text: "" };
     }
   }
 
