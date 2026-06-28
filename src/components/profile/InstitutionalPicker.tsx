@@ -114,18 +114,7 @@ export function InstitutionalPicker({ value, onChange }: Props) {
         <Command>
           <CommandInput placeholder="Buscar campus..." />
           <CommandList>
-            <CommandEmpty>
-              <div className="py-4 text-sm">
-                Nenhum campus cadastrado.
-                <NewCampusForm
-                  universityId={value.university_id!}
-                  onCreated={(row) => {
-                    setCampuses([...campuses, row]);
-                    onChange({ ...value, campus_id: row.id, course_id: null });
-                  }}
-                />
-              </div>
-            </CommandEmpty>
+            <CommandEmpty>Nenhum campus cadastrado. Solicite via Feedback.</CommandEmpty>
             <CommandGroup>
               {campuses.map((c) => (
                 <CommandItem key={c.id} value={c.name} onSelect={() => onChange({ ...value, campus_id: c.id, course_id: null })}>
@@ -150,18 +139,7 @@ export function InstitutionalPicker({ value, onChange }: Props) {
         <Command>
           <CommandInput placeholder="Buscar curso..." />
           <CommandList>
-            <CommandEmpty>
-              <div className="py-4 text-sm">
-                Nenhum curso cadastrado.
-                <NewCourseForm
-                  campusId={value.campus_id!}
-                  onCreated={(row) => {
-                    setCourses([...courses, row]);
-                    onChange({ ...value, course_id: row.id, course_name: row.name });
-                  }}
-                />
-              </div>
-            </CommandEmpty>
+            <CommandEmpty>Nenhum curso cadastrado. Solicite via Feedback.</CommandEmpty>
             <CommandGroup>
               {courses.map((c) => (
                 <CommandItem key={c.id} value={c.name} onSelect={() => onChange({ ...value, course_id: c.id, course_name: c.name })}>
@@ -230,52 +208,6 @@ function PickerRow({
           <div onClick={() => setOpen(false)}>{children}</div>
         </PopoverContent>
       </Popover>
-    </div>
-  );
-}
-
-function NewCampusForm({ universityId, onCreated }: { universityId: string; onCreated: (r: Row) => void }) {
-  const [name, setName] = useState("");
-  const [saving, setSaving] = useState(false);
-  if (!universityId) return null;
-  return (
-    <div className="flex gap-2 mt-3 px-2">
-      <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nome do campus" className="h-10 rounded-xl" />
-      <Button
-        size="sm"
-        disabled={!name || saving}
-        onClick={async () => {
-          setSaving(true);
-          const { data, error } = await supabase.from("campuses").insert({ university_id: universityId, name }).select("id,name").single();
-          setSaving(false);
-          if (!error && data) onCreated(data as Row);
-        }}
-      >
-        Criar
-      </Button>
-    </div>
-  );
-}
-
-function NewCourseForm({ campusId, onCreated }: { campusId: string; onCreated: (r: Row) => void }) {
-  const [name, setName] = useState("");
-  const [saving, setSaving] = useState(false);
-  if (!campusId) return null;
-  return (
-    <div className="flex gap-2 mt-3 px-2">
-      <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nome do curso" className="h-10 rounded-xl" />
-      <Button
-        size="sm"
-        disabled={!name || saving}
-        onClick={async () => {
-          setSaving(true);
-          const { data, error } = await supabase.from("courses").insert({ campus_id: campusId, name, degree: "graduacao" }).select("id,name,degree").single();
-          setSaving(false);
-          if (!error && data) onCreated(data as Row);
-        }}
-      >
-        Criar
-      </Button>
     </div>
   );
 }
