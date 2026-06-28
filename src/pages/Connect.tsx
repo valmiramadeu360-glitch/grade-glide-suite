@@ -42,6 +42,7 @@ import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { useCommunities } from "@/hooks/useCommunities";
 
 const ACADEMIC_TAGS = ["Dúvida", "Resumo", "Evento", "Desabafo"];
 const MARKETPLACE_TAGS = ["Venda de Livro", "República", "Vaga de Estágio", "Doação"];
@@ -64,8 +65,10 @@ export default function Connect() {
 
   const { user } = useAuth();
   const { toast } = useToast();
+  const { communities } = useCommunities();
 
   const [tab, setTab] = useState("global");
+  const [activeCommunity, setActiveCommunity] = useState<string | null>(null);
 
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
@@ -92,7 +95,7 @@ export default function Connect() {
     loadFollowing();
     loadPosts();
 
-  }, [user, tab]);
+  }, [user, tab, activeCommunity]);
 
 
   async function loadFollowing() {
@@ -216,6 +219,11 @@ export default function Connect() {
 
       }
 
+      if (activeCommunity) {
+        query = query.eq("community_id", activeCommunity);
+      } else {
+        query = query.is("community_id", null);
+      }
 
       const { data, error } = await query;
 
