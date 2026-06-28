@@ -323,7 +323,8 @@ export default function Connect() {
           user_id: user.id,
           content: newContent.trim(),
           media_url: mediaUrl,
-          tag: selectedTag
+          tag: selectedTag,
+          community_id: activeCommunity,
         });
 
       if (error) throw error;
