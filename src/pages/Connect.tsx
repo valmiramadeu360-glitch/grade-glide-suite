@@ -533,6 +533,42 @@ export default function Connect() {
         </TabsList>
       </Tabs>
 
+      {/* Comunidades */}
+      {communities.length > 0 && (
+        <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none">
+          <button
+            type="button"
+            onClick={() => setActiveCommunity(null)}
+            className={cn(
+              "shrink-0 text-[10px] font-black uppercase tracking-wider px-3 py-1.5 rounded-full transition-all border",
+              activeCommunity === null
+                ? "bg-primary text-primary-foreground border-primary"
+                : "bg-muted/40 text-muted-foreground border-transparent hover:bg-muted"
+            )}
+          >
+            Feed Geral
+          </button>
+          {communities.map((c) => {
+            const Icon = c.type === "university" ? "🎓" : c.type === "campus" ? "🏛️" : c.type === "course" ? "📚" : "#";
+            return (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => setActiveCommunity(c.id)}
+                className={cn(
+                  "shrink-0 text-[10px] font-black uppercase tracking-wider px-3 py-1.5 rounded-full transition-all border whitespace-nowrap",
+                  activeCommunity === c.id
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "bg-muted/40 text-muted-foreground border-transparent hover:bg-muted"
+                )}
+              >
+                <span className="mr-1">{Icon}</span>{c.name}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {/* Feed */}
       {loading ? (
         <div className="flex justify-center py-10">
