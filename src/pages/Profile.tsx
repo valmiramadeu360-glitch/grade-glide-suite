@@ -11,11 +11,12 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
 import { 
   ArrowLeft, User, Camera, Loader2, Cloud, 
-  GraduationCap, Target, BookOpen, Globe, ShieldCheck, 
+  GraduationCap, Globe, ShieldCheck, 
   Plus, Trash2, Eye, EyeOff, Link as LinkIcon
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
+import { InstitutionalPicker, type InstitutionalSelection } from "@/components/profile/InstitutionalPicker";
 
 // Interface para os links dinâmicos
 interface SocialLink {
@@ -40,6 +41,13 @@ export default function Profile() {
     university: "",
     course: "",
     is_public: true, // Controle de privacidade
+  });
+
+  const [institutional, setInstitutional] = useState<InstitutionalSelection>({
+    university_id: null,
+    campus_id: null,
+    course_id: null,
+    current_period: null,
   });
 
   const [socialLinks, setSocialLinks] = useState<SocialLink[]>([]);
@@ -71,6 +79,12 @@ export default function Profile() {
         });
         setSocialLinks((Array.isArray(data.social_links) ? data.social_links : []) as any);
         setAvatarUrl(data.avatar_url ?? "");
+        setInstitutional({
+          university_id: (data as any).university_id ?? null,
+          campus_id: (data as any).campus_id ?? null,
+          course_id: (data as any).course_id ?? null,
+          current_period: (data as any).current_period ?? null,
+        });
       }
     } finally {
       setLoading(false);
@@ -137,6 +151,29 @@ export default function Profile() {
       title: checked ? "Perfil Público" : "Perfil Privado", 
       description: checked ? "Outros alunos agora podem ver sua biografia." : "Suas informações estão ocultas da rede." 
     });
+  }
+
+  async function handleInstitutionalChange(next: InstitutionalSelection) {
+    setInstitutional(next);
+    setAutoSaveStatus("saving");
+    const payload: any = {
+      university_id: next.university_id,
+      campus_id: next.campus_id,
+      course_id: next.course_id,
+      current_period: next.current_period,
+    };
+    if (next.university_name) payload.university = next.university_name;
+    if (next.course_name) payload.course = next.course_name;
+    const { error } = await supabase.from("profiles").update(payload).eq("user_id", user!.id);
+    if (!error) {
+      setAutoSaveStatus("saved");
+      if (next.university_name) setProfileData((p) => ({ ...p, university: next.university_name! }));
+      if (next.course_name) setProfileData((p) => ({ ...p, course: next.course_name! }));
+      setTimeout(() => setAutoSaveStatus("idle"), 1500);
+    } else {
+      setAutoSaveStatus("idle");
+      toast({ title: "Erro ao salvar vínculo", variant: "destructive" });
+    }
   }
 
   async function uploadAvatar(e: React.ChangeEvent<HTMLInputElement>) {
@@ -284,25 +321,7 @@ export default function Profile() {
               />
             </div>
 
-            <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Universidade / Faculdade</Label>
-              <Input 
-                value={profileData.university} 
-                onChange={handleChange("university")}
-                placeholder="Ex: Universidade Federal..." 
-                className="h-14 rounded-2xl bg-muted/20 border-border/40 font-bold focus:ring-primary/30" 
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Curso de Graduação</Label>
-              <Input 
-                value={profileData.course} 
-                onChange={handleChange("course")}
-                placeholder="Ex: Direito, Medicina, Economia..." 
-                className="h-14 rounded-2xl bg-muted/20 border-border/40 font-bold focus:ring-primary/30" 
-              />
-            </div>
+            <InstitutionalPicker value={institutional} onChange={handleInstitutionalChange} />
           </Card>
         </section>
 
