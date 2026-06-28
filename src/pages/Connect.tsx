@@ -42,6 +42,7 @@ import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { useCommunities } from "@/hooks/useCommunities";
 
 const ACADEMIC_TAGS = ["Dúvida", "Resumo", "Evento", "Desabafo"];
 const MARKETPLACE_TAGS = ["Venda de Livro", "República", "Vaga de Estágio", "Doação"];
@@ -64,8 +65,10 @@ export default function Connect() {
 
   const { user } = useAuth();
   const { toast } = useToast();
+  const { communities } = useCommunities();
 
   const [tab, setTab] = useState("global");
+  const [activeCommunity, setActiveCommunity] = useState<string | null>(null);
 
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
@@ -92,7 +95,7 @@ export default function Connect() {
     loadFollowing();
     loadPosts();
 
-  }, [user, tab]);
+  }, [user, tab, activeCommunity]);
 
 
   async function loadFollowing() {
@@ -216,6 +219,11 @@ export default function Connect() {
 
       }
 
+      if (activeCommunity) {
+        query = query.eq("community_id", activeCommunity);
+      } else {
+        query = query.is("community_id", null);
+      }
 
       const { data, error } = await query;
 
@@ -315,7 +323,8 @@ export default function Connect() {
           user_id: user.id,
           content: newContent.trim(),
           media_url: mediaUrl,
-          tag: selectedTag
+          tag: selectedTag,
+          community_id: activeCommunity,
         });
 
       if (error) throw error;
@@ -523,6 +532,42 @@ export default function Connect() {
           <TabsTrigger value="oportunidades" className="rounded-full font-bold text-xs">Oportunidades</TabsTrigger>
         </TabsList>
       </Tabs>
+
+      {/* Comunidades */}
+      {communities.length > 0 && (
+        <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none">
+          <button
+            type="button"
+            onClick={() => setActiveCommunity(null)}
+            className={cn(
+              "shrink-0 text-[10px] font-black uppercase tracking-wider px-3 py-1.5 rounded-full transition-all border",
+              activeCommunity === null
+                ? "bg-primary text-primary-foreground border-primary"
+                : "bg-muted/40 text-muted-foreground border-transparent hover:bg-muted"
+            )}
+          >
+            Feed Geral
+          </button>
+          {communities.map((c) => {
+            const Icon = c.type === "university" ? "🎓" : c.type === "campus" ? "🏛️" : c.type === "course" ? "📚" : "#";
+            return (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => setActiveCommunity(c.id)}
+                className={cn(
+                  "shrink-0 text-[10px] font-black uppercase tracking-wider px-3 py-1.5 rounded-full transition-all border whitespace-nowrap",
+                  activeCommunity === c.id
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "bg-muted/40 text-muted-foreground border-transparent hover:bg-muted"
+                )}
+              >
+                <span className="mr-1">{Icon}</span>{c.name}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* Feed */}
       {loading ? (

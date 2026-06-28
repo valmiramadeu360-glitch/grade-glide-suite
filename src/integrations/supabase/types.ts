@@ -181,6 +181,102 @@ export type Database = {
           },
         ]
       }
+      communities: {
+        Row: {
+          campus_id: string | null
+          course_id: string | null
+          created_at: string
+          description: string | null
+          id: string
+          member_count: number
+          name: string
+          period_number: number | null
+          type: Database["public"]["Enums"]["community_type"]
+          university_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          campus_id?: string | null
+          course_id?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          member_count?: number
+          name: string
+          period_number?: number | null
+          type: Database["public"]["Enums"]["community_type"]
+          university_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          campus_id?: string | null
+          course_id?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          member_count?: number
+          name?: string
+          period_number?: number | null
+          type?: Database["public"]["Enums"]["community_type"]
+          university_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "communities_campus_id_fkey"
+            columns: ["campus_id"]
+            isOneToOne: false
+            referencedRelation: "campuses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "communities_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "communities_university_id_fkey"
+            columns: ["university_id"]
+            isOneToOne: false
+            referencedRelation: "universities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      community_members: {
+        Row: {
+          community_id: string
+          id: string
+          joined_at: string
+          role: Database["public"]["Enums"]["community_role"]
+          user_id: string
+        }
+        Insert: {
+          community_id: string
+          id?: string
+          joined_at?: string
+          role?: Database["public"]["Enums"]["community_role"]
+          user_id: string
+        }
+        Update: {
+          community_id?: string
+          id?: string
+          joined_at?: string
+          role?: Database["public"]["Enums"]["community_role"]
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_members_community_id_fkey"
+            columns: ["community_id"]
+            isOneToOne: false
+            referencedRelation: "communities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       course_periods: {
         Row: {
           course_id: string
@@ -696,6 +792,7 @@ export type Database = {
       }
       posts: {
         Row: {
+          community_id: string | null
           content: string
           created_at: string
           id: string
@@ -705,6 +802,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          community_id?: string | null
           content: string
           created_at?: string
           id?: string
@@ -714,6 +812,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          community_id?: string | null
           content?: string
           created_at?: string
           id?: string
@@ -722,7 +821,15 @@ export type Database = {
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "posts_community_id_fkey"
+            columns: ["community_id"]
+            isOneToOne: false
+            referencedRelation: "communities"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
@@ -1070,6 +1177,8 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "moderator" | "user" | "channel_admin"
+      community_role: "member" | "moderator" | "admin"
+      community_type: "university" | "campus" | "course" | "period"
       report_status: "pending" | "reviewed" | "resolved" | "dismissed"
     }
     CompositeTypes: {
@@ -1199,6 +1308,8 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "moderator", "user", "channel_admin"],
+      community_role: ["member", "moderator", "admin"],
+      community_type: ["university", "campus", "course", "period"],
       report_status: ["pending", "reviewed", "resolved", "dismissed"],
     },
   },
