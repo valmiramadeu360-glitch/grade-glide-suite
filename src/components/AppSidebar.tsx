@@ -93,9 +93,9 @@ export function AppSidebar() {
                       asChild 
                       tooltip={item.title}
                       className={cn(
-                        "h-14 flex items-center gap-3.5 px-4 rounded-xl transition-all duration-200 active:scale-[0.98]",
+                        "relative h-14 flex items-center gap-3.5 px-4 rounded-xl transition-all duration-200 active:scale-[0.98]",
                         isActive 
-                          ? "bg-primary text-primary-foreground shadow-md font-black" 
+                          ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20 font-black before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:h-7 before:w-1 before:rounded-r-full before:bg-primary-foreground/80" 
                           : "hover:bg-muted/80 text-muted-foreground hover:text-foreground font-bold"
                       )}
                     >
