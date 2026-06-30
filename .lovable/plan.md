@@ -1,77 +1,62 @@
-## EduFlow OS — Roadmap Estratégico (Visão CTO)
+## Ordem de execução
 
-A diretriz é enorme e cobre meses de trabalho. Tentar implementar tudo em uma única entrega quebraria o app que já está em produção. Proponho executar em **6 fases incrementais**, cada uma estável e publicável, sem perder o que já funciona (Dashboard, Disciplinas, Connect, Mensagens, Admin).
+Vou em 3 ondas. Cada onda só começa quando a anterior compila verde.
 
-Antes de iniciar, preciso da sua aprovação sobre a ordem e o escopo. Cada fase é uma entrega completa.
+### Onda 1 — Caça-bugs e estabilização
 
----
+Varredura objetiva nos pontos que historicamente quebraram nesta base:
 
-### Fase 0 — Fundação Arquitetural (1 entrega)
-Objetivo: preparar o terreno sem mudar UI.
-- Auditoria do schema atual (profiles, disciplines, posts, messages, notifications) e mapa de débito técnico.
-- Padronização de hooks (`useAuth`, `useSemester`) e criação de `useProfile`, `useUniversity`.
-- Camada de serviços (`src/services/`) isolando todas as chamadas Supabase — prepara troca futura de provedor e testes.
-- Remoção de código morto (Index.tsx duplicado, followers vs follows, RLS off em `notifications` e `saved_posts`).
-- Ativar RLS faltante + GRANTs em todas as tabelas públicas.
+- **Typecheck completo** (`tsgo`) e correção de tudo que aparecer.
+- **RLS check** via linter do Supabase — fechar buracos em `followers`, `notifications`, `saved_posts` (estão com RLS off no schema atual).
+- **Avatar não propaga**: revisar evento `avatarUpdated` em `Profile.tsx` ↔ `AppLayout.tsx` (cache busting na URL).
+- **Calendário Dashboard**: confirmar que os dots aparecem e o filtro por data realmente filtra `filteredClasses`/`filteredReminders`.
+- **Connect**: bucket `post-media`, contagem de likes/comments em tempo real, filtro por comunidade não sumir ao trocar de aba.
+- **Disciplinas**: restaurar período move para o `currentLabel` atual, não para texto digitado errado.
+- **Messages**: marcar como lidas ao abrir a conversa (zera o badge azul).
+- **Admin**: confirmar que `has_role('admin')` protege a rota (hoje só protege via UI).
+- **Console/network**: rodar Playwright no `/`, `/connect`, `/disciplines`, `/profile`, capturar erros.
 
-### Fase 1 — Hierarquia Acadêmica Nacional (núcleo do produto)
-Modelo hierárquico que destrava tudo depois.
-- Novas tabelas: `universities`, `campuses`, `courses`, `course_periods`, `subjects` (catálogo nacional, distinto de `disciplines` que é a "matrícula" do aluno).
-- `profiles` ganha FKs: `university_id`, `campus_id`, `course_id`, `current_period`.
-- Seed inicial com ~20 universidades brasileiras grandes (USP, UFRJ, UFMG, UnB, UFPE, etc.) + campi.
-- Onboarding atualizado: aluno escolhe Universidade → Campus → Curso → Período (com busca).
-- Disciplinas do aluno passam a referenciar `subjects` (catálogo) opcionalmente.
+### Onda 2 — Modernização visual (Atual refinado)
 
-### Fase 2 — Comunidades Automáticas + Chat reorganizado
-Depende da Fase 1.
-- Tabela `communities` (tipo: universidade | campus | curso | periodo | disciplina) + `community_members` (auto-join baseado no perfil).
-- Trigger: ao definir universidade/curso/período, usuário entra automaticamente nas comunidades correspondentes.
-- Feed do Connect filtra por comunidade ativa (abas: Minha Universidade, Meu Curso, Meu Período, Geral).
-- Chat: grupos automáticos por comunidade + DMs apenas por convite/aceite (`message_requests`).
-- Tabela `community_posts` separa feed global de feed por comunidade (ou flag `community_id` em `posts`).
+Mantém Indigo `#4f46e5` + Plus Jakarta. Sobe o nível de polimento sem trocar a identidade.
 
-### Fase 3 — Central de Notícias Institucional
-- Tabela `channels` (universidade, reitoria, atlética, PET, empresa júnior, departamento) + `channel_posts` + `channel_subscriptions`.
-- Roles novos: `channel_admin` no `user_roles`.
-- Painel Admin ganha aba "Canais Institucionais" para aprovar criação.
-- Feed "Notícias" no Dashboard puxa apenas canais seguidos.
-- IA opcional para resumir editais/PDFs publicados (já temos `LOVABLE_API_KEY`).
+- **Densidade**: reduzir padding dos `Card` (`p-8` → `p-6`), apertar tipografia dos headers (`text-xs` uppercase fica, mas com `tracking-[0.18em]` em vez de `0.3em` em títulos longos).
+- **Micro-animações**: `framer-motion` já não está instalado — vou usar `tailwindcss-animate` (já presente) + classes `animate-in fade-in-50 slide-in-from-bottom-2 duration-500` em listas e modais. Hover states com `transition-transform hover:-translate-y-0.5` em cards clicáveis.
+- **Glass refinement**: `.glass-card` ganha borda gradiente sutil (`before:` pseudo) só em surfaces principais (header, sidebar, cards de stats).
+- **Sidebar**: itens ativos com barra vertical à esquerda + leve glow `shadow-primary/10`.
+- **Header**: badge de notificações com animação `animate-pulse` substituída por `animate-bounce` discreto só quando count > 0.
+- **Empty states**: padronizar — ícone em círculo `bg-muted/50`, título bold uppercase, descrição sentence-case, CTA opcional.
+- **Loading**: skeletons em `Dashboard`, `Connect`, `Disciplines` substituindo os `Loader2`.
+- **Botões**: variante `soft` ganha hover com leve scale; primary com `shadow-primary/30` em hover.
 
-### Fase 4 — Assistente Acadêmico IA (camada transversal)
-- Edge function `ai-assistant` com prompt-router (resumo, flashcards, mapa mental, questões, cronograma, cálculo de média).
-- Tabelas: `ai_conversations`, `ai_messages`, `flashcards`, `mind_maps`, `study_plans`.
-- Botão "IA" contextual em: Disciplina (resumir material), Notícia (resumir edital), Dashboard (planejar semana).
-- Provider abstrato (`src/services/ai/provider.ts`) — permite trocar Gemini → outro sem refatorar UI.
+### Onda 3 — Fase 3: Central de Notícias
 
-### Fase 5 — Rede Acadêmica (perfil = currículo) + Monetização base
-- Perfil expandido: `competencies`, `certificates`, `projects`, `monitorias`, `publications`, `languages`, `experiences` (tabelas relacionadas).
-- Página `/profile/:id` pública com privacidade configurável (público | universidade | conexões | privado).
-- Estrutura de `subscriptions` + plano Premium (Stripe) — apenas schema e gating, sem ativar cobrança ainda.
-- Limites IA por plano (free: N requests/dia; premium: ilimitado).
+Migration nova:
 
-### Fase 6 — Refino UX e Escalabilidade
-- Bottom Navigation mobile dedicada (Dashboard, Connect, Chat, IA, Perfil).
-- Layouts tablet/desktop diferenciados.
-- Lazy loading de rotas, React Query com cache agressivo, índices de DB nas queries quentes.
-- Documentação técnica em `/docs` (arquitetura, schema, fluxos, decisões).
-- Acessibilidade (ARIA, contraste, navegação por teclado).
+- `news_channels` (id, scope: `university|campus|course|global`, scope_id, name, description, banner_url, created_by, member_count)
+- `news_posts` (id, channel_id, author_id, title, content, cover_url, link_url, pinned, published_at)
+- `news_subscriptions` (channel_id, user_id) — opt-in/opt-out por canal
+- Auto-subscribe via trigger: ao entrar numa community, é inscrito no canal correspondente.
+- RLS: leitura aberta para inscritos; escrita apenas para `admin` + `channel_owner` (nova role no `user_roles`).
 
----
+UI:
 
-### Detalhes técnicos importantes
+- Rota `/news` + item no sidebar (ícone `Newspaper`).
+- Header com tabs: **Para você** (canais inscritos) / **Explorar** / **Pinned**.
+- Card de notícia: capa 16:9, título serifado opcional, badge do canal, data relativa.
+- Detalhe modal/drawer com conteúdo rich-text (reusa `DisciplineNotes`).
+- Widget no Dashboard: "Últimas notícias" mostrando 3 cards do canal mais ativo do usuário.
 
-- **Não quebrar o existente**: cada migration é aditiva. Colunas novas nullable, FKs opcionais até backfill.
-- **RLS rigoroso** em toda tabela nova (auth.uid scoping, has_role para admin/channel_admin).
-- **Backend**: Lovable Cloud (Supabase) — já temos buckets, auth, IA gateway.
-- **IA**: Gemini 3 Flash por padrão (já configurado), abstraído via provider.
-- **Sem rate limiting custom** nesta fase (não há primitivo padrão); fica anotado para infra futura.
+### Detalhes técnicos
 
----
+- Não toco em `src/integrations/supabase/client.ts` nem em `types.ts`.
+- Migration única na Onda 3, com `GRANT` + `RLS` + policies completas (lição da Fase 2).
+- Cada onda termina com `tsgo` verde antes de seguir.
+- Sem framer-motion novo — só tailwindcss-animate que já está no projeto.
+- Não mexo no conteúdo institucional (cadeira, perfil, lembretes) — só refino.
 
-### Decisão que preciso de você
+### Fora de escopo desta rodada
 
-Confirma que devo seguir nesta ordem, **começando AGORA pela Fase 0 + Fase 1** (fundação + hierarquia universidades/cursos), que é o que destrava todo o restante?
-
-Ou prefere que eu priorize uma fase específica primeiro (ex.: pular direto para Comunidades, ou para IA)?
-
-Cada fase entrego como um marco isolado, com migrations + código + verificação, e só avanço para a próxima após seu OK.
+- Fase 4 (IA), Fase 5 (network profissional/Stripe), Fase 6 (bottom nav).
+- Renomeação de tabelas existentes.
+- Tradução de strings técnicas.

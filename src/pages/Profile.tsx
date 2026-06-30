@@ -198,7 +198,8 @@ export default function Profile() {
 
       if (uploadError) throw uploadError;
 
-      const { data: { publicUrl } } = supabase.storage.from("avatars").getPublicUrl(filePath);
+      const { data: { publicUrl: rawUrl } } = supabase.storage.from("avatars").getPublicUrl(filePath);
+      const publicUrl = `${rawUrl}?v=${Date.now()}`;
 
       const { error: updateError } = await supabase
         .from("profiles")

@@ -208,7 +208,7 @@ export default function Connect() {
 
       let query = supabase
         .from("posts")
-        .select("*, profiles(id,full_name,avatar_url,is_verified)")
+        .select("*, profiles(id,full_name,avatar_url)")
         .order("created_at", { ascending: false })
         .limit(50);
 
@@ -685,10 +685,6 @@ function PostCard({
               <p className="font-bold text-sm">
                 {post.profiles?.full_name || "Estudante"}
               </p>
-
-              {post.profiles?.is_verified && (
-                <BadgeCheck className="h-4 w-4 text-blue-500"/>
-              )}
 
             </div>
 

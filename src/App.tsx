@@ -24,6 +24,7 @@ import Connect from "./pages/Connect";
 import Messages from "./pages/Messages";
 import NotFound from "./pages/NotFound";
 import AdminDashboard from "./pages/AdminDashboard";
+import News from "./pages/News";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -129,6 +130,7 @@ const App = () => (
                 <Route path="/disciplines" element={<ProtectedRoute><Disciplines /></ProtectedRoute>} />
                 <Route path="/disciplines/:id" element={<ProtectedRoute><DisciplineDetail /></ProtectedRoute>} />
                 <Route path="/connect" element={<ProtectedRoute><Connect /></ProtectedRoute>} />
+                <Route path="/news" element={<ProtectedRoute><News /></ProtectedRoute>} />
                 <Route path="/messages" element={<ProtectedRoute><Messages /></ProtectedRoute>} />
                 <Route path="/extra-courses" element={<ProtectedRoute><Disciplines extraOnly /></ProtectedRoute>} />
                 <Route path="/reminders" element={<ProtectedRoute><Reminders /></ProtectedRoute>} />

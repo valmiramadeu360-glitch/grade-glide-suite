@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
-  MessageSquare, Send, Loader2, User, ArrowLeft, Search, MoreVertical, BadgeCheck
+  MessageSquare, Send, Loader2, User, ArrowLeft, Search, MoreVertical
 } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -50,7 +50,7 @@ export default function Messages() {
   const [searching, setSearching] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const [selectedProfile, setSelectedProfile] = useState<{ full_name: string | null; avatar_url: string | null; course: string | null; is_verified?: boolean } | null>(null);
+  const [selectedProfile, setSelectedProfile] = useState<{ full_name: string | null; avatar_url: string | null; course: string | null } | null>(null);
 
   // Carrega contatos na inicialização
   useEffect(() => {
@@ -262,9 +262,8 @@ export default function Messages() {
                 <AvatarFallback className="bg-primary/10 text-primary font-black">{selectedProfile?.full_name?.charAt(0) || "U"}</AvatarFallback>
               </Avatar>
               <div className="min-w-0">
-                <p className="text-sm font-black text-foreground truncate group-hover:text-primary transition-colors flex items-center gap-1">
+                <p className="text-sm font-black text-foreground truncate group-hover:text-primary transition-colors">
                   {selectedProfile?.full_name || "Estudante"}
-                  {selectedProfile?.is_verified && <BadgeCheck className="h-3 w-3 text-blue-500" />}
                 </p>
                 <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground truncate">{selectedProfile?.course || "Comunidade"}</p>
               </div>

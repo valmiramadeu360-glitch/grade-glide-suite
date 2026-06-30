@@ -119,14 +119,14 @@ export function SemesterProvider({ children }: { children: ReactNode }) {
       // Busca semestres únicos para popular o Histórico e o Seletor
       const { data: disciplines } = await supabase
         .from("disciplines")
-        .select("semester")
+        .select("semester_label")
         .eq("user_id", user.id);
 
       const labels = new Set<string>();
       labels.add(currentLabel); // Garante que o atual apareça
       
       disciplines?.forEach((d: any) => {
-        if (d.semester) labels.add(d.semester.toString());
+        if (d.semester_label) labels.add(d.semester_label);
       });
 
       // Ordenação decrescente: 2026.2 > 2026.1 > 2025.2...

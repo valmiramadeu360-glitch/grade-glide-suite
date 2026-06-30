@@ -602,6 +602,155 @@ export type Database = {
           },
         ]
       }
+      news_channels: {
+        Row: {
+          banner_url: string | null
+          campus_id: string | null
+          course_id: string | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          icon: string | null
+          id: string
+          is_active: boolean
+          member_count: number
+          name: string
+          scope: Database["public"]["Enums"]["news_channel_scope"]
+          university_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          banner_url?: string | null
+          campus_id?: string | null
+          course_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          icon?: string | null
+          id?: string
+          is_active?: boolean
+          member_count?: number
+          name: string
+          scope?: Database["public"]["Enums"]["news_channel_scope"]
+          university_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          banner_url?: string | null
+          campus_id?: string | null
+          course_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          icon?: string | null
+          id?: string
+          is_active?: boolean
+          member_count?: number
+          name?: string
+          scope?: Database["public"]["Enums"]["news_channel_scope"]
+          university_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "news_channels_campus_id_fkey"
+            columns: ["campus_id"]
+            isOneToOne: false
+            referencedRelation: "campuses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "news_channels_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "news_channels_university_id_fkey"
+            columns: ["university_id"]
+            isOneToOne: false
+            referencedRelation: "universities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      news_posts: {
+        Row: {
+          author_id: string
+          channel_id: string
+          content: string
+          cover_url: string | null
+          created_at: string
+          id: string
+          link_url: string | null
+          pinned: boolean
+          published_at: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          author_id: string
+          channel_id: string
+          content: string
+          cover_url?: string | null
+          created_at?: string
+          id?: string
+          link_url?: string | null
+          pinned?: boolean
+          published_at?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          author_id?: string
+          channel_id?: string
+          content?: string
+          cover_url?: string | null
+          created_at?: string
+          id?: string
+          link_url?: string | null
+          pinned?: boolean
+          published_at?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "news_posts_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "news_channels"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      news_subscriptions: {
+        Row: {
+          channel_id: string
+          subscribed_at: string
+          user_id: string
+        }
+        Insert: {
+          channel_id: string
+          subscribed_at?: string
+          user_id: string
+        }
+        Update: {
+          channel_id?: string
+          subscribed_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "news_subscriptions_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "news_channels"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notes: {
         Row: {
           content: string | null
@@ -1179,6 +1328,7 @@ export type Database = {
       app_role: "admin" | "moderator" | "user" | "channel_admin"
       community_role: "member" | "moderator" | "admin"
       community_type: "university" | "campus" | "course" | "period"
+      news_channel_scope: "global" | "university" | "campus" | "course"
       report_status: "pending" | "reviewed" | "resolved" | "dismissed"
     }
     CompositeTypes: {
@@ -1310,6 +1460,7 @@ export const Constants = {
       app_role: ["admin", "moderator", "user", "channel_admin"],
       community_role: ["member", "moderator", "admin"],
       community_type: ["university", "campus", "course", "period"],
+      news_channel_scope: ["global", "university", "campus", "course"],
       report_status: ["pending", "reviewed", "resolved", "dismissed"],
     },
   },
