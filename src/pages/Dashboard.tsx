@@ -16,6 +16,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger 
 } from "@/components/ui/dialog";
 import { Calendar } from "@/components/ui/calendar"; 
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { 
   BookOpen, Clock, AlertTriangle, 
   CheckCircle2, ArrowRight, Cloud, CloudOff, History, 
@@ -438,18 +439,54 @@ export default function Dashboard() {
 
       {/* EVENTOS DO DIA */}
       <div className="pt-4 space-y-8">
-        <header className="border-b border-border/40 pb-4">
-          <h2 className="text-2xl font-black text-foreground capitalize tracking-tight">
-            {isToday(calendarDate)
-              ? "Eventos de Hoje"
-              : isTomorrow(calendarDate)
-              ? "Eventos de Amanhã"
-              : format(calendarDate, "EEEE, dd/MM", { locale: ptBR })}
-          </h2>
+        <header className="border-b border-border/40 pb-4 flex items-end justify-between gap-4 flex-wrap">
+          <div>
+            <h2 className="text-2xl font-black text-foreground capitalize tracking-tight">
+              {isToday(calendarDate)
+                ? "Eventos de Hoje"
+                : isTomorrow(calendarDate)
+                ? "Eventos de Amanhã"
+                : format(calendarDate, "EEEE, dd/MM", { locale: ptBR })}
+            </h2>
+            <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mt-1">
+              Sua agenda personalizada para esta data
+            </p>
+          </div>
 
-          <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mt-1">
-            Sua agenda personalizada para esta data
-          </p>
+          <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
+            <PopoverTrigger asChild>
+              <button className="flex items-center gap-3 bg-card border border-border/50 hover:border-primary/40 px-4 py-2.5 rounded-2xl shadow-sm transition-all active:scale-95 group">
+                <CalendarIcon className="h-4 w-4 text-primary" />
+                <div className="text-left">
+                  <span className="block text-[9px] font-black uppercase tracking-widest text-muted-foreground leading-none">
+                    {format(calendarDate, "MMM", { locale: ptBR })}
+                  </span>
+                  <span className="block text-base font-black tracking-tight leading-none mt-0.5">
+                    {format(calendarDate, "dd")}
+                  </span>
+                </div>
+              </button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-auto p-0 rounded-2xl border-border/40 shadow-2xl">
+              <Calendar
+                mode="single"
+                selected={calendarDate}
+                onSelect={(d) => { if (d) { setCalendarDate(d); setIsCalendarOpen(false); } }}
+                locale={ptBR}
+                modifiers={{
+                  hasClass: (day) => allSchedules.some((s) => s.day_of_week === day.getDay()),
+                  hasReminder: (day) => allReminders.some((r) => {
+                    try { return isSameDay(new Date(r.due_date), day); } catch { return false; }
+                  }),
+                }}
+                modifiersClassNames={{
+                  hasClass: "calendar-dot-class",
+                  hasReminder: "calendar-dot-reminder",
+                }}
+                className="rounded-2xl"
+              />
+            </PopoverContent>
+          </Popover>
         </header>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
