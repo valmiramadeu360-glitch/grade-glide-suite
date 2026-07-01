@@ -18,7 +18,7 @@ import { useToast } from "@/hooks/use-toast";
 import { 
   Save, Loader2, Calendar, Palette, Moon, CheckCircle2,
   Sun, BellRing, Mail, Smartphone, ArrowLeft,
-  Volume2, Trash2, AlertTriangle, Settings2, FileText, Shield
+  Volume2, Trash2, AlertTriangle, Settings2, FileText, Shield, Lock, KeyRound
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useNavigate } from "react-router-dom";
@@ -50,6 +50,14 @@ export default function Settings() {
   const [notifyVolume, setNotifyVolume] = useState("3");
   const [notifyFrequency, setNotifyFrequency] = useState("daily");
 
+  // Privacidade
+  const [privacyProfile, setPrivacyProfile] = useState("public");
+  const [privacyDm, setPrivacyDm] = useState("public");
+  const [privacyPosts, setPrivacyPosts] = useState("public");
+
+  // Reset senha
+  const [resettingPassword, setResettingPassword] = useState(false);
+
   useEffect(() => {
     if (user) loadSettings();
   }, [user]);
@@ -74,6 +82,9 @@ export default function Settings() {
         setNotifyEnd(data.notification_end_time || "18:00");
         setNotifyVolume(data.notification_volume?.toString() || "3");
         setNotifyFrequency(data.notification_frequency || "daily");
+        setPrivacyProfile((data as any).privacy_profile ?? "public");
+        setPrivacyDm((data as any).privacy_dm ?? "public");
+        setPrivacyPosts((data as any).privacy_posts ?? "public");
       }
     } catch (err) {
       console.error("Erro ao carregar configurações", err);
@@ -95,8 +106,11 @@ export default function Settings() {
       notification_end_time: notifyEnd,
       notification_volume: parseInt(notifyVolume),
       notification_frequency: notifyFrequency,
+      privacy_profile: privacyProfile,
+      privacy_dm: privacyDm,
+      privacy_posts: privacyPosts,
       updated_at: new Date().toISOString(),
-    };
+    } as any;
 
     try {
       const { error } = await supabase
