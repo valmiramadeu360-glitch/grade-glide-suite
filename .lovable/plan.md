@@ -1,62 +1,62 @@
-## Ordem de execução
 
-Vou em 3 ondas. Cada onda só começa quando a anterior compila verde.
+## Escopo desta rodada
 
-### Onda 1 — Caça-bugs e estabilização
+Continuo a evolução ininterrupta que combinamos, mas agrupando os módulos como você pediu — menos rotas soltas, mais coerência.
 
-Varredura objetiva nos pontos que historicamente quebraram nesta base:
+### 1. Connect vira o hub social + Central de Notícias
 
-- **Typecheck completo** (`tsgo`) e correção de tudo que aparecer.
-- **RLS check** via linter do Supabase — fechar buracos em `followers`, `notifications`, `saved_posts` (estão com RLS off no schema atual).
-- **Avatar não propaga**: revisar evento `avatarUpdated` em `Profile.tsx` ↔ `AppLayout.tsx` (cache busting na URL).
-- **Calendário Dashboard**: confirmar que os dots aparecem e o filtro por data realmente filtra `filteredClasses`/`filteredReminders`.
-- **Connect**: bucket `post-media`, contagem de likes/comments em tempo real, filtro por comunidade não sumir ao trocar de aba.
-- **Disciplinas**: restaurar período move para o `currentLabel` atual, não para texto digitado errado.
-- **Messages**: marcar como lidas ao abrir a conversa (zera o badge azul).
-- **Admin**: confirmar que `has_role('admin')` protege a rota (hoje só protege via UI).
-- **Console/network**: rodar Playwright no `/`, `/connect`, `/disciplines`, `/profile`, capturar erros.
+Fundir `/news` dentro de `/connect` como uma aba, e reforçar o composer estilo LinkedIn/Instagram.
 
-### Onda 2 — Modernização visual (Atual refinado)
+- Aba nova no topo do Connect: **Feed | Comunidades | Notícias | Salvos**
+- A antiga rota `/news` passa a redirecionar para `/connect?tab=news` (mantém compatibilidade).
+- Composer com botão `+` central que abre um `Popover` com as opções:
+  - **Foto** (upload imagem, bucket `post-media`)
+  - **Vídeo** (upload mp4/webm até 50 MB, mesmo bucket)
+  - **Artigo** (título + rich-text via Tiptap — reusa `DisciplineNotes`)
+  - **Documento** (PDF, bucket novo `post-documents` privado com signed URL)
+  - **Enquete** (pergunta + 2-4 opções — tabela `post_polls` + `post_poll_votes`)
+- Card de post ganha renderização por tipo: player nativo para vídeo, preview do PDF com botão baixar, artigo com capa + trecho + "Ler mais" abre `Sheet` lateral.
+- Chip de comunidade e chip do canal de notícias no topo do card, para o usuário saber a origem.
+- Feed de Notícias reusa `news_posts` mas renderizado com o mesmo card visual (unificação estética).
 
-Mantém Indigo `#4f46e5` + Plus Jakarta. Sobe o nível de polimento sem trocar a identidade.
+### 2. Cursos Extras dentro de Disciplinas
 
-- **Densidade**: reduzir padding dos `Card` (`p-8` → `p-6`), apertar tipografia dos headers (`text-xs` uppercase fica, mas com `tracking-[0.18em]` em vez de `0.3em` em títulos longos).
-- **Micro-animações**: `framer-motion` já não está instalado — vou usar `tailwindcss-animate` (já presente) + classes `animate-in fade-in-50 slide-in-from-bottom-2 duration-500` em listas e modais. Hover states com `transition-transform hover:-translate-y-0.5` em cards clicáveis.
-- **Glass refinement**: `.glass-card` ganha borda gradiente sutil (`before:` pseudo) só em surfaces principais (header, sidebar, cards de stats).
-- **Sidebar**: itens ativos com barra vertical à esquerda + leve glow `shadow-primary/10`.
-- **Header**: badge de notificações com animação `animate-pulse` substituída por `animate-bounce` discreto só quando count > 0.
-- **Empty states**: padronizar — ícone em círculo `bg-muted/50`, título bold uppercase, descrição sentence-case, CTA opcional.
-- **Loading**: skeletons em `Dashboard`, `Connect`, `Disciplines` substituindo os `Loader2`.
-- **Botões**: variante `soft` ganha hover com leve scale; primary com `shadow-primary/30` em hover.
+Hoje "Cursos Extras" está na memória mas não existe UI. Vou entrar em `Disciplines.tsx` e criar uma **terceira tab**: `Em curso | Arquivadas | Cursos Extras`.
 
-### Onda 3 — Fase 3: Central de Notícias
+- Tabela nova `extra_courses` (nome, instituição, carga horária, url do certificado, status, data conclusão).
+- Card compacto com badge de status (em andamento / concluído) e link para o certificado.
+- CRUD inline no mesmo padrão das disciplinas.
 
-Migration nova:
+### 3. Configurações = central de conta, privacidade e app
 
-- `news_channels` (id, scope: `university|campus|course|global`, scope_id, name, description, banner_url, created_by, member_count)
-- `news_posts` (id, channel_id, author_id, title, content, cover_url, link_url, pinned, published_at)
-- `news_subscriptions` (channel_id, user_id) — opt-in/opt-out por canal
-- Auto-subscribe via trigger: ao entrar numa community, é inscrito no canal correspondente.
-- RLS: leitura aberta para inscritos; escrita apenas para `admin` + `channel_owner` (nova role no `user_roles`).
+Reorganizo `Settings.tsx` em seções colapsáveis (Accordion):
 
-UI:
+- **Aparência** — tema, paleta (já existe, só reorganiza).
+- **Notificações** — push/email/janelas (já existe).
+- **Privacidade** — quem vê perfil (público/seguidores/privado), quem pode me mandar DM, quem vê meus posts. Coluna `privacy_profile`, `privacy_dm`, `privacy_posts` em `profiles`.
+- **Conta** — trocar email, redefinir senha, sessões ativas, exportar dados (JSON).
+- **Zona de perigo** — deletar conta (já existe, só realoca).
 
-- Rota `/news` + item no sidebar (ícone `Newspaper`).
-- Header com tabs: **Para você** (canais inscritos) / **Explorar** / **Pinned**.
-- Card de notícia: capa 16:9, título serifado opcional, badge do canal, data relativa.
-- Detalhe modal/drawer com conteúdo rich-text (reusa `DisciplineNotes`).
-- Widget no Dashboard: "Últimas notícias" mostrando 3 cards do canal mais ativo do usuário.
+Rotas soltas como acesso admin continuam em `/admin`, mas o link "Painel Admin" vira um item da seção Conta (visível só se `has_role('admin')`).
 
-### Detalhes técnicos
+### 4. Continuação da modernização
 
-- Não toco em `src/integrations/supabase/client.ts` nem em `types.ts`.
-- Migration única na Onda 3, com `GRANT` + `RLS` + policies completas (lição da Fase 2).
-- Cada onda termina com `tsgo` verde antes de seguir.
-- Sem framer-motion novo — só tailwindcss-animate que já está no projeto.
-- Não mexo no conteúdo institucional (cadeira, perfil, lembretes) — só refino.
+- Skeletons nos feeds (Connect / Notícias) substituindo `Loader2`.
+- Animações `animate-in fade-in slide-in-from-bottom-2` em listas.
+- Empty states padronizados.
+- Barra flutuante de composer no mobile no Connect (botão `+` grande no canto inferior direito).
 
-### Fora de escopo desta rodada
+### Migrations (uma única)
 
-- Fase 4 (IA), Fase 5 (network profissional/Stripe), Fase 6 (bottom nav).
-- Renomeação de tabelas existentes.
-- Tradução de strings técnicas.
+- `extra_courses` (RLS: dono lê/escreve)
+- `post_polls`, `post_poll_votes` (RLS: leitura pública, voto autenticado 1x)
+- `posts.media_type` (`image | video | article | document | poll`), `posts.title`, `posts.link_url` (nullable)
+- `profiles.privacy_profile`, `profiles.privacy_dm`, `profiles.privacy_posts` (enum `public|followers|private`, default `public`)
+- Bucket `post-documents` (privado) — criado via tool.
+
+### Fora de escopo
+
+- Fase 4 IA, Fase 5 monetização — próxima rodada.
+- Reescrever a rota `/news` (fica só como redirect).
+
+Confirma que sigo assim? Ao aprovar, executo tudo em sequência sem parar entre etapas.

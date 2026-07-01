@@ -18,7 +18,7 @@ import { useToast } from "@/hooks/use-toast";
 import { 
   Save, Loader2, Calendar, Palette, Moon, CheckCircle2,
   Sun, BellRing, Mail, Smartphone, ArrowLeft,
-  Volume2, Trash2, AlertTriangle, Settings2, FileText, Shield
+  Volume2, Trash2, AlertTriangle, Settings2, FileText, Shield, Lock, KeyRound
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useNavigate } from "react-router-dom";
@@ -50,6 +50,14 @@ export default function Settings() {
   const [notifyVolume, setNotifyVolume] = useState("3");
   const [notifyFrequency, setNotifyFrequency] = useState("daily");
 
+  // Privacidade
+  const [privacyProfile, setPrivacyProfile] = useState("public");
+  const [privacyDm, setPrivacyDm] = useState("public");
+  const [privacyPosts, setPrivacyPosts] = useState("public");
+
+  // Reset senha
+  const [resettingPassword, setResettingPassword] = useState(false);
+
   useEffect(() => {
     if (user) loadSettings();
   }, [user]);
@@ -74,6 +82,9 @@ export default function Settings() {
         setNotifyEnd(data.notification_end_time || "18:00");
         setNotifyVolume(data.notification_volume?.toString() || "3");
         setNotifyFrequency(data.notification_frequency || "daily");
+        setPrivacyProfile((data as any).privacy_profile ?? "public");
+        setPrivacyDm((data as any).privacy_dm ?? "public");
+        setPrivacyPosts((data as any).privacy_posts ?? "public");
       }
     } catch (err) {
       console.error("Erro ao carregar configurações", err);
@@ -95,8 +106,11 @@ export default function Settings() {
       notification_end_time: notifyEnd,
       notification_volume: parseInt(notifyVolume),
       notification_frequency: notifyFrequency,
+      privacy_profile: privacyProfile,
+      privacy_dm: privacyDm,
+      privacy_posts: privacyPosts,
       updated_at: new Date().toISOString(),
-    };
+    } as any;
 
     try {
       const { error } = await supabase
@@ -139,6 +153,50 @@ export default function Settings() {
     } finally {
       setDeleting(false);
       setShowDeleteDialog(false);
+    }
+  }
+
+  async function handlePasswordReset() {
+    if (!user?.email) return;
+    setResettingPassword(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(user.email, {
+        redirectTo: `${window.location.origin}/auth`,
+      });
+      if (error) throw error;
+      toast({ title: "Verifique seu e-mail", description: "Enviamos um link para redefinir sua senha." });
+    } catch (e: any) {
+      toast({ title: "Falha ao enviar", description: e.message, variant: "destructive" });
+    } finally {
+      setResettingPassword(false);
+    }
+  }
+
+  async function handleExportData() {
+    if (!user) return;
+    try {
+      const [profile, disciplines, reminders, extras, notes] = await Promise.all([
+        supabase.from("profiles").select("*").eq("user_id", user.id).maybeSingle(),
+        supabase.from("disciplines").select("*").eq("user_id", user.id),
+        supabase.from("reminders").select("*").eq("user_id", user.id),
+        supabase.from("extra_courses").select("*").eq("user_id", user.id),
+        supabase.from("notes").select("*").eq("user_id", user.id),
+      ]);
+      const payload = {
+        exportedAt: new Date().toISOString(),
+        profile: profile.data, disciplines: disciplines.data,
+        reminders: reminders.data, extra_courses: extras.data, notes: notes.data,
+      };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `eduflow-export-${Date.now()}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast({ title: "Exportação concluída" });
+    } catch (e: any) {
+      toast({ title: "Erro ao exportar", description: e.message, variant: "destructive" });
     }
   }
 
@@ -419,6 +477,84 @@ export default function Settings() {
         </AccordionItem>
 
         {/* BLOCO 5: ZONA DE RISCO (EXCLUSÃO) */}
+        {/* BLOCO PRIVACIDADE */}
+        <AccordionItem value="privacy" className="border border-border/40 bg-card rounded-[32px] px-2 shadow-sm data-[state=open]:shadow-md transition-all">
+          <AccordionTrigger className="hover:no-underline py-5 px-4">
+            <div className="flex items-center gap-4">
+              <div className="h-12 w-12 rounded-2xl bg-purple-500/10 flex items-center justify-center shrink-0">
+                <Lock className="h-6 w-6 text-purple-500" />
+              </div>
+              <div className="text-left">
+                <p className="text-base sm:text-lg font-black text-foreground">Privacidade</p>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mt-1">Quem vê o quê</p>
+              </div>
+            </div>
+          </AccordionTrigger>
+          <AccordionContent className="px-4 pb-6 pt-2 space-y-4">
+            {[
+              { label: "Meu perfil", value: privacyProfile, set: setPrivacyProfile, desc: "Quem pode visualizar seu perfil" },
+              { label: "Mensagens diretas", value: privacyDm, set: setPrivacyDm, desc: "Quem pode te enviar DMs" },
+              { label: "Minhas publicações", value: privacyPosts, set: setPrivacyPosts, desc: "Quem vê o que você posta" },
+            ].map((r) => (
+              <div key={r.label} className="bg-muted/20 rounded-2xl border border-border/50 p-4 space-y-2">
+                <div>
+                  <p className="text-sm font-black">{r.label}</p>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{r.desc}</p>
+                </div>
+                <Select value={r.value} onValueChange={r.set}>
+                  <SelectTrigger className="h-11 rounded-xl bg-background font-bold">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-2xl">
+                    <SelectItem value="public">Público</SelectItem>
+                    <SelectItem value="followers">Somente seguidores</SelectItem>
+                    <SelectItem value="private">Privado</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            ))}
+          </AccordionContent>
+        </AccordionItem>
+
+        {/* BLOCO CONTA */}
+        <AccordionItem value="account" className="border border-border/40 bg-card rounded-[32px] px-2 shadow-sm data-[state=open]:shadow-md transition-all">
+          <AccordionTrigger className="hover:no-underline py-5 px-4">
+            <div className="flex items-center gap-4">
+              <div className="h-12 w-12 rounded-2xl bg-cyan-500/10 flex items-center justify-center shrink-0">
+                <KeyRound className="h-6 w-6 text-cyan-500" />
+              </div>
+              <div className="text-left">
+                <p className="text-base sm:text-lg font-black text-foreground">Conta & Acesso</p>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mt-1">Senha e dados</p>
+              </div>
+            </div>
+          </AccordionTrigger>
+          <AccordionContent className="px-4 pb-6 pt-2 space-y-3">
+            <div className="bg-muted/20 rounded-2xl border border-border/50 p-4 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-black">Redefinir senha</p>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Enviamos um link seguro para seu e-mail</p>
+              </div>
+              <Button size="sm" variant="outline" onClick={handlePasswordReset} disabled={resettingPassword} className="rounded-full">
+                {resettingPassword ? <Loader2 className="h-4 w-4 animate-spin" /> : "Enviar link"}
+              </Button>
+            </div>
+            <div className="bg-muted/20 rounded-2xl border border-border/50 p-4 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-black">Exportar meus dados</p>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Baixe um arquivo JSON com tudo</p>
+              </div>
+              <Button size="sm" variant="outline" onClick={handleExportData} className="rounded-full">Exportar</Button>
+            </div>
+            <div className="bg-muted/20 rounded-2xl border border-border/50 p-4 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-black">E-mail cadastrado</p>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground truncate">{user?.email}</p>
+              </div>
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+
         <AccordionItem value="danger" className="border border-destructive/20 bg-destructive/5 rounded-[32px] px-2 transition-all hover:bg-destructive/10">
           <AccordionTrigger className="hover:no-underline py-5 px-4">
             <div className="flex items-center gap-4">

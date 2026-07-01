@@ -1,10 +1,19 @@
 import { useEffect, useState, useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent, CardHeader, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Dialog as PollDialog,
+  DialogContent as PollDialogContent,
+  DialogHeader as PollDialogHeader,
+  DialogTitle as PollDialogTitle,
+  DialogDescription as PollDialogDescription,
+} from "@/components/ui/dialog";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
 import {
@@ -35,7 +44,13 @@ import {
   Bookmark,
   Share2,
   BadgeCheck,
-  X
+  X,
+  Plus,
+  Newspaper,
+  PenLine,
+  BarChart3,
+  ExternalLink,
+  Pin,
 } from "lucide-react";
 
 import { formatDistanceToNow } from "date-fns";
@@ -66,7 +81,10 @@ export default function Connect() {
   const { user } = useAuth();
   const { toast } = useToast();
   const { communities } = useCommunities();
+  const [searchParams, setSearchParams] = useSearchParams();
 
+  const initialTop = searchParams.get("tab") === "news" ? "news" : searchParams.get("tab") === "saved" ? "saved" : "feed";
+  const [topTab, setTopTab] = useState<string>(initialTop);
   const [tab, setTab] = useState("global");
   const [activeCommunity, setActiveCommunity] = useState<string | null>(null);
 
@@ -75,6 +93,11 @@ export default function Connect() {
   const [followingIds, setFollowingIds] = useState<string[]>([]);
 
   const [newContent, setNewContent] = useState("");
+  const [newTitle, setNewTitle] = useState("");
+  const [mediaType, setMediaType] = useState<"text" | "image" | "video" | "article" | "document" | "poll">("text");
+  const [composerOpen, setComposerOpen] = useState(false);
+  const [pollQuestion, setPollQuestion] = useState("");
+  const [pollOptions, setPollOptions] = useState<string[]>(["", ""]);
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
 
   const [posting, setPosting] = useState(false);
@@ -88,14 +111,64 @@ export default function Connect() {
   const [newComment, setNewComment] = useState("");
   const [sendingComment, setSendingComment] = useState(false);
 
+  // News feed inline
+  const [newsItems, setNewsItems] = useState<any[]>([]);
+  const [newsLoading, setNewsLoading] = useState(false);
+  const [activeNews, setActiveNews] = useState<any | null>(null);
+
 
   useEffect(() => {
     if (!user) return;
+    if (topTab !== "feed") return;
 
     loadFollowing();
     loadPosts();
 
-  }, [user, tab, activeCommunity]);
+  }, [user, tab, activeCommunity, topTab]);
+
+  useEffect(() => {
+    if (!user) return;
+    if (topTab === "news") loadNews();
+    if (topTab === "saved") loadSavedPosts();
+  }, [user, topTab]);
+
+  function changeTopTab(v: string) {
+    setTopTab(v);
+    setSearchParams(v === "feed" ? {} : { tab: v }, { replace: true });
+  }
+
+  async function loadNews() {
+    setNewsLoading(true);
+    try {
+      const { data } = await supabase
+        .from("news_posts")
+        .select("*, news_channels(name, scope)")
+        .order("pinned", { ascending: false })
+        .order("published_at", { ascending: false })
+        .limit(50);
+      setNewsItems(data ?? []);
+    } finally {
+      setNewsLoading(false);
+    }
+  }
+
+  async function loadSavedPosts() {
+    setLoading(true);
+    try {
+      const { data: saved } = await supabase
+        .from("saved_posts")
+        .select("post_id")
+        .eq("user_id", user!.id);
+      const ids = (saved ?? []).map((s: any) => s.post_id);
+      if (ids.length === 0) { setPosts([]); return; }
+      const { data } = await supabase
+        .from("posts")
+        .select("*, profiles(id,full_name,avatar_url)")
+        .in("id", ids)
+        .order("created_at", { ascending: false });
+      if (data) setPosts(await fetchMetricsForPosts(data));
+    } finally { setLoading(false); }
+  }
 
 
   async function loadFollowing() {
@@ -294,6 +367,8 @@ export default function Connect() {
     try {
 
       let mediaUrl: string | null = null;
+      let documentUrl: string | null = null;
+      let videoUrl: string | null = null;
 
       if (selectedFile) {
 
@@ -301,38 +376,63 @@ export default function Connect() {
 
         const filePath = `${user.id}/${Date.now()}.${fileExt}`;
 
+        const bucket = mediaType === "document" ? "post-documents" : "post-media";
         const { error: uploadError } = await supabase
           .storage
-          .from("post-media")
+          .from(bucket)
           .upload(filePath, selectedFile);
-
         if (uploadError) throw uploadError;
 
-        const { data } = supabase
-          .storage
-          .from("post-media")
-          .getPublicUrl(filePath);
-
-        mediaUrl = data.publicUrl;
+        if (bucket === "post-documents") {
+          const { data: signed } = await supabase.storage.from(bucket).createSignedUrl(filePath, 60 * 60 * 24 * 365);
+          documentUrl = signed?.signedUrl ?? null;
+        } else {
+          const { data } = supabase.storage.from(bucket).getPublicUrl(filePath);
+          if (mediaType === "video") videoUrl = data.publicUrl;
+          else mediaUrl = data.publicUrl;
+        }
 
       }
 
-      const { error } = await supabase
+      const insertPayload: any = {
+        user_id: user.id,
+        content: newContent.trim(),
+        media_url: mediaUrl,
+        tag: selectedTag,
+        community_id: activeCommunity,
+        media_type: mediaType,
+        title: newTitle || null,
+        document_url: documentUrl,
+        video_url: videoUrl,
+      };
+      const { data: created, error } = await supabase
         .from("posts")
-        .insert({
-          user_id: user.id,
-          content: newContent.trim(),
-          media_url: mediaUrl,
-          tag: selectedTag,
-          community_id: activeCommunity,
-        });
+        .insert(insertPayload)
+        .select()
+        .single();
 
       if (error) throw error;
 
+      if (mediaType === "poll" && created) {
+        const opts = pollOptions.map(o => o.trim()).filter(Boolean);
+        if (pollQuestion.trim() && opts.length >= 2) {
+          await supabase.from("post_polls").insert({
+            post_id: created.id,
+            question: pollQuestion.trim(),
+            options: opts,
+          } as any);
+        }
+      }
+
       setNewContent("");
+      setNewTitle("");
+      setPollQuestion("");
+      setPollOptions(["", ""]);
       setSelectedFile(null);
       setPreviewUrl(null);
       setSelectedTag(null);
+      setMediaType("text");
+      setComposerOpen(false);
 
       toast({
         title: "Publicado!"
@@ -459,25 +559,83 @@ export default function Connect() {
         </div>
       </div>
 
+      {/* Top Tabs */}
+      <Tabs value={topTab} onValueChange={changeTopTab}>
+        <TabsList className="w-full rounded-full bg-muted/40 p-1 grid grid-cols-3">
+          <TabsTrigger value="feed" className="rounded-full font-bold text-xs gap-1.5"><Globe className="h-3.5 w-3.5" /> Feed</TabsTrigger>
+          <TabsTrigger value="news" className="rounded-full font-bold text-xs gap-1.5"><Newspaper className="h-3.5 w-3.5" /> Notícias</TabsTrigger>
+          <TabsTrigger value="saved" className="rounded-full font-bold text-xs gap-1.5"><Bookmark className="h-3.5 w-3.5" /> Salvos</TabsTrigger>
+        </TabsList>
+      </Tabs>
+
+      {topTab === "feed" && (
+      <>
       {/* Composer */}
       <Card className="rounded-3xl">
         <CardContent className="p-4 space-y-3">
+          {(mediaType === "article") && (
+            <Input
+              value={newTitle}
+              onChange={(e) => setNewTitle(e.target.value)}
+              placeholder="Título do artigo"
+              className="rounded-2xl border-0 bg-muted/40 font-bold text-base"
+            />
+          )}
+          {(mediaType === "poll") && (
+            <div className="space-y-2">
+              <Input
+                value={pollQuestion}
+                onChange={(e) => setPollQuestion(e.target.value)}
+                placeholder="Sua pergunta"
+                className="rounded-2xl border-0 bg-muted/40 font-bold"
+              />
+              {pollOptions.map((opt, i) => (
+                <Input
+                  key={i}
+                  value={opt}
+                  onChange={(e) => {
+                    const next = [...pollOptions]; next[i] = e.target.value; setPollOptions(next);
+                  }}
+                  placeholder={`Opção ${i + 1}`}
+                  className="rounded-2xl border-0 bg-muted/40"
+                />
+              ))}
+              {pollOptions.length < 4 && (
+                <Button variant="ghost" size="sm" onClick={() => setPollOptions([...pollOptions, ""])} className="rounded-full">
+                  <Plus className="h-3.5 w-3.5 mr-1" /> Opção
+                </Button>
+              )}
+            </div>
+          )}
           <Textarea
             value={newContent}
             onChange={(e) => setNewContent(e.target.value)}
-            placeholder="O que está estudando hoje?"
+            placeholder={mediaType === "article" ? "Corpo do artigo…" : "O que está estudando hoje?"}
             rows={3}
             className="rounded-2xl resize-none border-0 bg-muted/40 focus-visible:ring-1"
           />
           {previewUrl && previewUrl !== "pdf-preview" && (
             <div className="relative">
-              <img src={previewUrl} className="rounded-2xl w-full max-h-64 object-cover" />
+              {mediaType === "video" ? (
+                <video src={previewUrl} controls className="rounded-2xl w-full max-h-64" />
+              ) : (
+                <img src={previewUrl} className="rounded-2xl w-full max-h-64 object-cover" />
+              )}
               <Button
                 size="icon"
                 variant="secondary"
                 className="absolute top-2 right-2 h-7 w-7 rounded-full"
                 onClick={() => { setSelectedFile(null); setPreviewUrl(null); }}
               >
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          )}
+          {previewUrl === "pdf-preview" && selectedFile && (
+            <div className="flex items-center gap-2 bg-muted/40 rounded-2xl p-3">
+              <FileText className="h-5 w-5 text-primary" />
+              <span className="text-sm font-bold truncate flex-1">{selectedFile.name}</span>
+              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { setSelectedFile(null); setPreviewUrl(null); }}>
                 <X className="h-3.5 w-3.5" />
               </Button>
             </div>
@@ -500,20 +658,56 @@ export default function Connect() {
             ))}
           </div>
           <div className="flex items-center justify-between">
-            <label className="cursor-pointer">
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handleFileSelect}
-                className="hidden"
-              />
-              <div className="h-9 w-9 rounded-full bg-muted flex items-center justify-center hover:bg-muted/70">
-                <ImageIcon className="h-4 w-4" />
-              </div>
-            </label>
+            <Popover>
+              <PopoverTrigger asChild>
+                <button className="h-10 w-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center hover:opacity-90 shadow-md transition-all active:scale-95" title="Adicionar mídia">
+                  <Plus className="h-5 w-5" />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent align="start" className="w-56 p-2 rounded-2xl">
+                <div className="grid grid-cols-1 gap-1">
+                  {[
+                    { t: "image", label: "Foto", icon: ImageIcon, accept: "image/*" },
+                    { t: "video", label: "Vídeo", icon: Video, accept: "video/*" },
+                    { t: "document", label: "Documento (PDF)", icon: FileText, accept: "application/pdf" },
+                    { t: "article", label: "Artigo", icon: PenLine, accept: null },
+                    { t: "poll", label: "Enquete", icon: BarChart3, accept: null },
+                  ].map((o) => (
+                    <label key={o.t} className="cursor-pointer">
+                      {o.accept && (
+                        <input
+                          type="file"
+                          accept={o.accept}
+                          className="hidden"
+                          onChange={(e) => { setMediaType(o.t as any); handleFileSelect(e); }}
+                        />
+                      )}
+                      <div
+                        onClick={() => { if (!o.accept) setMediaType(o.t as any); }}
+                        className={cn(
+                          "flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-muted transition-colors",
+                          mediaType === o.t && "bg-primary/10 text-primary"
+                        )}
+                      >
+                        <o.icon className="h-4 w-4" />
+                        <span className="text-sm font-bold">{o.label}</span>
+                      </div>
+                    </label>
+                  ))}
+                  {mediaType !== "text" && (
+                    <button
+                      onClick={() => { setMediaType("text"); setSelectedFile(null); setPreviewUrl(null); }}
+                      className="text-[10px] font-black uppercase tracking-widest text-muted-foreground hover:text-foreground py-2 mt-1 border-t"
+                    >
+                      Limpar tipo
+                    </button>
+                  )}
+                </div>
+              </PopoverContent>
+            </Popover>
             <Button
               onClick={handlePost}
-              disabled={posting || (!newContent.trim() && !selectedFile)}
+              disabled={posting || (!newContent.trim() && !selectedFile && !pollQuestion.trim())}
               className="rounded-full font-bold gap-2"
               size="sm"
             >
@@ -524,7 +718,7 @@ export default function Connect() {
         </CardContent>
       </Card>
 
-      {/* Tabs */}
+      {/* Sub-Tabs do Feed */}
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList className="w-full rounded-full bg-muted/40 p-1 grid grid-cols-3">
           <TabsTrigger value="global" className="rounded-full font-bold text-xs">Global</TabsTrigger>
@@ -532,9 +726,61 @@ export default function Connect() {
           <TabsTrigger value="oportunidades" className="rounded-full font-bold text-xs">Oportunidades</TabsTrigger>
         </TabsList>
       </Tabs>
+      </>
+      )}
+
+      {topTab === "news" && (
+        newsLoading ? (
+          <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
+        ) : newsItems.length === 0 ? (
+          <Card className="rounded-3xl border-dashed">
+            <CardContent className="p-10 text-center text-muted-foreground">
+              <Newspaper className="h-10 w-10 mx-auto mb-3 opacity-30" />
+              <p className="text-sm font-semibold">Nenhuma notícia por aqui ainda.</p>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="space-y-4 animate-in fade-in-50 slide-in-from-bottom-2 duration-500">
+            {newsItems.map((n) => (
+              <Card key={n.id} className="rounded-3xl overflow-hidden cursor-pointer hover:shadow-lg transition-all" onClick={() => setActiveNews(n)}>
+                {n.cover_url && <img src={n.cover_url} className="w-full h-40 object-cover" />}
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    {n.pinned && <Pin className="h-3.5 w-3.5 text-primary" />}
+                    <Badge variant="secondary" className="rounded-full text-[9px]">{n.news_channels?.name ?? "Canal"}</Badge>
+                    <span className="text-[10px] text-muted-foreground ml-auto">
+                      {formatDistanceToNow(new Date(n.published_at), { locale: ptBR, addSuffix: true })}
+                    </span>
+                  </div>
+                  <h3 className="font-black text-base leading-tight">{n.title}</h3>
+                  {n.content && <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{n.content}</p>}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )
+      )}
+
+      <Dialog open={!!activeNews} onOpenChange={(o) => !o && setActiveNews(null)}>
+        <DialogContent className="rounded-3xl max-w-lg max-h-[85vh] overflow-y-auto">
+          {activeNews && (
+            <div className="space-y-3">
+              {activeNews.cover_url && <img src={activeNews.cover_url} className="w-full rounded-2xl" />}
+              <Badge variant="secondary" className="rounded-full">{activeNews.news_channels?.name}</Badge>
+              <h2 className="font-black text-xl">{activeNews.title}</h2>
+              <p className="whitespace-pre-wrap text-sm">{activeNews.content}</p>
+              {activeNews.link_url && (
+                <Button variant="outline" className="rounded-full" onClick={() => window.open(activeNews.link_url, "_blank")}>
+                  <ExternalLink className="h-4 w-4 mr-2" /> Abrir link
+                </Button>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Comunidades */}
-      {communities.length > 0 && (
+      {topTab === "feed" && communities.length > 0 && (
         <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none">
           <button
             type="button"
@@ -570,7 +816,7 @@ export default function Connect() {
       )}
 
       {/* Feed */}
-      {loading ? (
+      {topTab !== "news" && (loading ? (
         <div className="flex justify-center py-10">
           <Loader2 className="h-6 w-6 animate-spin text-primary" />
         </div>
@@ -595,7 +841,7 @@ export default function Connect() {
             />
           ))}
         </div>
-      )}
+      ))}
 
       {/* Comments Modal */}
       <Dialog open={commentModalOpen} onOpenChange={setCommentModalOpen}>

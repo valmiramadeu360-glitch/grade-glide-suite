@@ -1,4 +1,5 @@
-import { useEffect, useState, useMemo } from "react"; import { supabase } from "@/integrations/supabase/client"; import { useAuth } from "@/hooks/useAuth"; import { useSemester } from "@/hooks/useSemester"; import { useNavigate } from "react-router-dom";
+import { useEffect, useState, useMemo } from "react"; import { supabase } from "@/integrations/supabase/client"; import { useAuth } from "@/hooks/useAuth"; import { useSemester } from "@/hooks/useSemester"; import { useNavigate, useSearchParams } from "react-router-dom";
+import { ExtraCoursesTab } from "@/components/ExtraCoursesTab";
 
 import { Card, CardContent } from "@/components/ui/card"; import { Button } from "@/components/ui/button"; import { Input } from "@/components/ui/input"; import { Label } from "@/components/ui/label";
 
@@ -8,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 
-import { Plus, BookOpen, ChevronRight, GraduationCap, Loader2, History, ArrowLeft, RefreshCcw, Search, Trash2, AlertTriangle } from "lucide-react";
+import { Plus, BookOpen, ChevronRight, GraduationCap, Loader2, History, ArrowLeft, RefreshCcw, Search, Trash2, AlertTriangle, Sparkles } from "lucide-react";
 
 import { useToast } from "@/hooks/use-toast";
 
@@ -22,11 +23,23 @@ const { currentLabel, setCurrentLabel, loadSemesters, isLoading: isSwapping } = 
 
 const navigate = useNavigate();
 
+const [searchParams, setSearchParams] = useSearchParams();
+
 const { toast } = useToast();
 
 const [allDisciplines, setAllDisciplines] = useState<Discipline[]>([]); const [loading, setLoading] = useState(true);
 
-const [activeTab, setActiveTab] = useState("active");
+const [activeTab, setActiveTab] = useState(searchParams.get("tab") === "extra" ? "extra" : "active");
+
+useEffect(() => {
+  const t = searchParams.get("tab");
+  if (t === "extra" || t === "active" || t === "history") setActiveTab(t);
+}, [searchParams]);
+
+function changeTab(v: string) {
+  setActiveTab(v);
+  setSearchParams(v === "active" ? {} : { tab: v }, { replace: true });
+}
 
 const [searchQuery, setSearchQuery] = useState("");
 
@@ -326,17 +339,28 @@ setIsProcessing(false);
       </div>
 
       {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
+      <Tabs value={activeTab} onValueChange={changeTab}>
         <TabsList className="w-full rounded-full bg-muted/40 p-1">
-          <TabsTrigger value="active" className="flex-1 rounded-full font-bold gap-1.5">
+          <TabsTrigger value="active" className="flex-1 rounded-full font-bold gap-1.5 text-xs">
             <GraduationCap className="h-4 w-4" /> Em curso
           </TabsTrigger>
           {!extraOnly && (
-            <TabsTrigger value="history" className="flex-1 rounded-full font-bold gap-1.5">
+            <TabsTrigger value="history" className="flex-1 rounded-full font-bold gap-1.5 text-xs">
               <History className="h-4 w-4" /> Histórico
             </TabsTrigger>
           )}
+          {!extraOnly && (
+            <TabsTrigger value="extra" className="flex-1 rounded-full font-bold gap-1.5 text-xs">
+              <Sparkles className="h-4 w-4" /> Extras
+            </TabsTrigger>
+          )}
         </TabsList>
+
+        {!extraOnly && (
+          <TabsContent value="extra">
+            <ExtraCoursesTab />
+          </TabsContent>
+        )}
 
         <TabsContent value="active" className="space-y-3 mt-4">
           {activeDisciplines.length === 0 ? (

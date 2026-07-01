@@ -23,8 +23,6 @@ const mainItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Minhas Disciplinas", url: "/disciplines", icon: BookOpen },
   { title: "Connect", url: "/connect", icon: Globe },
-  { title: "Central de Notícias", url: "/news", icon: Newspaper },
-  { title: "Cursos Extras", url: "/extra-courses", icon: Sparkles },
   { title: "Cronograma", url: "/reminders", icon: Bell },
   { title: "Configurações", url: "/settings", icon: Settings },
   { title: "Central de Ajuda", url: "/feedback", icon: MessageSquare },

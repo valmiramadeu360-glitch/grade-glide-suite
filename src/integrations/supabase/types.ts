@@ -471,6 +471,48 @@ export type Database = {
           },
         ]
       }
+      extra_courses: {
+        Row: {
+          certificate_url: string | null
+          completed_at: string | null
+          created_at: string
+          id: string
+          institution: string | null
+          name: string
+          notes: string | null
+          status: string
+          updated_at: string
+          user_id: string
+          workload_hours: number | null
+        }
+        Insert: {
+          certificate_url?: string | null
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          institution?: string | null
+          name: string
+          notes?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+          workload_hours?: number | null
+        }
+        Update: {
+          certificate_url?: string | null
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          institution?: string | null
+          name?: string
+          notes?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+          workload_hours?: number | null
+        }
+        Relationships: []
+      }
       feedbacks: {
         Row: {
           category: string
@@ -897,6 +939,77 @@ export type Database = {
           },
         ]
       }
+      post_poll_votes: {
+        Row: {
+          created_at: string
+          id: string
+          option_index: number
+          poll_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          option_index: number
+          poll_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          option_index?: number
+          poll_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "post_poll_votes_poll_id_fkey"
+            columns: ["poll_id"]
+            isOneToOne: false
+            referencedRelation: "post_polls"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      post_polls: {
+        Row: {
+          created_at: string
+          id: string
+          options: Json
+          post_id: string
+          question: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          options: Json
+          post_id: string
+          question: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          options?: Json
+          post_id?: string
+          question?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "post_polls_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: true
+            referencedRelation: "posts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "post_polls_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: true
+            referencedRelation: "trending_posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       post_reports: {
         Row: {
           created_at: string
@@ -944,31 +1057,46 @@ export type Database = {
           community_id: string | null
           content: string
           created_at: string
+          document_url: string | null
           id: string
+          link_url: string | null
+          media_type: string
           media_url: string | null
           tag: string | null
+          title: string | null
           updated_at: string
           user_id: string
+          video_url: string | null
         }
         Insert: {
           community_id?: string | null
           content: string
           created_at?: string
+          document_url?: string | null
           id?: string
+          link_url?: string | null
+          media_type?: string
           media_url?: string | null
           tag?: string | null
+          title?: string | null
           updated_at?: string
           user_id: string
+          video_url?: string | null
         }
         Update: {
           community_id?: string | null
           content?: string
           created_at?: string
+          document_url?: string | null
           id?: string
+          link_url?: string | null
+          media_type?: string
           media_url?: string | null
           tag?: string | null
+          title?: string | null
           updated_at?: string
           user_id?: string
+          video_url?: string | null
         }
         Relationships: [
           {
@@ -1002,6 +1130,9 @@ export type Database = {
           notification_start_time: string | null
           notification_volume: number | null
           portfolio_url: string | null
+          privacy_dm: string
+          privacy_posts: string
+          privacy_profile: string
           semester: number | null
           semester_end: string | null
           semester_start: string | null
@@ -1033,6 +1164,9 @@ export type Database = {
           notification_start_time?: string | null
           notification_volume?: number | null
           portfolio_url?: string | null
+          privacy_dm?: string
+          privacy_posts?: string
+          privacy_profile?: string
           semester?: number | null
           semester_end?: string | null
           semester_start?: string | null
@@ -1064,6 +1198,9 @@ export type Database = {
           notification_start_time?: string | null
           notification_volume?: number | null
           portfolio_url?: string | null
+          privacy_dm?: string
+          privacy_posts?: string
+          privacy_profile?: string
           semester?: number | null
           semester_end?: string | null
           semester_start?: string | null
