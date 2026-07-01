@@ -156,6 +156,50 @@ export default function Settings() {
     }
   }
 
+  async function handlePasswordReset() {
+    if (!user?.email) return;
+    setResettingPassword(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(user.email, {
+        redirectTo: `${window.location.origin}/auth`,
+      });
+      if (error) throw error;
+      toast({ title: "Verifique seu e-mail", description: "Enviamos um link para redefinir sua senha." });
+    } catch (e: any) {
+      toast({ title: "Falha ao enviar", description: e.message, variant: "destructive" });
+    } finally {
+      setResettingPassword(false);
+    }
+  }
+
+  async function handleExportData() {
+    if (!user) return;
+    try {
+      const [profile, disciplines, reminders, extras, notes] = await Promise.all([
+        supabase.from("profiles").select("*").eq("user_id", user.id).maybeSingle(),
+        supabase.from("disciplines").select("*").eq("user_id", user.id),
+        supabase.from("reminders").select("*").eq("user_id", user.id),
+        supabase.from("extra_courses").select("*").eq("user_id", user.id),
+        supabase.from("notes").select("*").eq("user_id", user.id),
+      ]);
+      const payload = {
+        exportedAt: new Date().toISOString(),
+        profile: profile.data, disciplines: disciplines.data,
+        reminders: reminders.data, extra_courses: extras.data, notes: notes.data,
+      };
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `eduflow-export-${Date.now()}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast({ title: "Exportação concluída" });
+    } catch (e: any) {
+      toast({ title: "Erro ao exportar", description: e.message, variant: "destructive" });
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex h-[100dvh] flex-col items-center justify-center gap-4">
