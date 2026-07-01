@@ -1,10 +1,19 @@
 import { useEffect, useState, useMemo } from "react";
+import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent, CardHeader, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Dialog as PollDialog,
+  DialogContent as PollDialogContent,
+  DialogHeader as PollDialogHeader,
+  DialogTitle as PollDialogTitle,
+  DialogDescription as PollDialogDescription,
+} from "@/components/ui/dialog";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
 import {
@@ -35,7 +44,13 @@ import {
   Bookmark,
   Share2,
   BadgeCheck,
-  X
+  X,
+  Plus,
+  Newspaper,
+  PenLine,
+  BarChart3,
+  ExternalLink,
+  Pin,
 } from "lucide-react";
 
 import { formatDistanceToNow } from "date-fns";
@@ -66,7 +81,10 @@ export default function Connect() {
   const { user } = useAuth();
   const { toast } = useToast();
   const { communities } = useCommunities();
+  const [searchParams, setSearchParams] = useSearchParams();
 
+  const initialTop = searchParams.get("tab") === "news" ? "news" : searchParams.get("tab") === "saved" ? "saved" : "feed";
+  const [topTab, setTopTab] = useState<string>(initialTop);
   const [tab, setTab] = useState("global");
   const [activeCommunity, setActiveCommunity] = useState<string | null>(null);
 
@@ -75,6 +93,11 @@ export default function Connect() {
   const [followingIds, setFollowingIds] = useState<string[]>([]);
 
   const [newContent, setNewContent] = useState("");
+  const [newTitle, setNewTitle] = useState("");
+  const [mediaType, setMediaType] = useState<"text" | "image" | "video" | "article" | "document" | "poll">("text");
+  const [composerOpen, setComposerOpen] = useState(false);
+  const [pollQuestion, setPollQuestion] = useState("");
+  const [pollOptions, setPollOptions] = useState<string[]>(["", ""]);
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
 
   const [posting, setPosting] = useState(false);
@@ -88,14 +111,64 @@ export default function Connect() {
   const [newComment, setNewComment] = useState("");
   const [sendingComment, setSendingComment] = useState(false);
 
+  // News feed inline
+  const [newsItems, setNewsItems] = useState<any[]>([]);
+  const [newsLoading, setNewsLoading] = useState(false);
+  const [activeNews, setActiveNews] = useState<any | null>(null);
+
 
   useEffect(() => {
     if (!user) return;
+    if (topTab !== "feed") return;
 
     loadFollowing();
     loadPosts();
 
-  }, [user, tab, activeCommunity]);
+  }, [user, tab, activeCommunity, topTab]);
+
+  useEffect(() => {
+    if (!user) return;
+    if (topTab === "news") loadNews();
+    if (topTab === "saved") loadSavedPosts();
+  }, [user, topTab]);
+
+  function changeTopTab(v: string) {
+    setTopTab(v);
+    setSearchParams(v === "feed" ? {} : { tab: v }, { replace: true });
+  }
+
+  async function loadNews() {
+    setNewsLoading(true);
+    try {
+      const { data } = await supabase
+        .from("news_posts")
+        .select("*, news_channels(name, scope)")
+        .order("pinned", { ascending: false })
+        .order("published_at", { ascending: false })
+        .limit(50);
+      setNewsItems(data ?? []);
+    } finally {
+      setNewsLoading(false);
+    }
+  }
+
+  async function loadSavedPosts() {
+    setLoading(true);
+    try {
+      const { data: saved } = await supabase
+        .from("saved_posts")
+        .select("post_id")
+        .eq("user_id", user!.id);
+      const ids = (saved ?? []).map((s: any) => s.post_id);
+      if (ids.length === 0) { setPosts([]); return; }
+      const { data } = await supabase
+        .from("posts")
+        .select("*, profiles(id,full_name,avatar_url)")
+        .in("id", ids)
+        .order("created_at", { ascending: false });
+      if (data) setPosts(await fetchMetricsForPosts(data));
+    } finally { setLoading(false); }
+  }
 
 
   async function loadFollowing() {
