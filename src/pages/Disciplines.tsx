@@ -339,17 +339,28 @@ setIsProcessing(false);
       </div>
 
       {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
+      <Tabs value={activeTab} onValueChange={changeTab}>
         <TabsList className="w-full rounded-full bg-muted/40 p-1">
-          <TabsTrigger value="active" className="flex-1 rounded-full font-bold gap-1.5">
+          <TabsTrigger value="active" className="flex-1 rounded-full font-bold gap-1.5 text-xs">
             <GraduationCap className="h-4 w-4" /> Em curso
           </TabsTrigger>
           {!extraOnly && (
-            <TabsTrigger value="history" className="flex-1 rounded-full font-bold gap-1.5">
+            <TabsTrigger value="history" className="flex-1 rounded-full font-bold gap-1.5 text-xs">
               <History className="h-4 w-4" /> Histórico
             </TabsTrigger>
           )}
+          {!extraOnly && (
+            <TabsTrigger value="extra" className="flex-1 rounded-full font-bold gap-1.5 text-xs">
+              <Sparkles className="h-4 w-4" /> Extras
+            </TabsTrigger>
+          )}
         </TabsList>
+
+        {!extraOnly && (
+          <TabsContent value="extra">
+            <ExtraCoursesTab />
+          </TabsContent>
+        )}
 
         <TabsContent value="active" className="space-y-3 mt-4">
           {activeDisciplines.length === 0 ? (
