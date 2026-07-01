@@ -780,7 +780,7 @@ export default function Connect() {
       </Dialog>
 
       {/* Comunidades */}
-      {communities.length > 0 && (
+      {topTab === "feed" && communities.length > 0 && (
         <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none">
           <button
             type="button"
@@ -816,7 +816,7 @@ export default function Connect() {
       )}
 
       {/* Feed */}
-      {loading ? (
+      {topTab !== "news" && (loading ? (
         <div className="flex justify-center py-10">
           <Loader2 className="h-6 w-6 animate-spin text-primary" />
         </div>
@@ -841,7 +841,7 @@ export default function Connect() {
             />
           ))}
         </div>
-      )}
+      ))}
 
       {/* Comments Modal */}
       <Dialog open={commentModalOpen} onOpenChange={setCommentModalOpen}>
