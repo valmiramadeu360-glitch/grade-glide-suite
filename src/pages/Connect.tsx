@@ -367,6 +367,8 @@ export default function Connect() {
     try {
 
       let mediaUrl: string | null = null;
+      let documentUrl: string | null = null;
+      let videoUrl: string | null = null;
 
       if (selectedFile) {
 
@@ -374,38 +376,63 @@ export default function Connect() {
 
         const filePath = `${user.id}/${Date.now()}.${fileExt}`;
 
+        const bucket = mediaType === "document" ? "post-documents" : "post-media";
         const { error: uploadError } = await supabase
           .storage
-          .from("post-media")
+          .from(bucket)
           .upload(filePath, selectedFile);
-
         if (uploadError) throw uploadError;
 
-        const { data } = supabase
-          .storage
-          .from("post-media")
-          .getPublicUrl(filePath);
-
-        mediaUrl = data.publicUrl;
+        if (bucket === "post-documents") {
+          const { data: signed } = await supabase.storage.from(bucket).createSignedUrl(filePath, 60 * 60 * 24 * 365);
+          documentUrl = signed?.signedUrl ?? null;
+        } else {
+          const { data } = supabase.storage.from(bucket).getPublicUrl(filePath);
+          if (mediaType === "video") videoUrl = data.publicUrl;
+          else mediaUrl = data.publicUrl;
+        }
 
       }
 
-      const { error } = await supabase
+      const insertPayload: any = {
+        user_id: user.id,
+        content: newContent.trim(),
+        media_url: mediaUrl,
+        tag: selectedTag,
+        community_id: activeCommunity,
+        media_type: mediaType,
+        title: newTitle || null,
+        document_url: documentUrl,
+        video_url: videoUrl,
+      };
+      const { data: created, error } = await supabase
         .from("posts")
-        .insert({
-          user_id: user.id,
-          content: newContent.trim(),
-          media_url: mediaUrl,
-          tag: selectedTag,
-          community_id: activeCommunity,
-        });
+        .insert(insertPayload)
+        .select()
+        .single();
 
       if (error) throw error;
 
+      if (mediaType === "poll" && created) {
+        const opts = pollOptions.map(o => o.trim()).filter(Boolean);
+        if (pollQuestion.trim() && opts.length >= 2) {
+          await supabase.from("post_polls").insert({
+            post_id: created.id,
+            question: pollQuestion.trim(),
+            options: opts,
+          } as any);
+        }
+      }
+
       setNewContent("");
+      setNewTitle("");
+      setPollQuestion("");
+      setPollOptions(["", ""]);
       setSelectedFile(null);
       setPreviewUrl(null);
       setSelectedTag(null);
+      setMediaType("text");
+      setComposerOpen(false);
 
       toast({
         title: "Publicado!"
