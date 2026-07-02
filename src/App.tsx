@@ -24,6 +24,7 @@ import Connect from "./pages/Connect";
 import Messages from "./pages/Messages";
 import NotFound from "./pages/NotFound";
 import AdminDashboard from "./pages/AdminDashboard";
+import Assistant from "./pages/Assistant";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -136,6 +137,7 @@ const App = () => (
                 <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
                 <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
                 <Route path="/feedback" element={<ProtectedRoute><Feedback /></ProtectedRoute>} />
+                <Route path="/assistant" element={<ProtectedRoute><Assistant /></ProtectedRoute>} />
                 
                 {/* Rota Protegida Administrativa */}
                 <Route path="/admin" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
