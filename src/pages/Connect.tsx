@@ -195,8 +195,9 @@ export default function Connect() {
     if (!postsData || postsData.length === 0 || !user) return [];
 
     const postIds = postsData.map(p => p.id);
+    const userIds = Array.from(new Set(postsData.map(p => p.user_id)));
 
-    const [likes, comments, saved] = await Promise.all([
+    const [likes, comments, saved, profs] = await Promise.all([
 
       supabase
         .from("post_likes")
@@ -212,7 +213,12 @@ export default function Connect() {
         .from("saved_posts")
         .select("post_id")
         .eq("user_id", user.id)
-        .in("post_id", postIds)
+        .in("post_id", postIds),
+
+      supabase
+        .from("profiles")
+        .select("user_id,full_name,avatar_url")
+        .in("user_id", userIds)
 
     ]);
 
@@ -251,14 +257,15 @@ export default function Connect() {
       (saved.data ?? []).map((s: any) => s.post_id)
     );
 
+    const profileMap: Record<string, any> = {};
+    (profs.data ?? []).forEach((p: any) => { profileMap[p.user_id] = p; });
+
 
     return postsData.map(p => ({
 
       ...p,
 
-      profiles: Array.isArray(p.profiles)
-        ? p.profiles[0]
-        : p.profiles,
+      profiles: profileMap[p.user_id] ?? null,
 
       likes_count: likesMap[p.id]?.count || 0,
 
@@ -281,7 +288,7 @@ export default function Connect() {
 
       let query = supabase
         .from("posts")
-        .select("*, profiles(id,full_name,avatar_url)")
+        .select("*")
         .order("created_at", { ascending: false })
         .limit(50);
 
