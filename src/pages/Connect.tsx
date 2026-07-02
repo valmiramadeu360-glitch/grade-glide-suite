@@ -512,10 +512,10 @@ export default function Connect() {
     try {
       const { data } = await supabase
         .from("post_comments")
-        .select("*, profiles(full_name,avatar_url)")
+        .select("*")
         .eq("post_id", post.id)
         .order("created_at", { ascending: true });
-      setPostComments(data ?? []);
+      setPostComments(await attachCommentProfiles(data ?? []));
     } catch {
       setPostComments([]);
     }
@@ -534,16 +534,28 @@ export default function Connect() {
       setNewComment("");
       const { data } = await supabase
         .from("post_comments")
-        .select("*, profiles(full_name,avatar_url)")
+        .select("*")
         .eq("post_id", activePost.id)
         .order("created_at", { ascending: true });
-      setPostComments(data ?? []);
+      setPostComments(await attachCommentProfiles(data ?? []));
       setPosts(prev => prev.map(p => p.id === activePost.id ? { ...p, comments_count: p.comments_count + 1 } : p));
     } catch (e: any) {
       toast({ title: "Erro ao comentar", description: e.message, variant: "destructive" });
     } finally {
       setSendingComment(false);
     }
+  }
+
+  async function attachCommentProfiles(comments: any[]) {
+    if (comments.length === 0) return [];
+    const ids = Array.from(new Set(comments.map((c) => c.user_id)));
+    const { data } = await supabase
+      .from("profiles")
+      .select("user_id,full_name,avatar_url")
+      .in("user_id", ids);
+    const map: Record<string, any> = {};
+    (data ?? []).forEach((p: any) => { map[p.user_id] = p; });
+    return comments.map((c) => ({ ...c, profiles: map[c.user_id] ?? null }));
   }
 
   const visiblePosts = useMemo(() => {
