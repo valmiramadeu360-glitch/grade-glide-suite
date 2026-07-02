@@ -163,7 +163,7 @@ export default function Connect() {
       if (ids.length === 0) { setPosts([]); return; }
       const { data } = await supabase
         .from("posts")
-        .select("*, profiles(id,full_name,avatar_url)")
+        .select("*")
         .in("id", ids)
         .order("created_at", { ascending: false });
       if (data) setPosts(await fetchMetricsForPosts(data));
@@ -195,8 +195,9 @@ export default function Connect() {
     if (!postsData || postsData.length === 0 || !user) return [];
 
     const postIds = postsData.map(p => p.id);
+    const userIds = Array.from(new Set(postsData.map(p => p.user_id)));
 
-    const [likes, comments, saved] = await Promise.all([
+    const [likes, comments, saved, profs] = await Promise.all([
 
       supabase
         .from("post_likes")
@@ -212,7 +213,12 @@ export default function Connect() {
         .from("saved_posts")
         .select("post_id")
         .eq("user_id", user.id)
-        .in("post_id", postIds)
+        .in("post_id", postIds),
+
+      supabase
+        .from("profiles")
+        .select("user_id,full_name,avatar_url")
+        .in("user_id", userIds)
 
     ]);
 
@@ -251,14 +257,15 @@ export default function Connect() {
       (saved.data ?? []).map((s: any) => s.post_id)
     );
 
+    const profileMap: Record<string, any> = {};
+    (profs.data ?? []).forEach((p: any) => { profileMap[p.user_id] = p; });
+
 
     return postsData.map(p => ({
 
       ...p,
 
-      profiles: Array.isArray(p.profiles)
-        ? p.profiles[0]
-        : p.profiles,
+      profiles: profileMap[p.user_id] ?? null,
 
       likes_count: likesMap[p.id]?.count || 0,
 
@@ -281,7 +288,7 @@ export default function Connect() {
 
       let query = supabase
         .from("posts")
-        .select("*, profiles(id,full_name,avatar_url)")
+        .select("*")
         .order("created_at", { ascending: false })
         .limit(50);
 
@@ -505,10 +512,10 @@ export default function Connect() {
     try {
       const { data } = await supabase
         .from("post_comments")
-        .select("*, profiles(full_name,avatar_url)")
+        .select("*")
         .eq("post_id", post.id)
         .order("created_at", { ascending: true });
-      setPostComments(data ?? []);
+      setPostComments(await attachCommentProfiles(data ?? []));
     } catch {
       setPostComments([]);
     }
@@ -527,16 +534,28 @@ export default function Connect() {
       setNewComment("");
       const { data } = await supabase
         .from("post_comments")
-        .select("*, profiles(full_name,avatar_url)")
+        .select("*")
         .eq("post_id", activePost.id)
         .order("created_at", { ascending: true });
-      setPostComments(data ?? []);
+      setPostComments(await attachCommentProfiles(data ?? []));
       setPosts(prev => prev.map(p => p.id === activePost.id ? { ...p, comments_count: p.comments_count + 1 } : p));
     } catch (e: any) {
       toast({ title: "Erro ao comentar", description: e.message, variant: "destructive" });
     } finally {
       setSendingComment(false);
     }
+  }
+
+  async function attachCommentProfiles(comments: any[]) {
+    if (comments.length === 0) return [];
+    const ids = Array.from(new Set(comments.map((c) => c.user_id)));
+    const { data } = await supabase
+      .from("profiles")
+      .select("user_id,full_name,avatar_url")
+      .in("user_id", ids);
+    const map: Record<string, any> = {};
+    (data ?? []).forEach((p: any) => { map[p.user_id] = p; });
+    return comments.map((c) => ({ ...c, profiles: map[c.user_id] ?? null }));
   }
 
   const visiblePosts = useMemo(() => {
