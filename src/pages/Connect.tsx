@@ -163,7 +163,7 @@ export default function Connect() {
       if (ids.length === 0) { setPosts([]); return; }
       const { data } = await supabase
         .from("posts")
-        .select("*, profiles(id,full_name,avatar_url)")
+        .select("*")
         .in("id", ids)
         .order("created_at", { ascending: false });
       if (data) setPosts(await fetchMetricsForPosts(data));
