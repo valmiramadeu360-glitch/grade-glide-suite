@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -16,14 +17,73 @@ type Flashcard = { front: string; back: string };
 type PlanBlock = { time: string; topic: string; goal: string };
 type PlanDay = { day: string; blocks: PlanBlock[] };
 
-async function invokeAI(body: Record<string, unknown>) {
-  const { data, error } = await supabase.functions.invoke("ai-assistant", { body });
+async function invokeAI(body: Record<string, unknown>, userId?: string) {
+  const context = userId ? await buildUserContext(userId) : "";
+  const { data, error } = await supabase.functions.invoke("ai-assistant", {
+    body: { ...body, context },
+  });
   if (error) throw error;
   if ((data as any)?.error) throw new Error((data as any).error);
   return data as { content: string; parsed: any };
 }
 
+async function buildUserContext(userId: string): Promise<string> {
+  try {
+    const [{ data: profile }, { data: disciplines }, { data: reminders }] = await Promise.all([
+      supabase
+        .from("profiles")
+        .select("full_name, university_id, campus_id, course_id, current_period, current_semester_label, bio, career_goals, universities(name), campuses(name), courses(name)")
+        .eq("user_id", userId)
+        .maybeSingle(),
+      supabase
+        .from("disciplines")
+        .select("name, professor, current_grade")
+        .eq("user_id", userId)
+        .eq("archived", false)
+        .limit(15),
+      supabase
+        .from("reminders")
+        .select("title, due_date, type")
+        .eq("user_id", userId)
+        .gte("due_date", new Date().toISOString())
+        .order("due_date", { ascending: true })
+        .limit(10),
+    ]);
+    const parts: string[] = [];
+    if (profile) {
+      parts.push(`Nome: ${profile.full_name ?? "-"}`);
+      const uni = (profile as any).universities?.name;
+      const camp = (profile as any).campuses?.name;
+      const course = (profile as any).courses?.name;
+      if (uni) parts.push(`Universidade: ${uni}`);
+      if (camp) parts.push(`Campus: ${camp}`);
+      if (course) parts.push(`Curso: ${course}`);
+      if (profile.current_period) parts.push(`Período: ${profile.current_period}`);
+      if (profile.current_semester_label) parts.push(`Semestre: ${profile.current_semester_label}`);
+      if (profile.career_goals) parts.push(`Objetivos: ${profile.career_goals}`);
+    }
+    if (disciplines?.length) {
+      parts.push(
+        `Disciplinas em curso: ${disciplines
+          .map((d: any) => `${d.name}${d.professor ? ` (Prof. ${d.professor})` : ""}${d.current_grade != null ? ` [nota ${d.current_grade}]` : ""}`)
+          .join("; ")}`,
+      );
+    }
+    if (reminders?.length) {
+      parts.push(
+        `Próximos prazos: ${reminders
+          .map((r: any) => `${r.title} — ${new Date(r.due_date).toLocaleDateString("pt-BR")}`)
+          .join("; ")}`,
+      );
+    }
+    return parts.join("\n");
+  } catch {
+    return "";
+  }
+}
+
 export default function Assistant() {
+  const { user } = useAuth();
   return (
     <div className="mx-auto w-full max-w-5xl space-y-6 p-4 md:p-6">
       <header className="space-y-1">
@@ -47,17 +107,17 @@ export default function Assistant() {
           <TabsTrigger value="plan"><CalendarClock className="h-4 w-4 mr-1.5" />Plano</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="chat"><ChatTab /></TabsContent>
-        <TabsContent value="summary"><SummaryTab /></TabsContent>
-        <TabsContent value="flashcards"><FlashcardsTab /></TabsContent>
-        <TabsContent value="plan"><StudyPlanTab /></TabsContent>
+        <TabsContent value="chat"><ChatTab userId={user?.id} /></TabsContent>
+        <TabsContent value="summary"><SummaryTab userId={user?.id} /></TabsContent>
+        <TabsContent value="flashcards"><FlashcardsTab userId={user?.id} /></TabsContent>
+        <TabsContent value="plan"><StudyPlanTab userId={user?.id} /></TabsContent>
       </Tabs>
     </div>
   );
 }
 
 /* --------------------------- CHAT --------------------------- */
-function ChatTab() {
+function ChatTab({ userId }: { userId?: string }) {
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -74,7 +134,10 @@ function ChatTab() {
     setMessages((m) => [...m, { role: "user", content: text }]);
     setLoading(true);
     try {
-      const { content } = await invokeAI({ action: "chat", message: text });
+      const { content } = await invokeAI(
+        { action: "chat", message: text, history: messages },
+        userId,
+      );
       setMessages((m) => [...m, { role: "assistant", content }]);
     } catch (e: any) {
       toast.error(e.message ?? "Falha ao consultar a IA");
@@ -145,7 +208,7 @@ function ChatTab() {
 }
 
 /* --------------------------- SUMMARY --------------------------- */
-function SummaryTab() {
+function SummaryTab({ userId }: { userId?: string }) {
   const [content, setContent] = useState("");
   const [result, setResult] = useState("");
   const [loading, setLoading] = useState(false);
@@ -154,7 +217,7 @@ function SummaryTab() {
     if (!content.trim()) return;
     setLoading(true);
     try {
-      const { content: out } = await invokeAI({ action: "summarize", content });
+      const { content: out } = await invokeAI({ action: "summarize", content }, userId);
       setResult(out);
     } catch (e: any) {
       toast.error(e.message ?? "Erro ao gerar resumo");
@@ -189,7 +252,7 @@ function SummaryTab() {
 }
 
 /* --------------------------- FLASHCARDS --------------------------- */
-function FlashcardsTab() {
+function FlashcardsTab({ userId }: { userId?: string }) {
   const [content, setContent] = useState("");
   const [count, setCount] = useState(8);
   const [cards, setCards] = useState<Flashcard[]>([]);
@@ -200,7 +263,7 @@ function FlashcardsTab() {
     if (!content.trim()) return;
     setLoading(true);
     try {
-      const { parsed, content: raw } = await invokeAI({ action: "flashcards", content, count });
+      const { parsed, content: raw } = await invokeAI({ action: "flashcards", content, count }, userId);
       if (parsed?.cards?.length) {
         setCards(parsed.cards);
         setFlipped({});
@@ -266,7 +329,7 @@ function FlashcardsTab() {
 }
 
 /* --------------------------- STUDY PLAN --------------------------- */
-function StudyPlanTab() {
+function StudyPlanTab({ userId }: { userId?: string }) {
   const [topic, setTopic] = useState("");
   const [goal, setGoal] = useState("");
   const [days, setDays] = useState(7);
@@ -278,13 +341,10 @@ function StudyPlanTab() {
     if (!topic.trim()) return;
     setLoading(true);
     try {
-      const { parsed, content: raw } = await invokeAI({
-        action: "study_plan",
-        topic,
-        goal,
-        days,
-        hoursPerDay,
-      });
+      const { parsed, content: raw } = await invokeAI(
+        { action: "study_plan", topic, goal, days, hoursPerDay },
+        userId,
+      );
       if (parsed?.plan?.length) setPlan(parsed.plan);
       else {
         toast.error("Não foi possível interpretar o plano.");
