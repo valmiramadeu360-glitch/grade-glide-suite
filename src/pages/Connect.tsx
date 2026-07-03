@@ -116,6 +116,15 @@ export default function Connect() {
   const [newsLoading, setNewsLoading] = useState(false);
   const [activeNews, setActiveNews] = useState<any | null>(null);
 
+  // News composer
+  const [newsComposerOpen, setNewsComposerOpen] = useState(false);
+  const [myChannels, setMyChannels] = useState<any[]>([]);
+  const [newsChannelId, setNewsChannelId] = useState<string>("");
+  const [newsTitle, setNewsTitle] = useState("");
+  const [newsContent, setNewsContent] = useState("");
+  const [newsLink, setNewsLink] = useState("");
+  const [publishingNews, setPublishingNews] = useState(false);
+
 
   useEffect(() => {
     if (!user) return;
@@ -131,6 +140,48 @@ export default function Connect() {
     if (topTab === "news") loadNews();
     if (topTab === "saved") loadSavedPosts();
   }, [user, topTab]);
+
+  async function loadMyChannels() {
+    if (!user) return;
+    const { data: subs } = await supabase
+      .from("news_subscriptions")
+      .select("channel_id, news_channels(id, name, scope)")
+      .eq("user_id", user.id);
+    const channels = (subs ?? [])
+      .map((s: any) => s.news_channels)
+      .filter(Boolean);
+    setMyChannels(channels);
+    if (channels[0]?.id) setNewsChannelId(channels[0].id);
+  }
+
+  async function publishNews() {
+    if (!user || !newsChannelId || !newsTitle.trim()) return;
+    setPublishingNews(true);
+    try {
+      const { error } = await supabase.from("news_posts").insert({
+        channel_id: newsChannelId,
+        author_id: user.id,
+        title: newsTitle.trim(),
+        content: newsContent.trim() || null,
+        link_url: newsLink.trim() || null,
+      });
+      if (error) throw error;
+      toast({ title: "Notícia publicada!" });
+      setNewsComposerOpen(false);
+      setNewsTitle(""); setNewsContent(""); setNewsLink("");
+      loadNews();
+    } catch (e: any) {
+      toast({
+        title: "Não foi possível publicar",
+        description: e?.message?.includes("row-level security")
+          ? "Apenas administradores ou responsáveis do canal podem publicar notícias oficiais."
+          : e?.message ?? "Erro desconhecido",
+        variant: "destructive",
+      });
+    } finally {
+      setPublishingNews(false);
+    }
+  }
 
   function changeTopTab(v: string) {
     setTopTab(v);
@@ -752,14 +803,34 @@ export default function Connect() {
         newsLoading ? (
           <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
         ) : newsItems.length === 0 ? (
-          <Card className="rounded-3xl border-dashed">
-            <CardContent className="p-10 text-center text-muted-foreground">
-              <Newspaper className="h-10 w-10 mx-auto mb-3 opacity-30" />
-              <p className="text-sm font-semibold">Nenhuma notícia por aqui ainda.</p>
-            </CardContent>
-          </Card>
+          <>
+            <div className="flex justify-end">
+              <Button
+                size="sm"
+                className="rounded-full"
+                onClick={() => { loadMyChannels(); setNewsComposerOpen(true); }}
+              >
+                <Plus className="h-4 w-4 mr-1" /> Publicar notícia
+              </Button>
+            </div>
+            <Card className="rounded-3xl border-dashed">
+              <CardContent className="p-10 text-center text-muted-foreground">
+                <Newspaper className="h-10 w-10 mx-auto mb-3 opacity-30" />
+                <p className="text-sm font-semibold">Nenhuma notícia por aqui ainda.</p>
+              </CardContent>
+            </Card>
+          </>
         ) : (
           <div className="space-y-4 animate-in fade-in-50 slide-in-from-bottom-2 duration-500">
+            <div className="flex justify-end">
+              <Button
+                size="sm"
+                className="rounded-full"
+                onClick={() => { loadMyChannels(); setNewsComposerOpen(true); }}
+              >
+                <Plus className="h-4 w-4 mr-1" /> Publicar notícia
+              </Button>
+            </div>
             {newsItems.map((n) => (
               <Card key={n.id} className="rounded-3xl overflow-hidden cursor-pointer hover:shadow-lg transition-all" onClick={() => setActiveNews(n)}>
                 {n.cover_url && <img src={n.cover_url} className="w-full h-40 object-cover" />}
@@ -779,6 +850,65 @@ export default function Connect() {
           </div>
         )
       )}
+
+      {/* News Composer Dialog */}
+      <Dialog open={newsComposerOpen} onOpenChange={setNewsComposerOpen}>
+        <DialogContent className="rounded-3xl max-w-lg">
+          <div className="space-y-3">
+            <div>
+              <h2 className="font-black text-lg">Publicar notícia</h2>
+              <p className="text-xs text-muted-foreground">Compartilhe com um canal do qual você faz parte.</p>
+            </div>
+            {myChannels.length === 0 ? (
+              <p className="text-sm text-muted-foreground p-4 bg-muted/40 rounded-2xl">
+                Você ainda não é membro de nenhum canal. Complete seu perfil (universidade, campus, curso) para entrar automaticamente nos canais oficiais.
+              </p>
+            ) : (
+              <>
+                <select
+                  value={newsChannelId}
+                  onChange={(e) => setNewsChannelId(e.target.value)}
+                  className="w-full rounded-2xl bg-muted/40 border-0 px-3 py-2 text-sm font-semibold"
+                >
+                  {myChannels.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+                <Input
+                  value={newsTitle}
+                  onChange={(e) => setNewsTitle(e.target.value)}
+                  placeholder="Título"
+                  className="rounded-2xl bg-muted/40 border-0 font-bold"
+                />
+                <Textarea
+                  value={newsContent}
+                  onChange={(e) => setNewsContent(e.target.value)}
+                  placeholder="Conteúdo (opcional)"
+                  rows={4}
+                  className="rounded-2xl bg-muted/40 border-0"
+                />
+                <Input
+                  value={newsLink}
+                  onChange={(e) => setNewsLink(e.target.value)}
+                  placeholder="Link (opcional)"
+                  className="rounded-2xl bg-muted/40 border-0 text-sm"
+                />
+                <Button
+                  onClick={publishNews}
+                  disabled={publishingNews || !newsTitle.trim()}
+                  className="w-full rounded-full"
+                >
+                  {publishingNews ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />}
+                  Publicar
+                </Button>
+                <p className="text-[10px] text-muted-foreground text-center">
+                  Apenas administradores ou responsáveis do canal têm permissão para publicar notícias oficiais.
+                </p>
+              </>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={!!activeNews} onOpenChange={(o) => !o && setActiveNews(null)}>
         <DialogContent className="rounded-3xl max-w-lg max-h-[85vh] overflow-y-auto">
