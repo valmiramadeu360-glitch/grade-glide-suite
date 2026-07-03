@@ -15,7 +15,7 @@ type Action = "chat" | "summarize" | "flashcards" | "study_plan";
 function buildMessages(action: Action, payload: any) {
   const sys = {
     chat:
-      "Você é o EduFlow AI, um tutor acadêmico brasileiro. Responda de forma clara, didática e objetiva, em português. Use markdown quando ajudar.",
+      "Você é o EduFlow AI, um tutor acadêmico brasileiro integrado ao app EduFlow. Você conhece o contexto do aluno (universidade, curso, período, disciplinas, próximos prazos e ações recentes no app) e usa essas informações para dar respostas personalizadas, práticas e didáticas em português. Use markdown quando ajudar.",
     summarize:
       "Você é um assistente que gera resumos acadêmicos concisos, estruturados em tópicos e subtópicos, em português. Destaque conceitos-chave em negrito.",
     flashcards:
@@ -33,10 +33,20 @@ function buildMessages(action: Action, payload: any) {
       ? `Gere ${payload.count ?? 8} flashcards sobre:\n\n${payload.content}`
       : `Monte um plano de estudos para ${payload.days ?? 7} dias, ${payload.hoursPerDay ?? 2}h/dia, sobre: ${payload.topic}. Objetivo: ${payload.goal ?? "revisão geral"}.`;
 
-  return [
-    { role: "system", content: sys },
-    { role: "user", content: user },
-  ];
+  const messages: any[] = [{ role: "system", content: sys }];
+  if (payload.context && typeof payload.context === "string" && payload.context.trim()) {
+    messages.push({
+      role: "system",
+      content: `Contexto do usuário no EduFlow (use para personalizar respostas):\n${payload.context}`,
+    });
+  }
+  if (Array.isArray(payload.history)) {
+    for (const m of payload.history.slice(-10)) {
+      if (m?.role && m?.content) messages.push({ role: m.role, content: String(m.content) });
+    }
+  }
+  messages.push({ role: "user", content: user });
+  return messages;
 }
 
 Deno.serve(async (req) => {
