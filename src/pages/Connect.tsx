@@ -116,6 +116,15 @@ export default function Connect() {
   const [newsLoading, setNewsLoading] = useState(false);
   const [activeNews, setActiveNews] = useState<any | null>(null);
 
+  // News composer
+  const [newsComposerOpen, setNewsComposerOpen] = useState(false);
+  const [myChannels, setMyChannels] = useState<any[]>([]);
+  const [newsChannelId, setNewsChannelId] = useState<string>("");
+  const [newsTitle, setNewsTitle] = useState("");
+  const [newsContent, setNewsContent] = useState("");
+  const [newsLink, setNewsLink] = useState("");
+  const [publishingNews, setPublishingNews] = useState(false);
+
 
   useEffect(() => {
     if (!user) return;
@@ -131,6 +140,48 @@ export default function Connect() {
     if (topTab === "news") loadNews();
     if (topTab === "saved") loadSavedPosts();
   }, [user, topTab]);
+
+  async function loadMyChannels() {
+    if (!user) return;
+    const { data: subs } = await supabase
+      .from("news_subscriptions")
+      .select("channel_id, news_channels(id, name, scope)")
+      .eq("user_id", user.id);
+    const channels = (subs ?? [])
+      .map((s: any) => s.news_channels)
+      .filter(Boolean);
+    setMyChannels(channels);
+    if (channels[0]?.id) setNewsChannelId(channels[0].id);
+  }
+
+  async function publishNews() {
+    if (!user || !newsChannelId || !newsTitle.trim()) return;
+    setPublishingNews(true);
+    try {
+      const { error } = await supabase.from("news_posts").insert({
+        channel_id: newsChannelId,
+        author_id: user.id,
+        title: newsTitle.trim(),
+        content: newsContent.trim() || null,
+        link_url: newsLink.trim() || null,
+      });
+      if (error) throw error;
+      toast({ title: "Notícia publicada!" });
+      setNewsComposerOpen(false);
+      setNewsTitle(""); setNewsContent(""); setNewsLink("");
+      loadNews();
+    } catch (e: any) {
+      toast({
+        title: "Não foi possível publicar",
+        description: e?.message?.includes("row-level security")
+          ? "Apenas administradores ou responsáveis do canal podem publicar notícias oficiais."
+          : e?.message ?? "Erro desconhecido",
+        variant: "destructive",
+      });
+    } finally {
+      setPublishingNews(false);
+    }
+  }
 
   function changeTopTab(v: string) {
     setTopTab(v);
