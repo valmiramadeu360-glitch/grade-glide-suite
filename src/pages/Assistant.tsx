@@ -32,7 +32,7 @@ async function buildUserContext(userId: string): Promise<string> {
     const [{ data: profile }, { data: disciplines }, { data: reminders }] = await Promise.all([
       supabase
         .from("profiles")
-        .select("full_name, university_id, campus_id, course_id, current_period, current_semester_label, bio, career_goals, universities(name), campuses(name), courses(name)")
+        .select("full_name, university_id, campus_id, course_id, current_period, current_semester_label, bio, career_goal, universities(name), campuses(name), courses(name)")
         .eq("user_id", userId)
         .maybeSingle(),
       supabase
@@ -60,7 +60,7 @@ async function buildUserContext(userId: string): Promise<string> {
       if (course) parts.push(`Curso: ${course}`);
       if (profile.current_period) parts.push(`Período: ${profile.current_period}`);
       if (profile.current_semester_label) parts.push(`Semestre: ${profile.current_semester_label}`);
-      if (profile.career_goals) parts.push(`Objetivos: ${profile.career_goals}`);
+      if (profile.career_goal) parts.push(`Objetivos: ${profile.career_goal}`);
     }
     if (disciplines?.length) {
       parts.push(
