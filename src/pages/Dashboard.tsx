@@ -21,7 +21,7 @@ import {
   BookOpen, Clock, AlertTriangle, 
   CheckCircle2, ArrowRight, Cloud, CloudOff, History, 
   Loader2, Sparkles, Calendar as CalendarIcon,
-  HandHelping, MessageCircle, Bell
+  HandHelping, Megaphone, BarChart3, ChevronLeft, ChevronRight
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format, isToday, isTomorrow, differenceInDays, startOfDay, isSameDay } from "date-fns";
@@ -49,6 +49,16 @@ interface Reminder {
   discipline_color?: string;
 }
 
+interface Announcement {
+  id: string;
+  title: string;
+  body: string | null;
+  type: string; // 'notice' | 'news' | 'poll' | 'event'
+  cta_label: string | null;
+  cta_url: string | null;
+  poll_options: { label: string }[] | null;
+}
+
 const typeLabels: Record<string, string> = {
   exam: "Prova",
   assignment: "Trabalho",
@@ -71,6 +81,11 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [libraryAlerts, setLibraryAlerts] = useState<any[]>([]);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [carouselIndex, setCarouselIndex] = useState(0);
+  const [pollVotes, setPollVotes] = useState<Record<string, number>>({});
+  const [displayName, setDisplayName] = useState<string>("");
+  const [hideName, setHideName] = useState<boolean>(false);
 
   const [calendarDate, setCalendarDate] = useState<Date>(new Date());
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
@@ -84,7 +99,9 @@ export default function Dashboard() {
   const [showEndSemester, setShowEndSemester] = useState(false);
   const [nextSemesterInput, setNextSemesterInput] = useState("");
 
-  const userName = user?.user_metadata?.full_name?.split(" ")[0] || "Estudante";
+  const userName = hideName
+    ? "Estudante"
+    : (displayName || user?.user_metadata?.full_name || "Estudante").split(" ")[0];
 
   const filteredClasses = useMemo(() => {
     const dow = calendarDate.getDay();
@@ -138,13 +155,33 @@ export default function Dashboard() {
 
       const { data: profile } = await supabase
         .from("profiles")
-        .select("current_semester_label, semester_start, semester_end")
+        .select("current_semester_label, semester_start, semester_end, display_name, hide_name, full_name")
         .eq("user_id", user!.id)
         .maybeSingle();
 
       if (profile?.current_semester_label) {
         setActiveSemesterFromProfile(profile.current_semester_label);
       }
+      setDisplayName((profile as any)?.display_name || (profile as any)?.full_name || "");
+      setHideName(!!(profile as any)?.hide_name);
+
+      // Anúncios administrativos ativos
+      const { data: annData } = await (supabase as any)
+        .from("admin_announcements")
+        .select("id, title, body, type, cta_label, cta_url, poll_options")
+        .eq("active", true)
+        .order("created_at", { ascending: false })
+        .limit(6);
+      setAnnouncements((annData ?? []) as Announcement[]);
+
+      // Meus votos em enquetes
+      const { data: myVotes } = await (supabase as any)
+        .from("announcement_poll_votes")
+        .select("announcement_id, option_index")
+        .eq("user_id", user!.id);
+      const votesMap: Record<string, number> = {};
+      (myVotes ?? []).forEach((v: any) => { votesMap[v.announcement_id] = v.option_index; });
+      setPollVotes(votesMap);
 
       const { data: disciplines } = await supabase
         .from("disciplines")
@@ -245,6 +282,24 @@ export default function Dashboard() {
 
     }
 
+  }
+
+  // Auto-rotate carousel every 6s
+  useEffect(() => {
+    const total = 1 + announcements.length; // semester slide + announcements
+    if (total <= 1) return;
+    const t = setInterval(() => setCarouselIndex((i) => (i + 1) % total), 6000);
+    return () => clearInterval(t);
+  }, [announcements.length]);
+
+  async function voteOnPoll(annId: string, optionIndex: number) {
+    if (!user) return;
+    setPollVotes((p) => ({ ...p, [annId]: optionIndex }));
+    await (supabase as any).from("announcement_poll_votes")
+      .upsert(
+        { announcement_id: annId, user_id: user.id, option_index: optionIndex },
+        { onConflict: "announcement_id,user_id" }
+      );
   }
 
   if (loading) {
