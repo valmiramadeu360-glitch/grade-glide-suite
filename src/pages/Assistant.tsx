@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -8,11 +8,27 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Sparkles, Send, FileText, Layers, CalendarClock, Loader2, RotateCw } from "lucide-react";
+import { Sparkles, Send, FileText, Layers, CalendarClock, Loader2, RotateCw, Plus, MessageSquare, Trash2, PanelLeft } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
 type ChatMsg = { role: "user" | "assistant"; content: string };
+type ChatThread = { id: string; title: string; messages: ChatMsg[]; updatedAt: number };
+const THREADS_KEY = "eduflow.ai.threads.v1";
+
+function loadThreads(): ChatThread[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(THREADS_KEY);
+    return raw ? (JSON.parse(raw) as ChatThread[]) : [];
+  } catch {
+    return [];
+  }
+}
+function saveThreads(threads: ChatThread[]) {
+  try { window.localStorage.setItem(THREADS_KEY, JSON.stringify(threads)); } catch {}
+}
+
 type Flashcard = { front: string; back: string };
 type PlanBlock = { time: string; topic: string; goal: string };
 type PlanDay = { day: string; blocks: PlanBlock[] };
@@ -118,27 +134,66 @@ export default function Assistant() {
 
 /* --------------------------- CHAT --------------------------- */
 function ChatTab({ userId }: { userId?: string }) {
-  const [messages, setMessages] = useState<ChatMsg[]>([]);
+  const [threads, setThreads] = useState<ChatThread[]>(() => loadThreads());
+  const [activeId, setActiveId] = useState<string | null>(() => {
+    const t = loadThreads();
+    return t[0]?.id ?? null;
+  });
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, loading]);
+  const activeThread = useMemo(
+    () => threads.find((t) => t.id === activeId) ?? null,
+    [threads, activeId]
+  );
+  const messages = activeThread?.messages ?? [];
+
+  useEffect(() => { saveThreads(threads); }, [threads]);
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, loading]);
+
+  function newThread(): string {
+    const id = `t_${Date.now()}`;
+    const t: ChatThread = { id, title: "Nova conversa", messages: [], updatedAt: Date.now() };
+    setThreads((prev) => [t, ...prev]);
+    setActiveId(id);
+    return id;
+  }
+
+  function deleteThread(id: string) {
+    setThreads((prev) => {
+      const next = prev.filter((t) => t.id !== id);
+      if (activeId === id) setActiveId(next[0]?.id ?? null);
+      return next;
+    });
+  }
 
   async function send() {
     const text = input.trim();
     if (!text || loading) return;
+    let currentId = activeId;
+    if (!currentId) currentId = newThread();
     setInput("");
-    setMessages((m) => [...m, { role: "user", content: text }]);
+    setThreads((prev) => prev.map((t) => t.id === currentId
+      ? {
+          ...t,
+          title: t.messages.length === 0 ? text.slice(0, 40) : t.title,
+          messages: [...t.messages, { role: "user", content: text }],
+          updatedAt: Date.now(),
+        }
+      : t
+    ));
     setLoading(true);
     try {
       const { content } = await invokeAI(
         { action: "chat", message: text, history: messages },
         userId,
       );
-      setMessages((m) => [...m, { role: "assistant", content }]);
+      setThreads((prev) => prev.map((t) => t.id === currentId
+        ? { ...t, messages: [...t.messages, { role: "assistant", content }], updatedAt: Date.now() }
+        : t
+      ));
     } catch (e: any) {
       toast.error(e.message ?? "Falha ao consultar a IA");
     } finally {
@@ -147,63 +202,123 @@ function ChatTab({ userId }: { userId?: string }) {
   }
 
   return (
-    <Card>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-base">Conversa com o tutor</CardTitle>
-        <CardDescription>Pergunte qualquer coisa sobre suas disciplinas.</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        <ScrollArea className="h-[420px] rounded-lg border bg-muted/20 p-3">
-          {messages.length === 0 && (
-            <p className="text-sm text-muted-foreground text-center py-16">
-              Faça uma pergunta para começar. Ex.: "Explique o teorema de Bayes com um exemplo."
-            </p>
-          )}
-          <div className="space-y-3">
-            {messages.map((m, i) => (
-              <div key={i} className={cn("flex", m.role === "user" ? "justify-end" : "justify-start")}>
-                <div
-                  className={cn(
-                    "max-w-[85%] rounded-2xl px-4 py-2.5 text-sm whitespace-pre-wrap",
-                    m.role === "user"
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-card border",
-                  )}
-                >
-                  {m.content}
-                </div>
-              </div>
-            ))}
-            {loading && (
-              <div className="flex justify-start">
-                <div className="rounded-2xl border bg-card px-4 py-2.5 text-sm text-muted-foreground flex items-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin" /> Pensando...
-                </div>
+    <div className="grid grid-cols-1 md:grid-cols-[260px_1fr] gap-4">
+      {/* Sidebar histórico */}
+      <aside className={cn(
+        "md:block",
+        sidebarOpen ? "block" : "hidden"
+      )}>
+        <Card className="h-[560px] flex flex-col">
+          <CardHeader className="p-3 pb-2 flex-row items-center justify-between space-y-0">
+            <CardTitle className="text-sm">Histórico</CardTitle>
+            <Button size="sm" variant="secondary" onClick={newThread} className="h-8">
+              <Plus className="h-4 w-4 mr-1" /> Nova
+            </Button>
+          </CardHeader>
+          <ScrollArea className="flex-1 px-2 pb-2">
+            {threads.length === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-8 px-2">
+                Suas conversas com o tutor ficam salvas aqui neste dispositivo.
+              </p>
+            ) : (
+              <div className="space-y-1">
+                {threads.map((t) => (
+                  <div
+                    key={t.id}
+                    className={cn(
+                      "group flex items-center gap-2 rounded-lg px-2 py-2 cursor-pointer text-sm",
+                      activeId === t.id ? "bg-primary/10 text-foreground" : "hover:bg-muted"
+                    )}
+                    onClick={() => { setActiveId(t.id); setSidebarOpen(false); }}
+                  >
+                    <MessageSquare className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <span className="flex-1 truncate">{t.title || "Sem título"}</span>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); deleteThread(t.id); }}
+                      className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition"
+                      aria-label="Excluir"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
               </div>
             )}
-            <div ref={bottomRef} />
+          </ScrollArea>
+        </Card>
+      </aside>
+
+      {/* Painel principal */}
+      <Card className="flex flex-col h-[560px]">
+        <CardHeader className="pb-3 flex-row items-center justify-between space-y-0">
+          <div className="min-w-0">
+            <CardTitle className="text-base truncate">
+              {activeThread?.title || "Conversa com o tutor"}
+            </CardTitle>
+            <CardDescription>Pergunte qualquer coisa sobre suas disciplinas.</CardDescription>
           </div>
-        </ScrollArea>
-        <div className="flex gap-2">
-          <Textarea
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                send();
-              }
-            }}
-            placeholder="Escreva sua pergunta..."
-            rows={2}
-            className="resize-none"
-          />
-          <Button onClick={send} disabled={loading || !input.trim()} className="self-end">
-            <Send className="h-4 w-4" />
-          </Button>
-        </div>
-      </CardContent>
-    </Card>
+          <div className="flex gap-2">
+            <Button size="sm" variant="ghost" className="md:hidden" onClick={() => setSidebarOpen((v) => !v)}>
+              <PanelLeft className="h-4 w-4" />
+            </Button>
+            <Button size="sm" variant="outline" onClick={newThread}>
+              <Plus className="h-4 w-4 mr-1" /> Nova
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="flex-1 flex flex-col gap-3 min-h-0">
+          <ScrollArea className="flex-1 rounded-lg border bg-muted/20 p-3">
+            {messages.length === 0 && (
+              <p className="text-sm text-muted-foreground text-center py-16">
+                Faça uma pergunta para começar. Ex.: "Explique o teorema de Bayes com um exemplo."
+              </p>
+            )}
+            <div className="space-y-3">
+              {messages.map((m, i) => (
+                <div key={i} className={cn("flex", m.role === "user" ? "justify-end" : "justify-start")}>
+                  <div
+                    className={cn(
+                      "max-w-[85%] rounded-2xl px-4 py-2.5 text-sm whitespace-pre-wrap leading-relaxed",
+                      m.role === "user"
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-card border",
+                    )}
+                  >
+                    {m.content}
+                  </div>
+                </div>
+              ))}
+              {loading && (
+                <div className="flex justify-start">
+                  <div className="rounded-2xl border bg-card px-4 py-2.5 text-sm text-muted-foreground flex items-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" /> Pensando...
+                  </div>
+                </div>
+              )}
+              <div ref={bottomRef} />
+            </div>
+          </ScrollArea>
+          <div className="flex gap-2">
+            <Textarea
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  send();
+                }
+              }}
+              placeholder="Escreva sua pergunta..."
+              rows={2}
+              className="resize-none"
+            />
+            <Button onClick={send} disabled={loading || !input.trim()} className="self-end">
+              <Send className="h-4 w-4" />
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 
