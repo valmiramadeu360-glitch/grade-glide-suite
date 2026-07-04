@@ -431,31 +431,125 @@ export default function Dashboard() {
         ))}
       </div>
 
-      {/* PROGRESSO DO SEMESTRE */}
-      <Card className="border-none bg-card shadow-sm rounded-[32px] overflow-hidden relative">
-        <div className="absolute -right-4 -top-4 opacity-5 pointer-events-none">
-          <Sparkles className="h-32 w-32" />
+      {/* CARROSSEL: PROGRESSO + ANÚNCIOS ADMIN */}
+      <div className="relative">
+        <div className="overflow-hidden rounded-2xl">
+          <div
+            className="flex transition-transform duration-500 ease-out"
+            style={{ transform: `translateX(-${carouselIndex * 100}%)` }}
+          >
+            {/* Slide 1: Progresso */}
+            <div className="w-full shrink-0 px-0.5">
+              <Card className="border border-border/40 bg-card shadow-sm rounded-2xl overflow-hidden">
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-widest text-primary mb-1">
+                        {isHistoricalView ? "Ciclo Concluído" : "Andamento do Semestre"}
+                      </p>
+                      <p className="text-3xl font-bold tracking-tight text-foreground">
+                        {semesterProgress}%
+                      </p>
+                    </div>
+                    <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
+                      <Sparkles className="h-6 w-6 text-primary" />
+                    </div>
+                  </div>
+                  <Progress value={semesterProgress} className="h-2 bg-muted/50 [&>div]:bg-primary rounded-full" />
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Slides de anúncios */}
+            {announcements.map((ann) => (
+              <div key={ann.id} className="w-full shrink-0 px-0.5">
+                <Card className="border border-border/40 bg-card shadow-sm rounded-2xl overflow-hidden">
+                  <CardContent className="p-6">
+                    <div className="flex items-start gap-3 mb-3">
+                      <div className={cn(
+                        "h-10 w-10 rounded-xl flex items-center justify-center shrink-0",
+                        ann.type === "poll" ? "bg-amber-500/10 text-amber-500" : "bg-primary/10 text-primary"
+                      )}>
+                        {ann.type === "poll" ? <BarChart3 className="h-5 w-5" /> : <Megaphone className="h-5 w-5" />}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-0.5">
+                          {ann.type === "poll" ? "Enquete Interna" : ann.type === "news" ? "Novidade" : "Comunicado"}
+                        </p>
+                        <h3 className="text-base font-bold text-foreground leading-tight">{ann.title}</h3>
+                      </div>
+                    </div>
+                    {ann.body && (
+                      <p className="text-sm text-muted-foreground leading-relaxed mb-3 line-clamp-3">{ann.body}</p>
+                    )}
+                    {ann.type === "poll" && Array.isArray(ann.poll_options) && (
+                      <div className="space-y-1.5">
+                        {ann.poll_options.map((opt: any, i: number) => {
+                          const label = typeof opt === "string" ? opt : opt.label;
+                          const selected = pollVotes[ann.id] === i;
+                          return (
+                            <button
+                              key={i}
+                              onClick={() => voteOnPoll(ann.id, i)}
+                              className={cn(
+                                "w-full text-left px-3 py-2 rounded-lg text-sm font-medium border transition",
+                                selected
+                                  ? "bg-primary text-primary-foreground border-primary"
+                                  : "bg-background hover:bg-muted border-border/50"
+                              )}
+                            >
+                              {label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {ann.cta_url && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => window.open(ann.cta_url!, "_blank")}
+                        className="mt-3 rounded-lg"
+                      >
+                        {ann.cta_label || "Saiba mais"} <ArrowRight className="h-3.5 w-3.5 ml-1.5" />
+                      </Button>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            ))}
+          </div>
         </div>
 
-        <CardContent className="p-8">
-          <div className="flex justify-between items-end mb-4">
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-primary mb-1">
-                {isHistoricalView ? "Ciclo Concluído" : "Andamento do Semestre"}
-              </p>
-
-              <p className="text-4xl sm:text-5xl font-black tracking-tighter text-foreground">
-                {semesterProgress}%
-              </p>
+        {(1 + announcements.length) > 1 && (
+          <div className="flex items-center justify-between mt-3 px-1">
+            <button
+              onClick={() => setCarouselIndex((i) => (i - 1 + (1 + announcements.length)) % (1 + announcements.length))}
+              className="h-8 w-8 rounded-full bg-muted/50 hover:bg-muted flex items-center justify-center"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <div className="flex items-center gap-1.5">
+              {Array.from({ length: 1 + announcements.length }).map((_, i) => (
+                <button
+                  key={i}
+                  onClick={() => setCarouselIndex(i)}
+                  className={cn(
+                    "h-1.5 rounded-full transition-all",
+                    carouselIndex === i ? "w-6 bg-primary" : "w-1.5 bg-muted-foreground/30"
+                  )}
+                />
+              ))}
             </div>
+            <button
+              onClick={() => setCarouselIndex((i) => (i + 1) % (1 + announcements.length))}
+              className="h-8 w-8 rounded-full bg-muted/50 hover:bg-muted flex items-center justify-center"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
           </div>
-
-          <Progress
-            value={semesterProgress}
-            className="h-3 bg-muted/50 [&>div]:bg-primary shadow-inner rounded-full transition-all duration-1000"
-          />
-        </CardContent>
-      </Card>
+        )}
+      </div>
 
       {/* EVENTOS DO DIA */}
       <div className="pt-4 space-y-8">
