@@ -321,57 +321,22 @@ export default function Dashboard() {
 
     <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in duration-700 pb-24 px-4 sm:px-6 overflow-x-hidden pt-6">
 
-      <header className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-8 border-b border-border/40 pb-8">
-
-        <div className="space-y-4 w-full lg:w-auto">
-
-          <h1 className="text-5xl sm:text-7xl font-black tracking-tighter text-foreground leading-[1.1]">
-            Olá,<br />{userName}! 👋
+      <header className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 pb-6 border-b border-border/40">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-1">
+            {format(new Date(), "EEEE, dd 'de' MMMM", { locale: ptBR })}
+          </p>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
+            Olá, {userName} 👋
           </h1>
-
         </div>
-
-        <div className="flex items-center gap-4">
-
-          {/* BOTÃO MENSAGENS */}
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => navigate("/messages")}
-            className="rounded-xl"
-          >
-            <MessageCircle className="h-5 w-5" />
-          </Button>
-
-          {/* BOTÃO NOTIFICAÇÕES */}
-          <Button
-            variant="outline"
-            size="icon"
-            className="rounded-xl"
-          >
-            <Bell className="h-5 w-5" />
-          </Button>
-
-          <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest bg-muted/50 px-4 py-2.5 rounded-xl shadow-sm">
-
-            {isOnline ? (
-
-              <span className="flex items-center gap-2 text-emerald-500">
-                <Cloud className="h-4 w-4" /> Cloud Sync
-              </span>
-
-            ) : (
-
-              <span className="flex items-center gap-2 text-amber-500 animate-pulse">
-                <CloudOff className="h-4 w-4" /> Offline
-              </span>
-
-            )}
-
-          </div>
-
+        <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-widest bg-muted/40 px-3 py-2 rounded-xl w-fit">
+          {isOnline ? (
+            <span className="flex items-center gap-1.5 text-emerald-500"><Cloud className="h-3.5 w-3.5" /> Sincronizado</span>
+          ) : (
+            <span className="flex items-center gap-1.5 text-amber-500"><CloudOff className="h-3.5 w-3.5" /> Offline</span>
+          )}
         </div>
-
       </header>
       {/* ALERTAS DE BIBLIOTECA */}
       {libraryAlerts.length > 0 && (
