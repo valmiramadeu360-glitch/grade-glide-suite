@@ -14,6 +14,86 @@ export type Database = {
   }
   public: {
     Tables: {
+      admin_announcements: {
+        Row: {
+          active: boolean
+          body: string | null
+          created_at: string
+          created_by: string | null
+          cta_label: string | null
+          cta_url: string | null
+          ends_at: string | null
+          id: string
+          poll_options: Json | null
+          starts_at: string
+          title: string
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          body?: string | null
+          created_at?: string
+          created_by?: string | null
+          cta_label?: string | null
+          cta_url?: string | null
+          ends_at?: string | null
+          id?: string
+          poll_options?: Json | null
+          starts_at?: string
+          title: string
+          type?: string
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          body?: string | null
+          created_at?: string
+          created_by?: string | null
+          cta_label?: string | null
+          cta_url?: string | null
+          ends_at?: string | null
+          id?: string
+          poll_options?: Json | null
+          starts_at?: string
+          title?: string
+          type?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      announcement_poll_votes: {
+        Row: {
+          announcement_id: string
+          created_at: string
+          id: string
+          option_index: number
+          user_id: string
+        }
+        Insert: {
+          announcement_id: string
+          created_at?: string
+          id?: string
+          option_index: number
+          user_id: string
+        }
+        Update: {
+          announcement_id?: string
+          created_at?: string
+          id?: string
+          option_index?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "announcement_poll_votes_announcement_id_fkey"
+            columns: ["announcement_id"]
+            isOneToOne: false
+            referencedRelation: "admin_announcements"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       books: {
         Row: {
           author: string | null
@@ -1119,7 +1199,9 @@ export type Database = {
           created_at: string
           current_period: number | null
           current_semester_label: string | null
+          display_name: string | null
           full_name: string | null
+          hide_name: boolean
           id: string
           is_banned: boolean | null
           is_public: boolean | null
@@ -1153,7 +1235,9 @@ export type Database = {
           created_at?: string
           current_period?: number | null
           current_semester_label?: string | null
+          display_name?: string | null
           full_name?: string | null
+          hide_name?: boolean
           id?: string
           is_banned?: boolean | null
           is_public?: boolean | null
@@ -1187,7 +1271,9 @@ export type Database = {
           created_at?: string
           current_period?: number | null
           current_semester_label?: string | null
+          display_name?: string | null
           full_name?: string | null
+          hide_name?: boolean
           id?: string
           is_banned?: boolean | null
           is_public?: boolean | null
