@@ -18,7 +18,7 @@ import { useToast } from "@/hooks/use-toast";
 import { 
   Save, Loader2, Calendar, Palette, Moon, CheckCircle2,
   Sun, BellRing, Mail, Smartphone, ArrowLeft,
-  Volume2, Trash2, AlertTriangle, Settings2, FileText, Shield, Lock, KeyRound
+  Volume2, Trash2, AlertTriangle, Settings2, FileText, Shield, Lock, KeyRound, User as UserIcon, EyeOff
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useNavigate } from "react-router-dom";
@@ -55,6 +55,10 @@ export default function Settings() {
   const [privacyDm, setPrivacyDm] = useState("public");
   const [privacyPosts, setPrivacyPosts] = useState("public");
 
+  // Identidade
+  const [displayName, setDisplayName] = useState("");
+  const [hideName, setHideName] = useState(false);
+
   // Reset senha
   const [resettingPassword, setResettingPassword] = useState(false);
 
@@ -85,6 +89,8 @@ export default function Settings() {
         setPrivacyProfile((data as any).privacy_profile ?? "public");
         setPrivacyDm((data as any).privacy_dm ?? "public");
         setPrivacyPosts((data as any).privacy_posts ?? "public");
+        setDisplayName((data as any).display_name ?? (data as any).full_name ?? "");
+        setHideName(!!(data as any).hide_name);
       }
     } catch (err) {
       console.error("Erro ao carregar configurações", err);
@@ -109,6 +115,8 @@ export default function Settings() {
       privacy_profile: privacyProfile,
       privacy_dm: privacyDm,
       privacy_posts: privacyPosts,
+      display_name: displayName || null,
+      hide_name: hideName,
       updated_at: new Date().toISOString(),
     } as any;
 
@@ -277,6 +285,44 @@ export default function Settings() {
 
       {/* ESTRUTURA DE ACORDEÃO (Estilo Configurações de Celular) */}
       <Accordion type="single" collapsible className="w-full space-y-4" defaultValue="visual">
+
+        {/* BLOCO IDENTIDADE */}
+        <AccordionItem value="identity" className="border border-border/40 bg-card rounded-[32px] px-2 shadow-sm data-[state=open]:shadow-md transition-all">
+          <AccordionTrigger className="hover:no-underline py-5 px-4">
+            <div className="flex items-center gap-4">
+              <div className="h-12 w-12 rounded-2xl bg-primary/10 flex items-center justify-center shrink-0">
+                <UserIcon className="h-6 w-6 text-primary" />
+              </div>
+              <div className="text-left">
+                <p className="text-base sm:text-lg font-bold text-foreground">Identidade</p>
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mt-1">Como você aparece no app</p>
+              </div>
+            </div>
+          </AccordionTrigger>
+          <AccordionContent className="px-4 pb-6 pt-2 space-y-4">
+            <div className="space-y-2">
+              <Label className="text-xs font-semibold text-muted-foreground">Nome de exibição</Label>
+              <Input
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                placeholder="Como aparece na saudação e no perfil"
+                className="h-11 rounded-xl bg-background"
+              />
+              <p className="text-[11px] text-muted-foreground">Deixe em branco para usar seu nome completo do cadastro.</p>
+            </div>
+
+            <div className="flex items-center justify-between p-4 bg-muted/20 rounded-2xl border border-border/50">
+              <div className="flex items-center gap-3">
+                <EyeOff className="h-5 w-5 text-muted-foreground" />
+                <div>
+                  <p className="text-sm font-bold">Ocultar meu nome</p>
+                  <p className="text-[11px] text-muted-foreground">Mostra "Estudante" no lugar do seu nome no dashboard.</p>
+                </div>
+              </div>
+              <Switch checked={hideName} onCheckedChange={setHideName} className="data-[state=checked]:bg-primary" />
+            </div>
+          </AccordionContent>
+        </AccordionItem>
         
         {/* BLOCO 1: VISUAL & TEMA */}
         <AccordionItem value="visual" className="border border-border/40 bg-card rounded-[32px] px-2 shadow-sm data-[state=open]:shadow-md transition-all">

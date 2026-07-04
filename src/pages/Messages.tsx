@@ -343,17 +343,13 @@ export default function Messages() {
     <div className="max-w-2xl mx-auto space-y-6 animate-in fade-in duration-500 pb-24 px-4 sm:px-6 pt-6">
       
       {/* Header */}
-      <header className="flex flex-col gap-2">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="h-12 w-12 rounded-2xl bg-primary/10 flex items-center justify-center shadow-inner">
-              <MessageSquare className="h-6 w-6 text-primary" />
-            </div>
-            <div>
-              <h1 className="text-3xl sm:text-4xl font-black tracking-tight text-foreground">Direct</h1>
-              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mt-1">Networking Acadêmico</p>
-            </div>
-          </div>
+      <header className="flex items-center gap-3">
+        <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
+          <MessageSquare className="h-5 w-5 text-primary" />
+        </div>
+        <div>
+          <h1 className="text-xl font-bold tracking-tight text-foreground">Mensagens</h1>
+          <p className="text-xs text-muted-foreground">Networking acadêmico</p>
         </div>
       </header>
 

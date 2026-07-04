@@ -21,7 +21,7 @@ import {
   BookOpen, Clock, AlertTriangle, 
   CheckCircle2, ArrowRight, Cloud, CloudOff, History, 
   Loader2, Sparkles, Calendar as CalendarIcon,
-  HandHelping, MessageCircle, Bell
+  HandHelping, Megaphone, BarChart3, ChevronLeft, ChevronRight
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format, isToday, isTomorrow, differenceInDays, startOfDay, isSameDay } from "date-fns";
@@ -49,6 +49,16 @@ interface Reminder {
   discipline_color?: string;
 }
 
+interface Announcement {
+  id: string;
+  title: string;
+  body: string | null;
+  type: string; // 'notice' | 'news' | 'poll' | 'event'
+  cta_label: string | null;
+  cta_url: string | null;
+  poll_options: { label: string }[] | null;
+}
+
 const typeLabels: Record<string, string> = {
   exam: "Prova",
   assignment: "Trabalho",
@@ -71,6 +81,11 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [libraryAlerts, setLibraryAlerts] = useState<any[]>([]);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [carouselIndex, setCarouselIndex] = useState(0);
+  const [pollVotes, setPollVotes] = useState<Record<string, number>>({});
+  const [displayName, setDisplayName] = useState<string>("");
+  const [hideName, setHideName] = useState<boolean>(false);
 
   const [calendarDate, setCalendarDate] = useState<Date>(new Date());
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
@@ -84,7 +99,9 @@ export default function Dashboard() {
   const [showEndSemester, setShowEndSemester] = useState(false);
   const [nextSemesterInput, setNextSemesterInput] = useState("");
 
-  const userName = user?.user_metadata?.full_name?.split(" ")[0] || "Estudante";
+  const userName = hideName
+    ? "Estudante"
+    : (displayName || user?.user_metadata?.full_name || "Estudante").split(" ")[0];
 
   const filteredClasses = useMemo(() => {
     const dow = calendarDate.getDay();
@@ -138,13 +155,33 @@ export default function Dashboard() {
 
       const { data: profile } = await supabase
         .from("profiles")
-        .select("current_semester_label, semester_start, semester_end")
+        .select("current_semester_label, semester_start, semester_end, display_name, hide_name, full_name")
         .eq("user_id", user!.id)
         .maybeSingle();
 
       if (profile?.current_semester_label) {
         setActiveSemesterFromProfile(profile.current_semester_label);
       }
+      setDisplayName((profile as any)?.display_name || (profile as any)?.full_name || "");
+      setHideName(!!(profile as any)?.hide_name);
+
+      // Anúncios administrativos ativos
+      const { data: annData } = await (supabase as any)
+        .from("admin_announcements")
+        .select("id, title, body, type, cta_label, cta_url, poll_options")
+        .eq("active", true)
+        .order("created_at", { ascending: false })
+        .limit(6);
+      setAnnouncements((annData ?? []) as Announcement[]);
+
+      // Meus votos em enquetes
+      const { data: myVotes } = await (supabase as any)
+        .from("announcement_poll_votes")
+        .select("announcement_id, option_index")
+        .eq("user_id", user!.id);
+      const votesMap: Record<string, number> = {};
+      (myVotes ?? []).forEach((v: any) => { votesMap[v.announcement_id] = v.option_index; });
+      setPollVotes(votesMap);
 
       const { data: disciplines } = await supabase
         .from("disciplines")
@@ -247,6 +284,24 @@ export default function Dashboard() {
 
   }
 
+  // Auto-rotate carousel every 6s
+  useEffect(() => {
+    const total = 1 + announcements.length; // semester slide + announcements
+    if (total <= 1) return;
+    const t = setInterval(() => setCarouselIndex((i) => (i + 1) % total), 6000);
+    return () => clearInterval(t);
+  }, [announcements.length]);
+
+  async function voteOnPoll(annId: string, optionIndex: number) {
+    if (!user) return;
+    setPollVotes((p) => ({ ...p, [annId]: optionIndex }));
+    await (supabase as any).from("announcement_poll_votes")
+      .upsert(
+        { announcement_id: annId, user_id: user.id, option_index: optionIndex },
+        { onConflict: "announcement_id,user_id" }
+      );
+  }
+
   if (loading) {
 
     return (
@@ -266,57 +321,22 @@ export default function Dashboard() {
 
     <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in duration-700 pb-24 px-4 sm:px-6 overflow-x-hidden pt-6">
 
-      <header className="flex flex-col lg:flex-row justify-between items-start lg:items-end gap-8 border-b border-border/40 pb-8">
-
-        <div className="space-y-4 w-full lg:w-auto">
-
-          <h1 className="text-5xl sm:text-7xl font-black tracking-tighter text-foreground leading-[1.1]">
-            Olá,<br />{userName}! 👋
+      <header className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 pb-6 border-b border-border/40">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-1">
+            {format(new Date(), "EEEE, dd 'de' MMMM", { locale: ptBR })}
+          </p>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
+            Olá, {userName} 👋
           </h1>
-
         </div>
-
-        <div className="flex items-center gap-4">
-
-          {/* BOTÃO MENSAGENS */}
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => navigate("/messages")}
-            className="rounded-xl"
-          >
-            <MessageCircle className="h-5 w-5" />
-          </Button>
-
-          {/* BOTÃO NOTIFICAÇÕES */}
-          <Button
-            variant="outline"
-            size="icon"
-            className="rounded-xl"
-          >
-            <Bell className="h-5 w-5" />
-          </Button>
-
-          <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest bg-muted/50 px-4 py-2.5 rounded-xl shadow-sm">
-
-            {isOnline ? (
-
-              <span className="flex items-center gap-2 text-emerald-500">
-                <Cloud className="h-4 w-4" /> Cloud Sync
-              </span>
-
-            ) : (
-
-              <span className="flex items-center gap-2 text-amber-500 animate-pulse">
-                <CloudOff className="h-4 w-4" /> Offline
-              </span>
-
-            )}
-
-          </div>
-
+        <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-widest bg-muted/40 px-3 py-2 rounded-xl w-fit">
+          {isOnline ? (
+            <span className="flex items-center gap-1.5 text-emerald-500"><Cloud className="h-3.5 w-3.5" /> Sincronizado</span>
+          ) : (
+            <span className="flex items-center gap-1.5 text-amber-500"><CloudOff className="h-3.5 w-3.5" /> Offline</span>
+          )}
         </div>
-
       </header>
       {/* ALERTAS DE BIBLIOTECA */}
       {libraryAlerts.length > 0 && (
@@ -411,31 +431,125 @@ export default function Dashboard() {
         ))}
       </div>
 
-      {/* PROGRESSO DO SEMESTRE */}
-      <Card className="border-none bg-card shadow-sm rounded-[32px] overflow-hidden relative">
-        <div className="absolute -right-4 -top-4 opacity-5 pointer-events-none">
-          <Sparkles className="h-32 w-32" />
+      {/* CARROSSEL: PROGRESSO + ANÚNCIOS ADMIN */}
+      <div className="relative">
+        <div className="overflow-hidden rounded-2xl">
+          <div
+            className="flex transition-transform duration-500 ease-out"
+            style={{ transform: `translateX(-${carouselIndex * 100}%)` }}
+          >
+            {/* Slide 1: Progresso */}
+            <div className="w-full shrink-0 px-0.5">
+              <Card className="border border-border/40 bg-card shadow-sm rounded-2xl overflow-hidden">
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <p className="text-[10px] font-semibold uppercase tracking-widest text-primary mb-1">
+                        {isHistoricalView ? "Ciclo Concluído" : "Andamento do Semestre"}
+                      </p>
+                      <p className="text-3xl font-bold tracking-tight text-foreground">
+                        {semesterProgress}%
+                      </p>
+                    </div>
+                    <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center">
+                      <Sparkles className="h-6 w-6 text-primary" />
+                    </div>
+                  </div>
+                  <Progress value={semesterProgress} className="h-2 bg-muted/50 [&>div]:bg-primary rounded-full" />
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Slides de anúncios */}
+            {announcements.map((ann) => (
+              <div key={ann.id} className="w-full shrink-0 px-0.5">
+                <Card className="border border-border/40 bg-card shadow-sm rounded-2xl overflow-hidden">
+                  <CardContent className="p-6">
+                    <div className="flex items-start gap-3 mb-3">
+                      <div className={cn(
+                        "h-10 w-10 rounded-xl flex items-center justify-center shrink-0",
+                        ann.type === "poll" ? "bg-amber-500/10 text-amber-500" : "bg-primary/10 text-primary"
+                      )}>
+                        {ann.type === "poll" ? <BarChart3 className="h-5 w-5" /> : <Megaphone className="h-5 w-5" />}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-0.5">
+                          {ann.type === "poll" ? "Enquete Interna" : ann.type === "news" ? "Novidade" : "Comunicado"}
+                        </p>
+                        <h3 className="text-base font-bold text-foreground leading-tight">{ann.title}</h3>
+                      </div>
+                    </div>
+                    {ann.body && (
+                      <p className="text-sm text-muted-foreground leading-relaxed mb-3 line-clamp-3">{ann.body}</p>
+                    )}
+                    {ann.type === "poll" && Array.isArray(ann.poll_options) && (
+                      <div className="space-y-1.5">
+                        {ann.poll_options.map((opt: any, i: number) => {
+                          const label = typeof opt === "string" ? opt : opt.label;
+                          const selected = pollVotes[ann.id] === i;
+                          return (
+                            <button
+                              key={i}
+                              onClick={() => voteOnPoll(ann.id, i)}
+                              className={cn(
+                                "w-full text-left px-3 py-2 rounded-lg text-sm font-medium border transition",
+                                selected
+                                  ? "bg-primary text-primary-foreground border-primary"
+                                  : "bg-background hover:bg-muted border-border/50"
+                              )}
+                            >
+                              {label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {ann.cta_url && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => window.open(ann.cta_url!, "_blank")}
+                        className="mt-3 rounded-lg"
+                      >
+                        {ann.cta_label || "Saiba mais"} <ArrowRight className="h-3.5 w-3.5 ml-1.5" />
+                      </Button>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+            ))}
+          </div>
         </div>
 
-        <CardContent className="p-8">
-          <div className="flex justify-between items-end mb-4">
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-primary mb-1">
-                {isHistoricalView ? "Ciclo Concluído" : "Andamento do Semestre"}
-              </p>
-
-              <p className="text-4xl sm:text-5xl font-black tracking-tighter text-foreground">
-                {semesterProgress}%
-              </p>
+        {(1 + announcements.length) > 1 && (
+          <div className="flex items-center justify-between mt-3 px-1">
+            <button
+              onClick={() => setCarouselIndex((i) => (i - 1 + (1 + announcements.length)) % (1 + announcements.length))}
+              className="h-8 w-8 rounded-full bg-muted/50 hover:bg-muted flex items-center justify-center"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+            <div className="flex items-center gap-1.5">
+              {Array.from({ length: 1 + announcements.length }).map((_, i) => (
+                <button
+                  key={i}
+                  onClick={() => setCarouselIndex(i)}
+                  className={cn(
+                    "h-1.5 rounded-full transition-all",
+                    carouselIndex === i ? "w-6 bg-primary" : "w-1.5 bg-muted-foreground/30"
+                  )}
+                />
+              ))}
             </div>
+            <button
+              onClick={() => setCarouselIndex((i) => (i + 1) % (1 + announcements.length))}
+              className="h-8 w-8 rounded-full bg-muted/50 hover:bg-muted flex items-center justify-center"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </button>
           </div>
-
-          <Progress
-            value={semesterProgress}
-            className="h-3 bg-muted/50 [&>div]:bg-primary shadow-inner rounded-full transition-all duration-1000"
-          />
-        </CardContent>
-      </Card>
+        )}
+      </div>
 
       {/* EVENTOS DO DIA */}
       <div className="pt-4 space-y-8">
