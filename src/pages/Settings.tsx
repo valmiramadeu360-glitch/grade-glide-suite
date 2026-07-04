@@ -18,7 +18,7 @@ import { useToast } from "@/hooks/use-toast";
 import { 
   Save, Loader2, Calendar, Palette, Moon, CheckCircle2,
   Sun, BellRing, Mail, Smartphone, ArrowLeft,
-  Volume2, Trash2, AlertTriangle, Settings2, FileText, Shield, Lock, KeyRound
+  Volume2, Trash2, AlertTriangle, Settings2, FileText, Shield, Lock, KeyRound, User as UserIcon, EyeOff
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useNavigate } from "react-router-dom";
@@ -55,6 +55,10 @@ export default function Settings() {
   const [privacyDm, setPrivacyDm] = useState("public");
   const [privacyPosts, setPrivacyPosts] = useState("public");
 
+  // Identidade
+  const [displayName, setDisplayName] = useState("");
+  const [hideName, setHideName] = useState(false);
+
   // Reset senha
   const [resettingPassword, setResettingPassword] = useState(false);
 
@@ -85,6 +89,8 @@ export default function Settings() {
         setPrivacyProfile((data as any).privacy_profile ?? "public");
         setPrivacyDm((data as any).privacy_dm ?? "public");
         setPrivacyPosts((data as any).privacy_posts ?? "public");
+        setDisplayName((data as any).display_name ?? (data as any).full_name ?? "");
+        setHideName(!!(data as any).hide_name);
       }
     } catch (err) {
       console.error("Erro ao carregar configurações", err);
@@ -109,6 +115,8 @@ export default function Settings() {
       privacy_profile: privacyProfile,
       privacy_dm: privacyDm,
       privacy_posts: privacyPosts,
+      display_name: displayName || null,
+      hide_name: hideName,
       updated_at: new Date().toISOString(),
     } as any;
 
