@@ -181,22 +181,15 @@ export default function Auth() {
 return (
     <div className="min-h-[100dvh] flex flex-col items-center justify-center bg-background p-4 relative overflow-hidden">
 
-      <Button
-        variant="ghost"
-        size="icon"
-        className="absolute top-4 left-4 md:top-8 md:left-8 text-muted-foreground hover:text-foreground hover:bg-accent/10 transition-colors z-10 h-14 w-14 rounded-2xl"
-        onClick={() => navigate(-1)}
-      >
-        <ArrowLeft className="h-6 w-6" />
-      </Button>
-
-      <div className="mb-8 text-center mt-12 md:mt-0">
-        <h1 className="text-5xl md:text-6xl font-black text-foreground italic tracking-tighter flex items-center justify-center gap-2">
+      <div className="mb-6 text-center">
+        <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/30">
+          <GraduationCap className="h-7 w-7" />
+        </div>
+        <h1 className="text-3xl font-black text-foreground tracking-tight">
           EduFlow
         </h1>
-
-        <p className="text-muted-foreground font-black uppercase tracking-[0.3em] text-[10px] mt-2">
-          Sua jornada acadêmica organizada
+        <p className="text-muted-foreground font-bold uppercase tracking-[0.25em] text-[10px] mt-1.5">
+          Sua jornada acadêmica
         </p>
       </div>
 
