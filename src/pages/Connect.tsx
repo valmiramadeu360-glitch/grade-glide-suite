@@ -162,7 +162,7 @@ export default function Connect() {
         channel_id: newsChannelId,
         author_id: user.id,
         title: newsTitle.trim(),
-        content: newsContent.trim() || null,
+        content: newsContent.trim() || newsTitle.trim(),
         link_url: newsLink.trim() || null,
       });
       if (error) throw error;
