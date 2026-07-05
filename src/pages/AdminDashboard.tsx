@@ -26,7 +26,12 @@ import {
   Ban,
   Megaphone,
   Send,
-  Search
+  Search,
+  Sparkles,
+  BarChart3,
+  Plus,
+  Power,
+  X
 } from "lucide-react";
 
 export default function AdminDashboard() {
@@ -47,6 +52,16 @@ export default function AdminDashboard() {
   const [sendingPromo, setSendingPromo] = useState(false);
 
   const [searchUser, setSearchUser] = useState("");
+
+  // Anúncios do dashboard
+  const [announcements, setAnnouncements] = useState<any[]>([]);
+  const [annTitle, setAnnTitle] = useState("");
+  const [annBody, setAnnBody] = useState("");
+  const [annType, setAnnType] = useState<"notice" | "news" | "poll">("notice");
+  const [annCtaLabel, setAnnCtaLabel] = useState("");
+  const [annCtaUrl, setAnnCtaUrl] = useState("");
+  const [annOptions, setAnnOptions] = useState<string[]>(["", ""]);
+  const [savingAnn, setSavingAnn] = useState(false);
 
   useEffect(() => {
 
@@ -113,6 +128,12 @@ export default function AdminDashboard() {
       if (usersError) throw usersError;
 
       setUsersList(profilesData || []);
+
+      const { data: annData } = await supabase
+        .from("admin_announcements")
+        .select("*")
+        .order("created_at", { ascending: false });
+      setAnnouncements(annData || []);
 
     } catch (error) {
 
@@ -339,6 +360,71 @@ async function sendGlobalNotification() {
 
     }
 
+  }
+
+  async function createAnnouncement() {
+    if (!annTitle.trim()) {
+      toast({ title: "Título obrigatório", variant: "destructive" });
+      return;
+    }
+    setSavingAnn(true);
+    try {
+      const payload: any = {
+        title: annTitle.trim(),
+        body: annBody.trim() || null,
+        type: annType,
+        cta_label: annCtaLabel.trim() || null,
+        cta_url: annCtaUrl.trim() || null,
+        created_by: user?.id,
+        active: true,
+      };
+      if (annType === "poll") {
+        const opts = annOptions.map((o) => o.trim()).filter(Boolean);
+        if (opts.length < 2) {
+          toast({ title: "Enquete precisa de ao menos 2 opções", variant: "destructive" });
+          setSavingAnn(false);
+          return;
+        }
+        payload.poll_options = opts;
+      }
+      const { data, error } = await supabase
+        .from("admin_announcements")
+        .insert(payload)
+        .select()
+        .single();
+      if (error) throw error;
+      setAnnouncements([data, ...announcements]);
+      setAnnTitle("");
+      setAnnBody("");
+      setAnnCtaLabel("");
+      setAnnCtaUrl("");
+      setAnnOptions(["", ""]);
+      toast({ title: "Publicado no Dashboard ✨" });
+    } catch (e: any) {
+      toast({ title: "Erro ao publicar", description: e.message, variant: "destructive" });
+    } finally {
+      setSavingAnn(false);
+    }
+  }
+
+  async function toggleAnnouncement(id: string, current: boolean) {
+    try {
+      await supabase.from("admin_announcements").update({ active: !current }).eq("id", id);
+      setAnnouncements(announcements.map((a) => (a.id === id ? { ...a, active: !current } : a)));
+    } catch {
+      toast({ title: "Erro ao atualizar", variant: "destructive" });
+    }
+  }
+
+  async function deleteAnnouncement(id: string) {
+    if (!window.confirm("Remover este anúncio do Dashboard?")) return;
+    try {
+      await supabase.from("admin_announcements").delete().eq("id", id);
+      setAnnouncements(announcements.filter((a) => a.id !== id));
+      toast({ title: "Anúncio removido" });
+    } catch {
+      toast({ title: "Erro ao remover", variant: "destructive" });
+    }
   }
 
   const filteredUsers = usersList.filter((u) =>
