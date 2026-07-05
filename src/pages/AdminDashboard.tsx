@@ -26,7 +26,12 @@ import {
   Ban,
   Megaphone,
   Send,
-  Search
+  Search,
+  Sparkles,
+  BarChart3,
+  Plus,
+  Power,
+  X
 } from "lucide-react";
 
 export default function AdminDashboard() {
@@ -47,6 +52,16 @@ export default function AdminDashboard() {
   const [sendingPromo, setSendingPromo] = useState(false);
 
   const [searchUser, setSearchUser] = useState("");
+
+  // Anúncios do dashboard
+  const [announcements, setAnnouncements] = useState<any[]>([]);
+  const [annTitle, setAnnTitle] = useState("");
+  const [annBody, setAnnBody] = useState("");
+  const [annType, setAnnType] = useState<"notice" | "news" | "poll">("notice");
+  const [annCtaLabel, setAnnCtaLabel] = useState("");
+  const [annCtaUrl, setAnnCtaUrl] = useState("");
+  const [annOptions, setAnnOptions] = useState<string[]>(["", ""]);
+  const [savingAnn, setSavingAnn] = useState(false);
 
   useEffect(() => {
 
@@ -113,6 +128,12 @@ export default function AdminDashboard() {
       if (usersError) throw usersError;
 
       setUsersList(profilesData || []);
+
+      const { data: annData } = await supabase
+        .from("admin_announcements")
+        .select("*")
+        .order("created_at", { ascending: false });
+      setAnnouncements(annData || []);
 
     } catch (error) {
 
@@ -341,6 +362,71 @@ async function sendGlobalNotification() {
 
   }
 
+  async function createAnnouncement() {
+    if (!annTitle.trim()) {
+      toast({ title: "Título obrigatório", variant: "destructive" });
+      return;
+    }
+    setSavingAnn(true);
+    try {
+      const payload: any = {
+        title: annTitle.trim(),
+        body: annBody.trim() || null,
+        type: annType,
+        cta_label: annCtaLabel.trim() || null,
+        cta_url: annCtaUrl.trim() || null,
+        created_by: user?.id,
+        active: true,
+      };
+      if (annType === "poll") {
+        const opts = annOptions.map((o) => o.trim()).filter(Boolean);
+        if (opts.length < 2) {
+          toast({ title: "Enquete precisa de ao menos 2 opções", variant: "destructive" });
+          setSavingAnn(false);
+          return;
+        }
+        payload.poll_options = opts;
+      }
+      const { data, error } = await supabase
+        .from("admin_announcements")
+        .insert(payload)
+        .select()
+        .single();
+      if (error) throw error;
+      setAnnouncements([data, ...announcements]);
+      setAnnTitle("");
+      setAnnBody("");
+      setAnnCtaLabel("");
+      setAnnCtaUrl("");
+      setAnnOptions(["", ""]);
+      toast({ title: "Publicado no Dashboard ✨" });
+    } catch (e: any) {
+      toast({ title: "Erro ao publicar", description: e.message, variant: "destructive" });
+    } finally {
+      setSavingAnn(false);
+    }
+  }
+
+  async function toggleAnnouncement(id: string, current: boolean) {
+    try {
+      await supabase.from("admin_announcements").update({ active: !current }).eq("id", id);
+      setAnnouncements(announcements.map((a) => (a.id === id ? { ...a, active: !current } : a)));
+    } catch {
+      toast({ title: "Erro ao atualizar", variant: "destructive" });
+    }
+  }
+
+  async function deleteAnnouncement(id: string) {
+    if (!window.confirm("Remover este anúncio do Dashboard?")) return;
+    try {
+      await supabase.from("admin_announcements").delete().eq("id", id);
+      setAnnouncements(announcements.filter((a) => a.id !== id));
+      toast({ title: "Anúncio removido" });
+    } catch {
+      toast({ title: "Erro ao remover", variant: "destructive" });
+    }
+  }
+
   const filteredUsers = usersList.filter((u) =>
     !searchUser.trim()
       ? true
@@ -403,13 +489,190 @@ async function sendGlobalNotification() {
         </Card>
       </div>
 
-      <Tabs defaultValue="reports">
-        <TabsList className="w-full rounded-full bg-muted/40 p-1 grid grid-cols-4">
-          <TabsTrigger value="reports" className="rounded-full font-bold text-xs">Denúncias</TabsTrigger>
-          <TabsTrigger value="feedbacks" className="rounded-full font-bold text-xs">Feedbacks</TabsTrigger>
-          <TabsTrigger value="users" className="rounded-full font-bold text-xs">Usuários</TabsTrigger>
-          <TabsTrigger value="broadcast" className="rounded-full font-bold text-xs">Avisos</TabsTrigger>
+      <Tabs defaultValue="announcements">
+        <TabsList className="w-full rounded-full bg-muted/40 p-1 grid grid-cols-5 h-auto">
+          <TabsTrigger value="announcements" className="rounded-full font-bold text-[11px] py-2">Dashboard</TabsTrigger>
+          <TabsTrigger value="reports" className="rounded-full font-bold text-[11px] py-2">Denúncias</TabsTrigger>
+          <TabsTrigger value="feedbacks" className="rounded-full font-bold text-[11px] py-2">Feedbacks</TabsTrigger>
+          <TabsTrigger value="users" className="rounded-full font-bold text-[11px] py-2">Usuários</TabsTrigger>
+          <TabsTrigger value="broadcast" className="rounded-full font-bold text-[11px] py-2">Avisos</TabsTrigger>
         </TabsList>
+
+        {/* Anúncios do Dashboard */}
+        <TabsContent value="announcements" className="space-y-4 mt-4">
+          <Card className="rounded-2xl border-primary/20">
+            <CardContent className="p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <Sparkles className="h-5 w-5 text-primary" />
+                <h3 className="font-black">Novo anúncio no Dashboard</h3>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Aparece no carrossel principal para todos os alunos.
+              </p>
+
+              <div className="grid grid-cols-3 gap-2">
+                {(["notice", "news", "poll"] as const).map((t) => (
+                  <Button
+                    key={t}
+                    type="button"
+                    variant={annType === t ? "default" : "outline"}
+                    size="sm"
+                    className="rounded-full font-bold text-xs"
+                    onClick={() => setAnnType(t)}
+                  >
+                    {t === "notice" ? "Aviso" : t === "news" ? "Notícia" : "Enquete"}
+                  </Button>
+                ))}
+              </div>
+
+              <Input
+                placeholder="Título"
+                value={annTitle}
+                onChange={(e) => setAnnTitle(e.target.value)}
+                className="rounded-xl"
+              />
+              <Textarea
+                placeholder="Mensagem (opcional)"
+                value={annBody}
+                onChange={(e) => setAnnBody(e.target.value)}
+                rows={3}
+                className="rounded-xl resize-none"
+              />
+
+              {annType !== "poll" ? (
+                <div className="grid grid-cols-2 gap-2">
+                  <Input
+                    placeholder="Rótulo do botão"
+                    value={annCtaLabel}
+                    onChange={(e) => setAnnCtaLabel(e.target.value)}
+                    className="rounded-xl"
+                  />
+                  <Input
+                    placeholder="Link (https://…)"
+                    value={annCtaUrl}
+                    onChange={(e) => setAnnCtaUrl(e.target.value)}
+                    className="rounded-xl"
+                  />
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                    Opções da enquete
+                  </p>
+                  {annOptions.map((opt, i) => (
+                    <div key={i} className="flex gap-2">
+                      <Input
+                        placeholder={`Opção ${i + 1}`}
+                        value={opt}
+                        onChange={(e) => {
+                          const next = [...annOptions];
+                          next[i] = e.target.value;
+                          setAnnOptions(next);
+                        }}
+                        className="rounded-xl"
+                      />
+                      {annOptions.length > 2 && (
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          onClick={() => setAnnOptions(annOptions.filter((_, j) => j !== i))}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="rounded-full gap-1 font-bold"
+                    onClick={() => setAnnOptions([...annOptions, ""])}
+                  >
+                    <Plus className="h-3.5 w-3.5" /> Opção
+                  </Button>
+                </div>
+              )}
+
+              <Button
+                onClick={createAnnouncement}
+                disabled={savingAnn}
+                className="w-full rounded-full font-bold gap-2"
+              >
+                {savingAnn ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                Publicar no Dashboard
+              </Button>
+            </CardContent>
+          </Card>
+
+          <div className="space-y-2">
+            <p className="text-[11px] font-black uppercase tracking-widest text-muted-foreground px-1">
+              Publicados ({announcements.length})
+            </p>
+            {announcements.length === 0 ? (
+              <EmptyState icon={<Sparkles className="h-10 w-10" />} text="Nenhum anúncio publicado." />
+            ) : (
+              announcements.map((a) => (
+                <Card key={a.id} className={`rounded-2xl ${a.active ? "" : "opacity-60"}`}>
+                  <CardContent className="p-4 space-y-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-[10px] font-black uppercase tracking-widest text-primary">
+                            {a.type === "poll" ? "Enquete" : a.type === "news" ? "Notícia" : "Aviso"}
+                          </span>
+                          {!a.active && (
+                            <span className="text-[10px] font-bold uppercase text-muted-foreground">
+                              · pausado
+                            </span>
+                          )}
+                        </div>
+                        <p className="font-bold text-sm truncate">{a.title}</p>
+                        {a.body && (
+                          <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">
+                            {a.body}
+                          </p>
+                        )}
+                      </div>
+                      <div className="flex gap-1 shrink-0">
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-8 w-8"
+                          onClick={() => toggleAnnouncement(a.id, a.active)}
+                          title={a.active ? "Pausar" : "Ativar"}
+                        >
+                          <Power className={`h-4 w-4 ${a.active ? "text-primary" : "text-muted-foreground"}`} />
+                        </Button>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-8 w-8"
+                          onClick={() => deleteAnnouncement(a.id)}
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </div>
+                    </div>
+                    {Array.isArray(a.poll_options) && a.poll_options.length > 0 && (
+                      <div className="flex flex-wrap gap-1 pt-1">
+                        {a.poll_options.map((opt: string, i: number) => (
+                          <span
+                            key={i}
+                            className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-muted"
+                          >
+                            {opt}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              ))
+            )}
+          </div>
+        </TabsContent>
 
         {/* Denúncias */}
         <TabsContent value="reports" className="space-y-3 mt-4">
