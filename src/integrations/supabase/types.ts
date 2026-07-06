@@ -1539,6 +1539,20 @@ export type Database = {
       }
     }
     Functions: {
+      get_announcement_poll_totals: {
+        Args: { _announcement_id: string }
+        Returns: {
+          option_index: number
+          votes: number
+        }[]
+      }
+      get_post_poll_totals: {
+        Args: { _poll_id: string }
+        Returns: {
+          option_index: number
+          votes: number
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -1546,6 +1560,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_user_banned: { Args: { _user_id: string }; Returns: boolean }
     }
     Enums: {
       app_role: "admin" | "moderator" | "user" | "channel_admin"

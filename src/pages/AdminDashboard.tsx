@@ -64,24 +64,23 @@ export default function AdminDashboard() {
   const [savingAnn, setSavingAnn] = useState(false);
 
   useEffect(() => {
-
     if (!user) return;
-
-    if (user.email !== "eduflow.adm.academy@gmail.com") {
-
-      toast({
-        title: "Acesso Negado",
-        description: "Área restrita.",
-        variant: "destructive"
+    (async () => {
+      const { data: isAdmin, error } = await supabase.rpc("has_role", {
+        _user_id: user.id,
+        _role: "admin",
       });
-
-      navigate("/");
-      return;
-
-    }
-
-    loadAdminData();
-
+      if (error || !isAdmin) {
+        toast({
+          title: "Acesso Negado",
+          description: "Área restrita a administradores.",
+          variant: "destructive",
+        });
+        navigate("/");
+        return;
+      }
+      loadAdminData();
+    })();
   }, [user]);
 
   async function loadAdminData() {
