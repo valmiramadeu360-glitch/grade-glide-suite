@@ -811,11 +811,25 @@ async function sendGlobalNotification() {
                   <div className="flex-1 min-w-0">
                     <p className="font-bold text-sm truncate">
                       {u.full_name || "Sem nome"}
+                      {adminIds.has(u.user_id) && (
+                        <span className="ml-2 inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-amber-500">
+                          <Crown className="h-3 w-3" /> Admin
+                        </span>
+                      )}
                     </p>
                     <p className="text-xs text-muted-foreground truncate">
                       {u.course || "—"} · {u.current_semester_label || "—"}
                     </p>
                   </div>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-8 w-8"
+                    title={adminIds.has(u.user_id) ? "Remover admin" : "Promover a admin"}
+                    onClick={() => toggleAdmin(u.user_id, adminIds.has(u.user_id))}
+                  >
+                    <Crown className={`h-4 w-4 ${adminIds.has(u.user_id) ? "text-amber-500" : "text-muted-foreground"}`} />
+                  </Button>
                   <Button
                     size="sm"
                     variant={u.is_banned ? "outline" : "destructive"}
