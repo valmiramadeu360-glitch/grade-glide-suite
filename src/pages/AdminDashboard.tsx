@@ -434,6 +434,27 @@ async function sendGlobalNotification() {
     }
   }
 
+  async function toggleAdmin(userId: string, isAdmin: boolean) {
+    if (userId === user?.id && isAdmin) {
+      toast({ title: "Ação bloqueada", description: "Você não pode remover seu próprio acesso admin.", variant: "destructive" });
+      return;
+    }
+    if (!window.confirm(isAdmin ? "Remover acesso de administrador?" : "Conceder acesso de administrador a este usuário?")) return;
+    try {
+      if (isAdmin) {
+        await supabase.from("user_roles").delete().eq("user_id", userId).eq("role", "admin");
+        const next = new Set(adminIds); next.delete(userId); setAdminIds(next);
+        toast({ title: "Admin removido" });
+      } else {
+        await supabase.from("user_roles").insert({ user_id: userId, role: "admin" as any });
+        const next = new Set(adminIds); next.add(userId); setAdminIds(next);
+        toast({ title: "Admin promovido 👑" });
+      }
+    } catch (e: any) {
+      toast({ title: "Erro ao atualizar papel", description: e.message, variant: "destructive" });
+    }
+  }
+
   const filteredUsers = usersList.filter((u) =>
     !searchUser.trim()
       ? true
