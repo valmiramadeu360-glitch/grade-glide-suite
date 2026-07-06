@@ -31,7 +31,8 @@ import {
   BarChart3,
   Plus,
   Power,
-  X
+  X,
+  Crown
 } from "lucide-react";
 
 export default function AdminDashboard() {
@@ -55,6 +56,7 @@ export default function AdminDashboard() {
 
   // Anúncios do dashboard
   const [announcements, setAnnouncements] = useState<any[]>([]);
+  const [adminIds, setAdminIds] = useState<Set<string>>(new Set());
   const [annTitle, setAnnTitle] = useState("");
   const [annBody, setAnnBody] = useState("");
   const [annType, setAnnType] = useState<"notice" | "news" | "poll">("notice");
@@ -133,6 +135,12 @@ export default function AdminDashboard() {
         .select("*")
         .order("created_at", { ascending: false });
       setAnnouncements(annData || []);
+
+      const { data: rolesData } = await supabase
+        .from("user_roles")
+        .select("user_id")
+        .eq("role", "admin");
+      setAdminIds(new Set((rolesData || []).map((r: any) => r.user_id)));
 
     } catch (error) {
 
@@ -423,6 +431,27 @@ async function sendGlobalNotification() {
       toast({ title: "Anúncio removido" });
     } catch {
       toast({ title: "Erro ao remover", variant: "destructive" });
+    }
+  }
+
+  async function toggleAdmin(userId: string, isAdmin: boolean) {
+    if (userId === user?.id && isAdmin) {
+      toast({ title: "Ação bloqueada", description: "Você não pode remover seu próprio acesso admin.", variant: "destructive" });
+      return;
+    }
+    if (!window.confirm(isAdmin ? "Remover acesso de administrador?" : "Conceder acesso de administrador a este usuário?")) return;
+    try {
+      if (isAdmin) {
+        await supabase.from("user_roles").delete().eq("user_id", userId).eq("role", "admin");
+        const next = new Set(adminIds); next.delete(userId); setAdminIds(next);
+        toast({ title: "Admin removido" });
+      } else {
+        await supabase.from("user_roles").insert({ user_id: userId, role: "admin" as any });
+        const next = new Set(adminIds); next.add(userId); setAdminIds(next);
+        toast({ title: "Admin promovido 👑" });
+      }
+    } catch (e: any) {
+      toast({ title: "Erro ao atualizar papel", description: e.message, variant: "destructive" });
     }
   }
 
@@ -782,11 +811,25 @@ async function sendGlobalNotification() {
                   <div className="flex-1 min-w-0">
                     <p className="font-bold text-sm truncate">
                       {u.full_name || "Sem nome"}
+                      {adminIds.has(u.user_id) && (
+                        <span className="ml-2 inline-flex items-center gap-1 text-[9px] font-black uppercase tracking-widest text-amber-500">
+                          <Crown className="h-3 w-3" /> Admin
+                        </span>
+                      )}
                     </p>
                     <p className="text-xs text-muted-foreground truncate">
                       {u.course || "—"} · {u.current_semester_label || "—"}
                     </p>
                   </div>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-8 w-8"
+                    title={adminIds.has(u.user_id) ? "Remover admin" : "Promover a admin"}
+                    onClick={() => toggleAdmin(u.user_id, adminIds.has(u.user_id))}
+                  >
+                    <Crown className={`h-4 w-4 ${adminIds.has(u.user_id) ? "text-amber-500" : "text-muted-foreground"}`} />
+                  </Button>
                   <Button
                     size="sm"
                     variant={u.is_banned ? "outline" : "destructive"}

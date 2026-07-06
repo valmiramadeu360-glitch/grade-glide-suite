@@ -25,6 +25,7 @@ import Messages from "./pages/Messages";
 import NotFound from "./pages/NotFound";
 import AdminDashboard from "./pages/AdminDashboard";
 import Assistant from "./pages/Assistant";
+import ResetPassword from "./pages/ResetPassword";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -124,6 +125,7 @@ const App = () => (
               <Routes>
                 {/* Rotas de Acesso */}
                 <Route path="/auth" element={<PublicRoute><Auth /></PublicRoute>} />
+                <Route path="/reset-password" element={<ResetPassword />} />
                 
                 {/* Rotas Acadêmicas Protegidas */}
                 <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
