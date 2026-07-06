@@ -31,7 +31,8 @@ import {
   BarChart3,
   Plus,
   Power,
-  X
+  X,
+  Crown
 } from "lucide-react";
 
 export default function AdminDashboard() {
@@ -55,6 +56,7 @@ export default function AdminDashboard() {
 
   // Anúncios do dashboard
   const [announcements, setAnnouncements] = useState<any[]>([]);
+  const [adminIds, setAdminIds] = useState<Set<string>>(new Set());
   const [annTitle, setAnnTitle] = useState("");
   const [annBody, setAnnBody] = useState("");
   const [annType, setAnnType] = useState<"notice" | "news" | "poll">("notice");
@@ -133,6 +135,12 @@ export default function AdminDashboard() {
         .select("*")
         .order("created_at", { ascending: false });
       setAnnouncements(annData || []);
+
+      const { data: rolesData } = await supabase
+        .from("user_roles")
+        .select("user_id")
+        .eq("role", "admin");
+      setAdminIds(new Set((rolesData || []).map((r: any) => r.user_id)));
 
     } catch (error) {
 
