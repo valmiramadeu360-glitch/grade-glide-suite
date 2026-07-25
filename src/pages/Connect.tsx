@@ -24,7 +24,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   Dialog,
-  DialogContent
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -51,6 +53,7 @@ import {
   BarChart3,
   ExternalLink,
   Pin,
+  Store,
 } from "lucide-react";
 
 import { formatDistanceToNow } from "date-fns";
@@ -77,7 +80,6 @@ interface Post {
 }
 
 export default function Connect() {
-
   const { user } = useAuth();
   const { toast } = useToast();
   const { communities } = useCommunities();
@@ -99,9 +101,7 @@ export default function Connect() {
   const [pollQuestion, setPollQuestion] = useState("");
   const [pollOptions, setPollOptions] = useState<string[]>(["", ""]);
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
-
   const [posting, setPosting] = useState(false);
-
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
@@ -111,7 +111,7 @@ export default function Connect() {
   const [newComment, setNewComment] = useState("");
   const [sendingComment, setSendingComment] = useState(false);
 
-  // News feed inline
+  // News feed
   const [newsItems, setNewsItems] = useState<any[]>([]);
   const [newsLoading, setNewsLoading] = useState(false);
   const [activeNews, setActiveNews] = useState<any | null>(null);
@@ -125,14 +125,11 @@ export default function Connect() {
   const [newsLink, setNewsLink] = useState("");
   const [publishingNews, setPublishingNews] = useState(false);
 
-
   useEffect(() => {
     if (!user) return;
     if (topTab !== "feed") return;
-
     loadFollowing();
     loadPosts();
-
   }, [user, tab, activeCommunity, topTab]);
 
   useEffect(() => {
@@ -147,9 +144,7 @@ export default function Connect() {
       .from("news_subscriptions")
       .select("channel_id, news_channels(id, name, scope)")
       .eq("user_id", user.id);
-    const channels = (subs ?? [])
-      .map((s: any) => s.news_channels)
-      .filter(Boolean);
+    const channels = (subs ?? []).map((s: any) => s.news_channels).filter(Boolean);
     setMyChannels(channels);
     if (channels[0]?.id) setNewsChannelId(channels[0].id);
   }
@@ -172,10 +167,8 @@ export default function Connect() {
       loadNews();
     } catch (e: any) {
       toast({
-        title: "Não foi possível publicar",
-        description: e?.message?.includes("row-level security")
-          ? "Apenas administradores ou responsáveis do canal podem publicar notícias oficiais."
-          : e?.message ?? "Erro desconhecido",
+        title: "Permissão Negada",
+        description: "Apenas administradores podem publicar notícias oficiais.",
         variant: "destructive",
       });
     } finally {
@@ -206,239 +199,110 @@ export default function Connect() {
   async function loadSavedPosts() {
     setLoading(true);
     try {
-      const { data: saved } = await supabase
-        .from("saved_posts")
-        .select("post_id")
-        .eq("user_id", user!.id);
+      const { data: saved } = await supabase.from("saved_posts").select("post_id").eq("user_id", user!.id);
       const ids = (saved ?? []).map((s: any) => s.post_id);
       if (ids.length === 0) { setPosts([]); return; }
-      const { data } = await supabase
-        .from("posts")
-        .select("*")
-        .in("id", ids)
-        .order("created_at", { ascending: false });
+      const { data } = await supabase.from("posts").select("*").in("id", ids).order("created_at", { ascending: false });
       if (data) setPosts(await fetchMetricsForPosts(data));
     } finally { setLoading(false); }
   }
 
-
   async function loadFollowing() {
-
     if (!user) return;
-
     try {
-
-      const { data } = await supabase
-        .from("follows")
-        .select("following_id")
-        .eq("follower_id", user.id);
-
+      const { data } = await supabase.from("follows").select("following_id").eq("follower_id", user.id);
       setFollowingIds((data ?? []).map((f: any) => f.following_id));
-
     } catch (e) {
       console.error(e);
     }
   }
 
-
   async function fetchMetricsForPosts(postsData: any[]) {
-
     if (!postsData || postsData.length === 0 || !user) return [];
-
     const postIds = postsData.map(p => p.id);
     const userIds = Array.from(new Set(postsData.map(p => p.user_id)));
 
     const [likes, comments, saved, profs] = await Promise.all([
-
-      supabase
-        .from("post_likes")
-        .select("post_id,user_id")
-        .in("post_id", postIds),
-
-      supabase
-        .from("post_comments")
-        .select("post_id")
-        .in("post_id", postIds),
-
-      supabase
-        .from("saved_posts")
-        .select("post_id")
-        .eq("user_id", user.id)
-        .in("post_id", postIds),
-
-      supabase
-        .from("profiles")
-        .select("user_id,full_name,avatar_url")
-        .in("user_id", userIds)
-
+      supabase.from("post_likes").select("post_id,user_id").in("post_id", postIds),
+      supabase.from("post_comments").select("post_id").in("post_id", postIds),
+      supabase.from("saved_posts").select("post_id").eq("user_id", user.id).in("post_id", postIds),
+      supabase.from("profiles").select("user_id,full_name,avatar_url").in("user_id", userIds)
     ]);
 
     const likesMap: any = {};
-
     (likes.data ?? []).forEach((l: any) => {
-
-      if (!likesMap[l.post_id]) {
-
-        likesMap[l.post_id] = {
-          count: 0,
-          userLiked: false
-        };
-
-      }
-
+      if (!likesMap[l.post_id]) { likesMap[l.post_id] = { count: 0, userLiked: false }; }
       likesMap[l.post_id].count++;
-
-      if (l.user_id === user.id) {
-
-        likesMap[l.post_id].userLiked = true;
-
-      }
-
+      if (l.user_id === user.id) { likesMap[l.post_id].userLiked = true; }
     });
 
     const commentsMap: any = {};
+    (comments.data ?? []).forEach((c: any) => { commentsMap[c.post_id] = (commentsMap[c.post_id] || 0) + 1; });
 
-    (comments.data ?? []).forEach((c: any) => {
-
-      commentsMap[c.post_id] = (commentsMap[c.post_id] || 0) + 1;
-
-    });
-
-    const savedSet = new Set(
-      (saved.data ?? []).map((s: any) => s.post_id)
-    );
-
+    const savedSet = new Set((saved.data ?? []).map((s: any) => s.post_id));
     const profileMap: Record<string, any> = {};
     (profs.data ?? []).forEach((p: any) => { profileMap[p.user_id] = p; });
 
-
     return postsData.map(p => ({
-
       ...p,
-
       profiles: profileMap[p.user_id] ?? null,
-
       likes_count: likesMap[p.id]?.count || 0,
-
       comments_count: commentsMap[p.id] || 0,
-
       user_liked: likesMap[p.id]?.userLiked || false,
-
       user_saved: savedSet.has(p.id)
-
     }));
   }
 
-
-
   async function loadPosts() {
-
     setLoading(true);
-
     try {
-
-      let query = supabase
-        .from("posts")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(50);
-
-
-      if (tab === "oportunidades") {
-
-        query = query.in("tag", MARKETPLACE_TAGS);
-
-      }
-
-      if (activeCommunity) {
-        query = query.eq("community_id", activeCommunity);
-      } else {
-        query = query.is("community_id", null);
-      }
+      let query = supabase.from("posts").select("*").order("created_at", { ascending: false }).limit(50);
+      if (tab === "oportunidades") { query = query.in("tag", MARKETPLACE_TAGS); }
+      else if (tab !== "oportunidades") { query = query.not("tag", "in", `(${MARKETPLACE_TAGS.join(',')})`); }
+      if (activeCommunity) { query = query.eq("community_id", activeCommunity); } 
+      else { query = query.is("community_id", null); }
 
       const { data, error } = await query;
-
       if (error) throw error;
-
       if (data) {
-
         const postsWithMetrics = await fetchMetricsForPosts(data);
-
         setPosts(postsWithMetrics);
-
       }
-
     } catch (e) {
-
-      toast({
-        title: "Erro ao carregar feed",
-        variant: "destructive"
-      });
-
+      toast({ title: "Erro ao carregar feed", variant: "destructive" });
     } finally {
-
       setLoading(false);
-
     }
   }
-
-
 
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
-
     const file = e.target.files?.[0];
-
     if (!file) return;
-
     if (file.size > 50 * 1024 * 1024) {
-
-      toast({
-        title: "Arquivo muito grande",
-        variant: "destructive"
-      });
-
+      toast({ title: "Arquivo muito grande", variant: "destructive" });
       return;
     }
-
     setSelectedFile(file);
-
     if (file.type.startsWith("image/") || file.type.startsWith("video/")) {
-
       setPreviewUrl(URL.createObjectURL(file));
-
     } else {
-
       setPreviewUrl("pdf-preview");
-
     }
-
   }
 
-
-
   async function handlePost() {
-
     if ((!newContent.trim() && !selectedFile) || !user) return;
-
     setPosting(true);
-
     try {
-
       let mediaUrl: string | null = null;
       let documentUrl: string | null = null;
       let videoUrl: string | null = null;
 
       if (selectedFile) {
-
         const fileExt = selectedFile.name.split(".").pop();
-
         const filePath = `${user.id}/${Date.now()}.${fileExt}`;
-
         const bucket = mediaType === "document" ? "post-documents" : "post-media";
-        const { error: uploadError } = await supabase
-          .storage
-          .from(bucket)
-          .upload(filePath, selectedFile);
+        const { error: uploadError } = await supabase.storage.from(bucket).upload(filePath, selectedFile);
         if (uploadError) throw uploadError;
 
         if (bucket === "post-documents") {
@@ -449,67 +313,29 @@ export default function Connect() {
           if (mediaType === "video") videoUrl = data.publicUrl;
           else mediaUrl = data.publicUrl;
         }
-
       }
 
       const insertPayload: any = {
-        user_id: user.id,
-        content: newContent.trim(),
-        media_url: mediaUrl,
-        tag: selectedTag,
-        community_id: activeCommunity,
-        media_type: mediaType,
-        title: newTitle || null,
-        document_url: documentUrl,
-        video_url: videoUrl,
+        user_id: user.id, content: newContent.trim(), media_url: mediaUrl, tag: selectedTag, community_id: activeCommunity, media_type: mediaType, title: newTitle || null, document_url: documentUrl, video_url: videoUrl,
       };
-      const { data: created, error } = await supabase
-        .from("posts")
-        .insert(insertPayload)
-        .select()
-        .single();
-
+      
+      const { data: created, error } = await supabase.from("posts").insert(insertPayload).select().single();
       if (error) throw error;
 
       if (mediaType === "poll" && created) {
         const opts = pollOptions.map(o => o.trim()).filter(Boolean);
         if (pollQuestion.trim() && opts.length >= 2) {
-          await supabase.from("post_polls").insert({
-            post_id: created.id,
-            question: pollQuestion.trim(),
-            options: opts,
-          } as any);
+          await supabase.from("post_polls").insert({ post_id: created.id, question: pollQuestion.trim(), options: opts } as any);
         }
       }
 
-      setNewContent("");
-      setNewTitle("");
-      setPollQuestion("");
-      setPollOptions(["", ""]);
-      setSelectedFile(null);
-      setPreviewUrl(null);
-      setSelectedTag(null);
-      setMediaType("text");
-      setComposerOpen(false);
-
-      toast({
-        title: "Publicado!"
-      });
-
+      setNewContent(""); setNewTitle(""); setPollQuestion(""); setPollOptions(["", ""]); setSelectedFile(null); setPreviewUrl(null); setSelectedTag(null); setMediaType("text"); setComposerOpen(false);
+      toast({ title: "Publicação no ar!" });
       loadPosts();
-
     } catch (e: any) {
-
-      toast({
-        title: "Erro ao postar",
-        description: e.message,
-        variant: "destructive"
-      });
-
+      toast({ title: "Erro ao postar", description: e.message, variant: "destructive" });
     } finally {
-
       setPosting(false);
-
     }
   }
 
@@ -517,16 +343,11 @@ export default function Connect() {
     if (!user) return;
     try {
       if (post.user_liked) {
-        await supabase.from("post_likes").delete()
-          .eq("post_id", post.id).eq("user_id", user.id);
+        await supabase.from("post_likes").delete().eq("post_id", post.id).eq("user_id", user.id);
       } else {
         await supabase.from("post_likes").insert({ post_id: post.id, user_id: user.id });
       }
-      setPosts(prev => prev.map(p => p.id === post.id ? {
-        ...p,
-        user_liked: !p.user_liked,
-        likes_count: p.user_liked ? p.likes_count - 1 : p.likes_count + 1,
-      } : p));
+      setPosts(prev => prev.map(p => p.id === post.id ? { ...p, user_liked: !p.user_liked, likes_count: p.user_liked ? p.likes_count - 1 : p.likes_count + 1 } : p));
     } catch (e: any) {
       toast({ title: "Erro ao curtir", description: e.message, variant: "destructive" });
     }
@@ -536,8 +357,7 @@ export default function Connect() {
     if (!user) return;
     try {
       if (post.user_saved) {
-        await supabase.from("saved_posts").delete()
-          .eq("post_id", post.id).eq("user_id", user.id);
+        await supabase.from("saved_posts").delete().eq("post_id", post.id).eq("user_id", user.id);
       } else {
         await supabase.from("saved_posts").insert({ post_id: post.id, user_id: user.id });
       }
@@ -546,12 +366,12 @@ export default function Connect() {
   }
 
   async function handleDelete(post: Post) {
-    if (!window.confirm("Excluir esta publicação?")) return;
+    if (!window.confirm("Deseja apagar esta publicação?")) return;
     try {
       const { error } = await supabase.from("posts").delete().eq("id", post.id);
       if (error) throw error;
       setPosts(prev => prev.filter(p => p.id !== post.id));
-      toast({ title: "Publicação excluída" });
+      toast({ title: "Publicação removida." });
     } catch (e: any) {
       toast({ title: "Erro ao excluir", description: e.message, variant: "destructive" });
     }
@@ -561,11 +381,7 @@ export default function Connect() {
     setActivePost(post);
     setCommentModalOpen(true);
     try {
-      const { data } = await supabase
-        .from("post_comments")
-        .select("*")
-        .eq("post_id", post.id)
-        .order("created_at", { ascending: true });
+      const { data } = await supabase.from("post_comments").select("*").eq("post_id", post.id).order("created_at", { ascending: true });
       setPostComments(await attachCommentProfiles(data ?? []));
     } catch {
       setPostComments([]);
@@ -576,22 +392,14 @@ export default function Connect() {
     if (!user || !activePost || !newComment.trim()) return;
     setSendingComment(true);
     try {
-      const { error } = await supabase.from("post_comments").insert({
-        post_id: activePost.id,
-        user_id: user.id,
-        content: newComment.trim(),
-      });
+      const { error } = await supabase.from("post_comments").insert({ post_id: activePost.id, user_id: user.id, content: newComment.trim() });
       if (error) throw error;
       setNewComment("");
-      const { data } = await supabase
-        .from("post_comments")
-        .select("*")
-        .eq("post_id", activePost.id)
-        .order("created_at", { ascending: true });
+      const { data } = await supabase.from("post_comments").select("*").eq("post_id", activePost.id).order("created_at", { ascending: true });
       setPostComments(await attachCommentProfiles(data ?? []));
       setPosts(prev => prev.map(p => p.id === activePost.id ? { ...p, comments_count: p.comments_count + 1 } : p));
     } catch (e: any) {
-      toast({ title: "Erro ao comentar", description: e.message, variant: "destructive" });
+      toast({ title: "Erro", description: e.message, variant: "destructive" });
     } finally {
       setSendingComment(false);
     }
@@ -600,363 +408,143 @@ export default function Connect() {
   async function attachCommentProfiles(comments: any[]) {
     if (comments.length === 0) return [];
     const ids = Array.from(new Set(comments.map((c) => c.user_id)));
-    const { data } = await supabase
-      .from("profiles")
-      .select("user_id,full_name,avatar_url")
-      .in("user_id", ids);
+    const { data } = await supabase.from("profiles").select("user_id,full_name,avatar_url").in("user_id", ids);
     const map: Record<string, any> = {};
     (data ?? []).forEach((p: any) => { map[p.user_id] = p; });
     return comments.map((c) => ({ ...c, profiles: map[c.user_id] ?? null }));
   }
 
   const visiblePosts = useMemo(() => {
-    if (tab === "following") {
-      return posts.filter(p => followingIds.includes(p.user_id));
-    }
+    if (tab === "following") { return posts.filter(p => followingIds.includes(p.user_id)); }
     return posts;
   }, [posts, tab, followingIds]);
 
   return (
-    <div className="p-4 md:p-6 max-w-2xl mx-auto space-y-5 pb-24">
-      {/* Header */}
-      <div className="flex items-center gap-2">
-        <Globe className="h-6 w-6 text-primary" />
-        <div>
-          <h1 className="text-2xl font-black tracking-tight">Connect</h1>
-          <p className="text-xs text-muted-foreground font-semibold">
-            Rede acadêmica
-          </p>
+    <div className="p-4 md:p-6 max-w-2xl mx-auto space-y-4 pb-28 animate-in fade-in">
+      
+      {/* HEADER COMPACTO */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Globe className="h-5 w-5 text-primary" />
+          <div>
+            <h1 className="text-xl font-black tracking-tight">Connect</h1>
+            <p className="text-[10px] text-muted-foreground font-semibold uppercase tracking-widest">
+              Campus Digital
+            </p>
+          </div>
         </div>
+        
+        {/* BOTÃO FLUTUANTE DE POSTAGEM - PREMIUM */}
+        {topTab === "feed" && (
+          <Button onClick={() => setComposerOpen(true)} size="sm" className="rounded-full shadow-md hover:scale-105 transition-all text-xs font-bold px-4 h-9">
+            <PenLine className="h-3.5 w-3.5 mr-1.5" /> Criar Post
+          </Button>
+        )}
       </div>
 
-      {/* Top Tabs */}
+      {/* TOP TABS COMPACTAS */}
       <Tabs value={topTab} onValueChange={changeTopTab}>
-        <TabsList className="w-full rounded-full bg-muted/40 p-1 grid grid-cols-3">
-          <TabsTrigger value="feed" className="rounded-full font-bold text-xs gap-1.5"><Globe className="h-3.5 w-3.5" /> Feed</TabsTrigger>
-          <TabsTrigger value="news" className="rounded-full font-bold text-xs gap-1.5"><Newspaper className="h-3.5 w-3.5" /> Notícias</TabsTrigger>
-          <TabsTrigger value="saved" className="rounded-full font-bold text-xs gap-1.5"><Bookmark className="h-3.5 w-3.5" /> Salvos</TabsTrigger>
+        <TabsList className="w-full rounded-2xl bg-muted/50 p-1 flex">
+          <TabsTrigger value="feed" className="flex-1 rounded-xl font-bold text-[11px] sm:text-xs"><Globe className="h-3.5 w-3.5 mr-1" />Feed</TabsTrigger>
+          <TabsTrigger value="news" className="flex-1 rounded-xl font-bold text-[11px] sm:text-xs"><Newspaper className="h-3.5 w-3.5 mr-1" />Painel</TabsTrigger>
+          <TabsTrigger value="saved" className="flex-1 rounded-xl font-bold text-[11px] sm:text-xs"><Bookmark className="h-3.5 w-3.5 mr-1" />Salvos</TabsTrigger>
         </TabsList>
       </Tabs>
 
-      {topTab === "feed" && (
-      <>
-      {/* Composer */}
-      <Card className="rounded-3xl">
-        <CardContent className="p-4 space-y-3">
-          {(mediaType === "article") && (
-            <Input
-              value={newTitle}
-              onChange={(e) => setNewTitle(e.target.value)}
-              placeholder="Título do artigo"
-              className="rounded-2xl border-0 bg-muted/40 font-bold text-base"
-            />
-          )}
-          {(mediaType === "poll") && (
-            <div className="space-y-2">
-              <Input
-                value={pollQuestion}
-                onChange={(e) => setPollQuestion(e.target.value)}
-                placeholder="Sua pergunta"
-                className="rounded-2xl border-0 bg-muted/40 font-bold"
-              />
-              {pollOptions.map((opt, i) => (
-                <Input
-                  key={i}
-                  value={opt}
-                  onChange={(e) => {
-                    const next = [...pollOptions]; next[i] = e.target.value; setPollOptions(next);
-                  }}
-                  placeholder={`Opção ${i + 1}`}
-                  className="rounded-2xl border-0 bg-muted/40"
-                />
-              ))}
-              {pollOptions.length < 4 && (
-                <Button variant="ghost" size="sm" onClick={() => setPollOptions([...pollOptions, ""])} className="rounded-full">
-                  <Plus className="h-3.5 w-3.5 mr-1" /> Opção
-                </Button>
-              )}
-            </div>
-          )}
-          <Textarea
-            value={newContent}
-            onChange={(e) => setNewContent(e.target.value)}
-            placeholder={mediaType === "article" ? "Corpo do artigo…" : "O que está estudando hoje?"}
-            rows={3}
-            className="rounded-2xl resize-none border-0 bg-muted/40 focus-visible:ring-1"
-          />
-          {previewUrl && previewUrl !== "pdf-preview" && (
-            <div className="relative">
-              {mediaType === "video" ? (
-                <video src={previewUrl} controls className="rounded-2xl w-full max-h-64" />
-              ) : (
-                <img src={previewUrl} className="rounded-2xl w-full max-h-64 object-cover" />
-              )}
-              <Button
-                size="icon"
-                variant="secondary"
-                className="absolute top-2 right-2 h-7 w-7 rounded-full"
-                onClick={() => { setSelectedFile(null); setPreviewUrl(null); }}
-              >
-                <X className="h-3.5 w-3.5" />
-              </Button>
-            </div>
-          )}
-          {previewUrl === "pdf-preview" && selectedFile && (
-            <div className="flex items-center gap-2 bg-muted/40 rounded-2xl p-3">
-              <FileText className="h-5 w-5 text-primary" />
-              <span className="text-sm font-bold truncate flex-1">{selectedFile.name}</span>
-              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => { setSelectedFile(null); setPreviewUrl(null); }}>
-                <X className="h-3.5 w-3.5" />
-              </Button>
-            </div>
-          )}
-          <div className="flex gap-1.5 flex-wrap">
-            {[...ACADEMIC_TAGS, ...MARKETPLACE_TAGS].map((t) => (
-              <button
-                key={t}
-                type="button"
-                onClick={() => setSelectedTag(selectedTag === t ? null : t)}
-                className={cn(
-                  "text-[10px] font-black uppercase tracking-wider px-2.5 py-1 rounded-full transition-all",
-                  selectedTag === t
-                    ? "bg-primary text-primary-foreground"
-                    : "bg-muted text-muted-foreground hover:bg-muted/70"
-                )}
-              >
-                {t}
-              </button>
-            ))}
-          </div>
-          <div className="flex items-center justify-between">
-            <Popover>
-              <PopoverTrigger asChild>
-                <button className="h-10 w-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center hover:opacity-90 shadow-md transition-all active:scale-95" title="Adicionar mídia">
-                  <Plus className="h-5 w-5" />
-                </button>
-              </PopoverTrigger>
-              <PopoverContent align="start" className="w-56 p-2 rounded-2xl">
-                <div className="grid grid-cols-1 gap-1">
-                  {[
-                    { t: "image", label: "Foto", icon: ImageIcon, accept: "image/*" },
-                    { t: "video", label: "Vídeo", icon: Video, accept: "video/*" },
-                    { t: "document", label: "Documento (PDF)", icon: FileText, accept: "application/pdf" },
-                    { t: "article", label: "Artigo", icon: PenLine, accept: null },
-                    { t: "poll", label: "Enquete", icon: BarChart3, accept: null },
-                  ].map((o) => (
-                    <label key={o.t} className="cursor-pointer">
-                      {o.accept && (
-                        <input
-                          type="file"
-                          accept={o.accept}
-                          className="hidden"
-                          onChange={(e) => { setMediaType(o.t as any); handleFileSelect(e); }}
-                        />
-                      )}
-                      <div
-                        onClick={() => { if (!o.accept) setMediaType(o.t as any); }}
-                        className={cn(
-                          "flex items-center gap-2.5 px-3 py-2.5 rounded-xl hover:bg-muted transition-colors",
-                          mediaType === o.t && "bg-primary/10 text-primary"
-                        )}
-                      >
-                        <o.icon className="h-4 w-4" />
-                        <span className="text-sm font-bold">{o.label}</span>
-                      </div>
-                    </label>
-                  ))}
-                  {mediaType !== "text" && (
-                    <button
-                      onClick={() => { setMediaType("text"); setSelectedFile(null); setPreviewUrl(null); }}
-                      className="text-[10px] font-black uppercase tracking-widest text-muted-foreground hover:text-foreground py-2 mt-1 border-t"
-                    >
-                      Limpar tipo
-                    </button>
+      {/* MODAL DO COMPOSER (Rede Social e Marketplace unificados no design) */}
+      <Dialog open={composerOpen} onOpenChange={setComposerOpen}>
+        <DialogContent className="rounded-[28px] p-5 sm:max-w-md border-0 shadow-2xl">
+          <DialogHeader className="mb-2">
+            <DialogTitle className="text-lg font-black">Nova Publicação</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="flex gap-2 flex-wrap">
+              {[...ACADEMIC_TAGS, ...MARKETPLACE_TAGS].map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setSelectedTag(selectedTag === t ? null : t)}
+                  className={cn(
+                    "text-[10px] font-bold uppercase tracking-wider px-2.5 py-1.5 rounded-full transition-all border",
+                    selectedTag === t
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "bg-background text-muted-foreground border-border/50 hover:bg-muted"
                   )}
-                </div>
-              </PopoverContent>
-            </Popover>
-            <Button
-              onClick={handlePost}
-              disabled={posting || (!newContent.trim() && !selectedFile && !pollQuestion.trim())}
-              className="rounded-full font-bold gap-2"
-              size="sm"
-            >
-              {posting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-              Publicar
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Sub-Tabs do Feed */}
-      <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="w-full rounded-full bg-muted/40 p-1 grid grid-cols-3">
-          <TabsTrigger value="global" className="rounded-full font-bold text-xs">Global</TabsTrigger>
-          <TabsTrigger value="following" className="rounded-full font-bold text-xs">Seguindo</TabsTrigger>
-          <TabsTrigger value="oportunidades" className="rounded-full font-bold text-xs">Oportunidades</TabsTrigger>
-        </TabsList>
-      </Tabs>
-      </>
-      )}
-
-      {topTab === "news" && (
-        newsLoading ? (
-          <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
-        ) : newsItems.length === 0 ? (
-          <>
-            <div className="flex justify-end">
-              <Button
-                size="sm"
-                className="rounded-full"
-                onClick={() => { loadMyChannels(); setNewsComposerOpen(true); }}
-              >
-                <Plus className="h-4 w-4 mr-1" /> Publicar notícia
-              </Button>
-            </div>
-            <Card className="rounded-3xl border-dashed">
-              <CardContent className="p-10 text-center text-muted-foreground">
-                <Newspaper className="h-10 w-10 mx-auto mb-3 opacity-30" />
-                <p className="text-sm font-semibold">Nenhuma notícia por aqui ainda.</p>
-              </CardContent>
-            </Card>
-          </>
-        ) : (
-          <div className="space-y-4 animate-in fade-in-50 slide-in-from-bottom-2 duration-500">
-            <div className="flex justify-end">
-              <Button
-                size="sm"
-                className="rounded-full"
-                onClick={() => { loadMyChannels(); setNewsComposerOpen(true); }}
-              >
-                <Plus className="h-4 w-4 mr-1" /> Publicar notícia
-              </Button>
-            </div>
-            {newsItems.map((n) => (
-              <Card key={n.id} className="rounded-3xl overflow-hidden cursor-pointer hover:shadow-lg transition-all" onClick={() => setActiveNews(n)}>
-                {n.cover_url && <img src={n.cover_url} className="w-full h-40 object-cover" />}
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    {n.pinned && <Pin className="h-3.5 w-3.5 text-primary" />}
-                    <Badge variant="secondary" className="rounded-full text-[9px]">{n.news_channels?.name ?? "Canal"}</Badge>
-                    <span className="text-[10px] text-muted-foreground ml-auto">
-                      {formatDistanceToNow(new Date(n.published_at), { locale: ptBR, addSuffix: true })}
-                    </span>
-                  </div>
-                  <h3 className="font-black text-base leading-tight">{n.title}</h3>
-                  {n.content && <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{n.content}</p>}
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        )
-      )}
-
-      {/* News Composer Dialog */}
-      <Dialog open={newsComposerOpen} onOpenChange={setNewsComposerOpen}>
-        <DialogContent className="rounded-3xl max-w-lg">
-          <div className="space-y-3">
-            <div>
-              <h2 className="font-black text-lg">Publicar notícia</h2>
-              <p className="text-xs text-muted-foreground">Compartilhe com um canal do qual você faz parte.</p>
-            </div>
-            {myChannels.length === 0 ? (
-              <p className="text-sm text-muted-foreground p-4 bg-muted/40 rounded-2xl">
-                Você ainda não é membro de nenhum canal. Complete seu perfil (universidade, campus, curso) para entrar automaticamente nos canais oficiais.
-              </p>
-            ) : (
-              <>
-                <select
-                  value={newsChannelId}
-                  onChange={(e) => setNewsChannelId(e.target.value)}
-                  className="w-full rounded-2xl bg-muted/40 border-0 px-3 py-2 text-sm font-semibold"
                 >
-                  {myChannels.map((c) => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </select>
-                <Input
-                  value={newsTitle}
-                  onChange={(e) => setNewsTitle(e.target.value)}
-                  placeholder="Título"
-                  className="rounded-2xl bg-muted/40 border-0 font-bold"
-                />
-                <Textarea
-                  value={newsContent}
-                  onChange={(e) => setNewsContent(e.target.value)}
-                  placeholder="Conteúdo (opcional)"
-                  rows={4}
-                  className="rounded-2xl bg-muted/40 border-0"
-                />
-                <Input
-                  value={newsLink}
-                  onChange={(e) => setNewsLink(e.target.value)}
-                  placeholder="Link (opcional)"
-                  className="rounded-2xl bg-muted/40 border-0 text-sm"
-                />
-                <Button
-                  onClick={publishNews}
-                  disabled={publishingNews || !newsTitle.trim()}
-                  className="w-full rounded-full"
-                >
-                  {publishingNews ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />}
-                  Publicar
+                  {t}
+                </button>
+              ))}
+            </div>
+            
+            <Textarea
+              value={newContent}
+              onChange={(e) => setNewContent(e.target.value)}
+              placeholder="Sobre o que vamos conversar hoje?"
+              rows={4}
+              className="rounded-2xl resize-none border-0 bg-muted/40 focus-visible:ring-1 text-sm p-3"
+            />
+
+            {previewUrl && previewUrl !== "pdf-preview" && (
+              <div className="relative">
+                {mediaType === "video" ? (
+                  <video src={previewUrl} controls className="rounded-xl w-full max-h-48 object-cover" />
+                ) : (
+                  <img src={previewUrl} className="rounded-xl w-full max-h-48 object-cover" />
+                )}
+                <Button size="icon" variant="secondary" className="absolute top-2 right-2 h-7 w-7 rounded-full shadow-sm" onClick={() => { setSelectedFile(null); setPreviewUrl(null); }}>
+                  <X className="h-3.5 w-3.5" />
                 </Button>
-                <p className="text-[10px] text-muted-foreground text-center">
-                  Apenas administradores ou responsáveis do canal têm permissão para publicar notícias oficiais.
-                </p>
-              </>
+              </div>
             )}
+            
+            {previewUrl === "pdf-preview" && selectedFile && (
+              <div className="flex items-center gap-2 bg-muted/40 rounded-xl p-3">
+                <FileText className="h-5 w-5 text-primary" />
+                <span className="text-xs font-bold truncate flex-1">{selectedFile.name}</span>
+                <Button size="icon" variant="ghost" className="h-7 w-7 rounded-full" onClick={() => { setSelectedFile(null); setPreviewUrl(null); }}>
+                  <X className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            )}
+
+            <div className="flex items-center justify-between pt-2 border-t border-border/30">
+              <div className="flex items-center gap-1">
+                <label className="cursor-pointer">
+                  <input type="file" accept="image/*,video/*" className="hidden" onChange={(e) => { setMediaType(e.target.files?.[0]?.type.startsWith('video') ? "video" : "image"); handleFileSelect(e); }} />
+                  <div className="h-9 w-9 rounded-full bg-muted/50 flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground transition-all"><ImageIcon className="h-4 w-4" /></div>
+                </label>
+                <label className="cursor-pointer">
+                  <input type="file" accept="application/pdf" className="hidden" onChange={(e) => { setMediaType("document"); handleFileSelect(e); }} />
+                  <div className="h-9 w-9 rounded-full bg-muted/50 flex items-center justify-center text-muted-foreground hover:bg-muted hover:text-foreground transition-all"><FileText className="h-4 w-4" /></div>
+                </label>
+              </div>
+              <Button onClick={handlePost} disabled={posting || (!newContent.trim() && !selectedFile)} className="rounded-full font-bold h-9 px-5 text-xs">
+                {posting ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : <Send className="h-3.5 w-3.5 mr-1.5" />} Publicar
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!activeNews} onOpenChange={(o) => !o && setActiveNews(null)}>
-        <DialogContent className="rounded-3xl max-w-lg max-h-[85vh] overflow-y-auto">
-          {activeNews && (
-            <div className="space-y-3">
-              {activeNews.cover_url && <img src={activeNews.cover_url} className="w-full rounded-2xl" />}
-              <Badge variant="secondary" className="rounded-full">{activeNews.news_channels?.name}</Badge>
-              <h2 className="font-black text-xl">{activeNews.title}</h2>
-              <p className="whitespace-pre-wrap text-sm">{activeNews.content}</p>
-              {activeNews.link_url && (
-                <Button variant="outline" className="rounded-full" onClick={() => window.open(activeNews.link_url, "_blank")}>
-                  <ExternalLink className="h-4 w-4 mr-2" /> Abrir link
-                </Button>
-              )}
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+      {/* FEED SECUNDÁRIO (Abas de Rede Social vs Marketplace) */}
+      {topTab === "feed" && (
+        <Tabs value={tab} onValueChange={setTab} className="w-full">
+          <TabsList className="w-full rounded-2xl bg-muted/40 p-1 grid grid-cols-3">
+            <TabsTrigger value="global" className="rounded-xl font-bold text-[11px] sm:text-xs">Geral</TabsTrigger>
+            <TabsTrigger value="following" className="rounded-xl font-bold text-[11px] sm:text-xs">Seguindo</TabsTrigger>
+            <TabsTrigger value="oportunidades" className="rounded-xl font-bold text-[11px] sm:text-xs flex items-center gap-1"><Store className="h-3.5 w-3.5" /> Mercado</TabsTrigger>
+          </TabsList>
+        </Tabs>
+      )}
 
-      {/* Comunidades */}
+      {/* Comunidades Filtro */}
       {topTab === "feed" && communities.length > 0 && (
-        <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-none">
-          <button
-            type="button"
-            onClick={() => setActiveCommunity(null)}
-            className={cn(
-              "shrink-0 text-[10px] font-black uppercase tracking-wider px-3 py-1.5 rounded-full transition-all border",
-              activeCommunity === null
-                ? "bg-primary text-primary-foreground border-primary"
-                : "bg-muted/40 text-muted-foreground border-transparent hover:bg-muted"
-            )}
-          >
-            Feed Geral
-          </button>
+        <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
+          <button onClick={() => setActiveCommunity(null)} className={cn("shrink-0 text-[10px] font-black uppercase tracking-wider px-3 py-1.5 rounded-full transition-all border", activeCommunity === null ? "bg-primary text-primary-foreground border-primary" : "bg-muted/40 text-muted-foreground border-transparent hover:bg-muted")}>Feed Geral</button>
           {communities.map((c) => {
             const Icon = c.type === "university" ? "🎓" : c.type === "campus" ? "🏛️" : c.type === "course" ? "📚" : "#";
             return (
-              <button
-                key={c.id}
-                type="button"
-                onClick={() => setActiveCommunity(c.id)}
-                className={cn(
-                  "shrink-0 text-[10px] font-black uppercase tracking-wider px-3 py-1.5 rounded-full transition-all border whitespace-nowrap",
-                  activeCommunity === c.id
-                    ? "bg-primary text-primary-foreground border-primary"
-                    : "bg-muted/40 text-muted-foreground border-transparent hover:bg-muted"
-                )}
-              >
+              <button key={c.id} onClick={() => setActiveCommunity(c.id)} className={cn("shrink-0 text-[10px] font-black uppercase tracking-wider px-3 py-1.5 rounded-full transition-all border whitespace-nowrap", activeCommunity === c.id ? "bg-primary text-primary-foreground border-primary" : "bg-muted/40 text-muted-foreground border-transparent hover:bg-muted")}>
                 <span className="mr-1">{Icon}</span>{c.name}
               </button>
             );
@@ -964,76 +552,91 @@ export default function Connect() {
         </div>
       )}
 
-      {/* Feed */}
-      {topTab !== "news" && (loading ? (
-        <div className="flex justify-center py-10">
-          <Loader2 className="h-6 w-6 animate-spin text-primary" />
-        </div>
-      ) : visiblePosts.length === 0 ? (
-        <Card className="rounded-3xl border-dashed">
-          <CardContent className="p-10 text-center text-muted-foreground">
-            <Globe className="h-10 w-10 mx-auto mb-3 opacity-30" />
-            <p className="text-sm font-semibold">Nada por aqui ainda.</p>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="space-y-4">
-          {visiblePosts.map((p) => (
-            <PostCard
-              key={p.id}
-              post={p}
-              isOwner={p.user_id === user?.id}
-              onLike={() => handleLike(p)}
-              onSave={() => handleSave(p)}
-              onComment={() => openComments(p)}
-              onDelete={() => handleDelete(p)}
-            />
-          ))}
-        </div>
-      ))}
-
-      {/* Comments Modal */}
-      <Dialog open={commentModalOpen} onOpenChange={setCommentModalOpen}>
-        <DialogContent className="rounded-3xl max-w-md p-0 overflow-hidden">
-          <div className="p-4 border-b">
-            <h3 className="font-black">Comentários</h3>
+      {/* LISTAGEM DE POSTS (FEED E SAVED) */}
+      {(topTab === "feed" || topTab === "saved") && (
+        loading ? (
+          <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
+        ) : visiblePosts.length === 0 ? (
+          <div className="p-10 text-center rounded-[24px] bg-muted/30 border-2 border-dashed border-border/50">
+            <Globe className="h-8 w-8 mx-auto mb-3 text-muted-foreground/40" />
+            <p className="text-sm font-semibold text-muted-foreground">O feed está calmo hoje.</p>
           </div>
-          <ScrollArea className="max-h-[50vh] p-4">
-            {postComments.length === 0 ? (
-              <p className="text-center text-sm text-muted-foreground py-6">
-                Seja o primeiro a comentar.
-              </p>
+        ) : (
+          <div className="space-y-4">
+            {visiblePosts.map((p) => (
+              <PostCard key={p.id} post={p} isOwner={p.user_id === user?.id} onLike={() => handleLike(p)} onSave={() => handleSave(p)} onComment={() => openComments(p)} onDelete={() => handleDelete(p)} />
+            ))}
+          </div>
+        )
+      )}
+
+      {/* TELA DE NOTÍCIAS */}
+      {topTab === "news" && (
+        newsLoading ? (
+          <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
+        ) : (
+          <div className="space-y-4 animate-in fade-in">
+            <div className="flex justify-between items-center bg-muted/30 p-3 rounded-2xl border border-border/50">
+              <div>
+                <p className="text-xs font-bold">Painel Oficial</p>
+                <p className="text-[10px] text-muted-foreground">Comunicados do campus</p>
+              </div>
+              <Button size="sm" className="rounded-full h-8 px-3 text-xs" onClick={() => { loadMyChannels(); setNewsComposerOpen(true); }}>
+                <Plus className="h-3 w-3 mr-1" /> Nova
+              </Button>
+            </div>
+            
+            {newsItems.length === 0 ? (
+              <p className="text-center text-sm font-medium text-muted-foreground py-8">Sem avisos recentes.</p>
             ) : (
-              <div className="space-y-3">
+              newsItems.map((n) => (
+                <Card key={n.id} className="rounded-[24px] overflow-hidden cursor-pointer hover:shadow-md transition-all border-0 shadow-sm" onClick={() => setActiveNews(n)}>
+                  {n.cover_url && <img src={n.cover_url} className="w-full h-32 object-cover" />}
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-2 mb-1.5">
+                      {n.pinned && <Pin className="h-3 w-3 text-primary" />}
+                      <Badge variant="secondary" className="rounded-lg text-[9px] font-bold px-1.5">{n.news_channels?.name ?? "Canal"}</Badge>
+                      <span className="text-[9px] font-semibold text-muted-foreground ml-auto">{formatDistanceToNow(new Date(n.published_at), { locale: ptBR, addSuffix: true })}</span>
+                    </div>
+                    <h3 className="font-bold text-sm leading-tight text-foreground">{n.title}</h3>
+                    {n.content && <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{n.content}</p>}
+                  </CardContent>
+                </Card>
+              ))
+            )}
+          </div>
+        )
+      )}
+
+      {/* MODAL DE COMENTÁRIOS */}
+      <Dialog open={commentModalOpen} onOpenChange={setCommentModalOpen}>
+        <DialogContent className="rounded-[28px] max-w-md p-0 overflow-hidden border-0 shadow-2xl">
+          <div className="p-4 border-b border-border/40 bg-muted/20">
+            <h3 className="font-black text-base">Comentários</h3>
+          </div>
+          <ScrollArea className="h-[40vh] p-4 bg-background">
+            {postComments.length === 0 ? (
+              <p className="text-center text-xs font-semibold text-muted-foreground py-8">Seja o primeiro a interagir.</p>
+            ) : (
+              <div className="space-y-4">
                 {postComments.map((c: any) => (
-                  <div key={c.id} className="flex gap-2.5">
+                  <div key={c.id} className="flex gap-3">
                     <Avatar className="h-8 w-8 shrink-0">
                       <AvatarImage src={c.profiles?.avatar_url} />
-                      <AvatarFallback>{c.profiles?.full_name?.charAt(0) || "U"}</AvatarFallback>
+                      <AvatarFallback className="bg-primary/10 text-primary text-xs font-bold">{c.profiles?.full_name?.charAt(0) || "U"}</AvatarFallback>
                     </Avatar>
-                    <div className="bg-muted/50 rounded-2xl px-3 py-2 flex-1">
-                      <p className="text-xs font-bold">{c.profiles?.full_name || "Estudante"}</p>
-                      <p className="text-sm whitespace-pre-wrap">{c.content}</p>
+                    <div className="bg-muted/40 rounded-2xl rounded-tl-sm px-3.5 py-2.5 flex-1">
+                      <p className="text-[11px] font-bold text-foreground">{c.profiles?.full_name || "Estudante"}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5 whitespace-pre-wrap">{c.content}</p>
                     </div>
                   </div>
                 ))}
               </div>
             )}
           </ScrollArea>
-          <div className="p-3 border-t flex gap-2">
-            <Input
-              value={newComment}
-              onChange={(e) => setNewComment(e.target.value)}
-              placeholder="Escreva um comentário..."
-              className="rounded-full"
-              onKeyDown={(e) => { if (e.key === "Enter") sendComment(); }}
-            />
-            <Button
-              size="icon"
-              onClick={sendComment}
-              disabled={sendingComment || !newComment.trim()}
-              className="rounded-full shrink-0"
-            >
+          <div className="p-3 border-t border-border/40 bg-background flex gap-2">
+            <Input value={newComment} onChange={(e) => setNewComment(e.target.value)} placeholder="Escreva algo..." className="h-10 rounded-full bg-muted/50 border-0 text-sm focus-visible:ring-primary" onKeyDown={(e) => { if (e.key === "Enter") sendComment(); }} />
+            <Button size="icon" onClick={sendComment} disabled={sendingComment || !newComment.trim()} className="h-10 w-10 rounded-full shrink-0 shadow-sm">
               {sendingComment ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
             </Button>
           </div>
@@ -1043,196 +646,72 @@ export default function Connect() {
   );
 }
 
-function PostCard({
-  post,
-  onLike,
-  onSave,
-  onComment,
-  isOwner,
-  onDelete
-}: any) {
-
+// POST CARD ATUALIZADO E COMPACTO
+function PostCard({ post, onLike, onSave, onComment, isOwner, onDelete }: any) {
   const isVideo = post.media_url?.match(/\.(mp4|webm|mov)$/i);
-  const isPdf = post.media_url?.match(/\.pdf$/i);
+  const isPdf = post.media_url?.match(/\.pdf$/i) || post.document_url;
+  const mediaSource = post.document_url || post.video_url || post.media_url;
 
   return (
-
-    <Card className="rounded-[32px] overflow-hidden">
-
-      <CardHeader className="flex flex-row items-center justify-between">
-
-        <div className="flex gap-3 items-center">
-
-          <Avatar>
-
+    <Card className="rounded-[24px] border-0 shadow-sm bg-card overflow-hidden">
+      <CardHeader className="p-4 pb-0 flex flex-row items-center justify-between">
+        <div className="flex gap-2.5 items-center">
+          <Avatar className="h-9 w-9">
             <AvatarImage src={post.profiles?.avatar_url} />
-
-            <AvatarFallback>
-              {post.profiles?.full_name?.charAt(0) || "U"}
-            </AvatarFallback>
-
+            <AvatarFallback className="bg-primary/10 text-primary font-bold text-xs">{post.profiles?.full_name?.charAt(0) || "U"}</AvatarFallback>
           </Avatar>
-
           <div>
-
-            <div className="flex gap-1 items-center">
-
-              <p className="font-bold text-sm">
-                {post.profiles?.full_name || "Estudante"}
-              </p>
-
-            </div>
-
-            <p className="text-xs text-muted-foreground">
-
-              {formatDistanceToNow(
-                new Date(post.created_at),
-                { locale: ptBR, addSuffix: true }
-              )}
-
-            </p>
-
+            <p className="font-bold text-[13px] leading-tight text-foreground">{post.profiles?.full_name || "Estudante"}</p>
+            <p className="text-[10px] font-semibold text-muted-foreground mt-0.5">{formatDistanceToNow(new Date(post.created_at), { locale: ptBR, addSuffix: true })}</p>
           </div>
-
         </div>
-
         <DropdownMenu>
-
           <DropdownMenuTrigger asChild>
-
-            <Button variant="ghost" size="icon">
-              <MoreHorizontal/>
-            </Button>
-
+            <Button variant="ghost" size="icon" className="h-8 w-8 rounded-full text-muted-foreground"><MoreHorizontal className="h-4 w-4"/></Button>
           </DropdownMenuTrigger>
-
-          <DropdownMenuContent align="end">
-
-            {isOwner && (
-
-              <DropdownMenuItem onClick={onDelete}>
-                <Trash2 className="h-4 w-4 mr-2"/>
-                Excluir
-              </DropdownMenuItem>
-
-            )}
-
-            <DropdownMenuItem
-              onClick={() => navigator.clipboard.writeText(post.content)}
-            >
-              <Share2 className="h-4 w-4 mr-2"/>
-              Copiar Texto
-            </DropdownMenuItem>
-
+          <DropdownMenuContent align="end" className="rounded-xl">
+            {isOwner && <DropdownMenuItem onClick={onDelete} className="text-destructive font-semibold"><Trash2 className="h-3.5 w-3.5 mr-2"/>Apagar post</DropdownMenuItem>}
+            <DropdownMenuItem onClick={() => navigator.clipboard.writeText(post.content)} className="font-semibold"><Share2 className="h-3.5 w-3.5 mr-2"/>Copiar texto</DropdownMenuItem>
           </DropdownMenuContent>
-
         </DropdownMenu>
-
       </CardHeader>
-
-
-      <CardContent>
-
-        {post.tag && (
-          <Badge variant="secondary" className="mb-2">
-            {post.tag}
-          </Badge>
-        )}
-
-        <p className="whitespace-pre-wrap text-sm">
-          {post.content}
-        </p>
-
-
-        {post.media_url && (
-
-          <div className="mt-4">
-
+      
+      <CardContent className="p-4">
+        {post.tag && <Badge variant="secondary" className="mb-2.5 rounded-lg text-[9px] font-bold px-2">{post.tag}</Badge>}
+        <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-foreground/90">{post.content}</p>
+        
+        {mediaSource && (
+          <div className="mt-3">
             {isPdf ? (
-
-              <Button
-                variant="outline"
-                onClick={() => window.open(post.media_url)}
-              >
-                <Download className="h-4 w-4 mr-2"/>
-                Baixar PDF
-              </Button>
-
+              <div className="flex items-center justify-between bg-muted/40 p-3 rounded-2xl border border-border/30">
+                <div className="flex items-center gap-2">
+                  <FileText className="h-5 w-5 text-primary" />
+                  <span className="text-xs font-bold">Documento Anexado</span>
+                </div>
+                <Button size="sm" variant="outline" className="h-8 rounded-full text-[10px] font-bold" onClick={() => window.open(mediaSource)}><Download className="h-3.5 w-3.5 mr-1"/>Abrir</Button>
+              </div>
             ) : isVideo ? (
-
-              <video
-                src={post.media_url}
-                controls
-                className="w-full rounded-xl"
-              />
-
+              <video src={mediaSource} controls className="w-full rounded-2xl max-h-72 object-cover bg-black" />
             ) : (
-
-              <img
-                src={post.media_url}
-                className="rounded-xl w-full"
-              />
-
+              <img src={mediaSource} className="w-full rounded-2xl max-h-72 object-cover border border-border/10" />
             )}
-
           </div>
-
         )}
-
       </CardContent>
 
-
-      <CardFooter className="flex justify-between">
-
-        <div className="flex gap-2">
-
-          <Button
-            variant="ghost"
-            onClick={onLike}
-            className={cn(post.user_liked && "text-red-500")}
-          >
-
-            <Heart
-              className={cn(
-                "h-4 w-4",
-                post.user_liked && "fill-current"
-              )}
-            />
-
-            {post.likes_count}
-
+      <CardFooter className="p-3 pt-0 flex justify-between items-center border-t border-border/20 mt-2">
+        <div className="flex gap-1 mt-2">
+          <Button variant="ghost" onClick={onLike} className={cn("h-8 rounded-full px-3 text-xs font-bold transition-all", post.user_liked ? "text-red-500 hover:text-red-600 bg-red-500/10" : "text-muted-foreground hover:bg-muted")}>
+            <Heart className={cn("h-3.5 w-3.5 mr-1.5", post.user_liked && "fill-current")} /> {post.likes_count > 0 ? post.likes_count : "Curtir"}
           </Button>
-
-
-          <Button variant="ghost" onClick={onComment}>
-
-            <MessageSquare className="h-4 w-4"/>
-
-            {post.comments_count}
-
+          <Button variant="ghost" onClick={onComment} className="h-8 rounded-full px-3 text-xs font-bold text-muted-foreground hover:bg-muted transition-all">
+            <MessageSquare className="h-3.5 w-3.5 mr-1.5"/> {post.comments_count > 0 ? post.comments_count : "Comentar"}
           </Button>
-
         </div>
-
-
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={onSave}
-        >
-
-          <Bookmark
-            className={cn(
-              "h-4 w-4",
-              post.user_saved && "fill-current"
-            )}
-          />
-
+        <Button variant="ghost" size="icon" onClick={onSave} className={cn("h-8 w-8 rounded-full mt-2 transition-all", post.user_saved ? "text-amber-500 bg-amber-500/10" : "text-muted-foreground hover:bg-muted")}>
+          <Bookmark className={cn("h-4 w-4", post.user_saved && "fill-current")} />
         </Button>
-
       </CardFooter>
-
     </Card>
-
   );
 }
