@@ -13,7 +13,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle 
 } from "@/components/ui/alert-dialog";
 import { 
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger 
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription 
 } from "@/components/ui/dialog";
 import { Calendar } from "@/components/ui/calendar"; 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -21,7 +21,7 @@ import {
   BookOpen, Clock, AlertTriangle, 
   CheckCircle2, ArrowRight, Cloud, CloudOff, History, 
   Loader2, Sparkles, Calendar as CalendarIcon,
-  HandHelping, Megaphone, BarChart3, ChevronLeft, ChevronRight
+  HandHelping, Megaphone, BarChart3, ChevronLeft, ChevronRight, Trophy
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format, isToday, isTomorrow, differenceInDays, startOfDay, isSameDay } from "date-fns";
@@ -53,7 +53,7 @@ interface Announcement {
   id: string;
   title: string;
   body: string | null;
-  type: string; // 'notice' | 'news' | 'poll' | 'event'
+  type: string;
   cta_label: string | null;
   cta_url: string | null;
   poll_options: { label: string }[] | null;
@@ -70,7 +70,7 @@ const typeLabels: Record<string, string> = {
 export default function Dashboard() {
 
   const { user } = useAuth();
-  const { currentLabel, setCurrentLabel, allSemesters, loadSemesters } = useSemester();
+  const { currentLabel, setCurrentLabel, allSemesters, loadSemesters, endSemester } = useSemester();
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -91,6 +91,11 @@ export default function Dashboard() {
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
 
   const [activeSemesterFromProfile, setActiveSemesterFromProfile] = useState("");
+  
+  // ESTADOS DA VIRADA DE SEMESTRE
+  const [isTurnoverModalOpen, setIsTurnoverModalOpen] = useState(false);
+  const [newSemesterLabel, setNewSemesterLabel] = useState("");
+  const [isTurningOver, setIsTurningOver] = useState(false);
 
   const isHistoricalView = useMemo(() => {
     return activeSemesterFromProfile !== "" && currentLabel !== activeSemesterFromProfile;
@@ -270,6 +275,8 @@ export default function Dashboard() {
 
         }
 
+      } else {
+        setSemesterProgress(0);
       }
 
     } catch (e) {
@@ -286,7 +293,7 @@ export default function Dashboard() {
 
   // Auto-rotate carousel every 6s
   useEffect(() => {
-    const total = 1 + announcements.length; // semester slide + announcements
+    const total = 1 + announcements.length; 
     if (total <= 1) return;
     const t = setInterval(() => setCarouselIndex((i) => (i + 1) % total), 6000);
     return () => clearInterval(t);
@@ -300,6 +307,17 @@ export default function Dashboard() {
         { announcement_id: annId, user_id: user.id, option_index: optionIndex },
         { onConflict: "announcement_id,user_id" }
       );
+  }
+
+  // FUNÇÃO DE SUBMIT DA VIRADA
+  async function handleTurnoverSubmit() {
+    if (!newSemesterLabel.trim()) return;
+    setIsTurningOver(true);
+    await endSemester(newSemesterLabel.trim());
+    setIsTurnoverModalOpen(false);
+    setNewSemesterLabel("");
+    setIsTurningOver(false);
+    loadDashboard(); 
   }
 
   if (loading) {
@@ -338,6 +356,7 @@ export default function Dashboard() {
           )}
         </div>
       </header>
+
       {/* ALERTAS DE BIBLIOTECA */}
       {libraryAlerts.length > 0 && (
         <section className="animate-in slide-in-from-top-4 duration-500">
@@ -371,6 +390,31 @@ export default function Dashboard() {
             </div>
           ))}
         </section>
+      )}
+
+      {/* GATILHO DA VIRADA DE SEMESTRE */}
+      {semesterProgress === 100 && !isHistoricalView && (
+        <Card className="border-0 shadow-lg shadow-emerald-500/20 bg-emerald-500 rounded-[32px] overflow-hidden animate-in slide-in-from-top-4">
+          <CardContent className="p-6 sm:p-8 flex flex-col sm:flex-row items-center justify-between gap-6">
+            <div className="text-white text-center sm:text-left">
+              <p className="text-[10px] font-black uppercase tracking-widest mb-1 text-emerald-100">
+                Jornada Concluída
+              </p>
+              <h2 className="text-3xl font-black tracking-tight mb-2">Semestre finalizado!</h2>
+              <p className="text-sm font-medium text-emerald-50">
+                Você chegou a 100% de andamento deste ciclo. É hora de avançar para a próxima etapa.
+              </p>
+            </div>
+            <Button 
+              onClick={() => setIsTurnoverModalOpen(true)}
+              size="lg" 
+              className="w-full sm:w-auto rounded-2xl bg-white text-emerald-600 hover:bg-emerald-50 font-black tracking-wide shadow-xl shrink-0 h-14"
+            >
+              <Trophy className="h-5 w-5 mr-2" />
+              Arquivar & Iniciar Novo
+            </Button>
+          </CardContent>
+        </Card>
       )}
 
       {/* MÉTRICAS */}
@@ -440,7 +484,7 @@ export default function Dashboard() {
           >
             {/* Slide 1: Progresso */}
             <div className="w-full shrink-0 px-0.5">
-              <Card className="border border-border/40 bg-card shadow-sm rounded-2xl overflow-hidden">
+              <Card className="border border-border/40 bg-card shadow-sm rounded-[24px] overflow-hidden">
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between mb-3">
                     <div>
@@ -463,7 +507,7 @@ export default function Dashboard() {
             {/* Slides de anúncios */}
             {announcements.map((ann) => (
               <div key={ann.id} className="w-full shrink-0 px-0.5">
-                <Card className="border border-border/40 bg-card shadow-sm rounded-2xl overflow-hidden">
+                <Card className="border border-border/40 bg-card shadow-sm rounded-[24px] overflow-hidden">
                   <CardContent className="p-6">
                     <div className="flex items-start gap-3 mb-3">
                       <div className={cn(
@@ -729,6 +773,41 @@ export default function Dashboard() {
           </Button>
         </div>
       )}
+
+      {/* MODAL VIRADA DE SEMESTRE */}
+      <Dialog open={isTurnoverModalOpen} onOpenChange={setIsTurnoverModalOpen}>
+        <DialogContent className="rounded-[32px] sm:max-w-md p-8 border-0 shadow-2xl">
+          <DialogHeader className="text-center space-y-3">
+            <div className="mx-auto h-16 w-16 bg-emerald-100 rounded-full flex items-center justify-center mb-2">
+              <Trophy className="h-8 w-8 text-emerald-600" />
+            </div>
+            <DialogTitle className="text-2xl font-black">Pronto para avançar?</DialogTitle>
+            <DialogDescription className="text-base text-muted-foreground">
+              As matérias atuais serão arquivadas no seu histórico. Digite o nome do seu próximo ciclo para recomeçar com o quadro limpo.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 pt-4">
+            <div className="space-y-2">
+              <label className="text-sm font-bold">Identificação do Novo Semestre</label>
+              <Input 
+                value={newSemesterLabel} 
+                onChange={(e) => setNewSemesterLabel(e.target.value)} 
+                placeholder="Ex: 2026.2, 5º Período..."
+                className="h-14 rounded-2xl bg-muted/50 border-0 focus-visible:ring-emerald-500"
+              />
+            </div>
+            <Button 
+              onClick={handleTurnoverSubmit} 
+              disabled={!newSemesterLabel.trim() || isTurningOver}
+              className="w-full h-14 rounded-2xl bg-emerald-500 hover:bg-emerald-600 text-white font-black text-lg"
+            >
+              {isTurningOver ? <Loader2 className="h-5 w-5 animate-spin mr-2" /> : null}
+              {isTurningOver ? "Processando..." : "Iniciar Nova Jornada"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
     </div>
   );
 }
