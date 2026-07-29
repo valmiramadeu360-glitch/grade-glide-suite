@@ -225,160 +225,164 @@ export default function Profile() {
     return (
       <div className="flex h-[80vh] flex-col items-center justify-center gap-4">
         <Loader2 className="h-10 w-10 animate-spin text-primary" />
-        <span className="text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground">Sincronizando Perfil...</span>
+        <span className="text-[10px] font-black uppercase tracking-[0.3em] text-muted-foreground animate-pulse">Sincronizando Perfil...</span>
       </div>
     );
   }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in duration-700 pb-24 px-4 sm:px-6 overflow-x-hidden">
+    <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in duration-500 pb-28 px-4 sm:px-6 overflow-x-hidden pt-4">
       
-      {/* Header Principal */}
-      <header className="flex flex-col md:flex-row md:items-center justify-between gap-6 pt-6">
-        <div className="flex items-center gap-4 w-full md:w-auto">
-          <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="h-14 w-14 rounded-2xl bg-muted/30 hover:bg-muted border border-border/40 shrink-0">
-            <ArrowLeft className="h-6 w-6" />
+      {/* HEADER PREMIUM */}
+      <header className="flex items-center justify-between pb-2">
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="h-11 w-11 rounded-full bg-muted/40 hover:bg-muted border border-border/40 shrink-0 transition-all">
+            <ArrowLeft className="h-5 w-5" />
           </Button>
           <div className="flex-1 min-w-0">
-            <h1 className="text-3xl sm:text-4xl font-black tracking-tighter truncate">Perfil <span className="text-primary">Acadêmico</span></h1>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mt-1 truncate">Identidade & Networking</p>
+            <h1 className="text-2xl font-black tracking-tight text-foreground truncate">Meu Perfil</h1>
+            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mt-0.5 truncate">Identidade Acadêmica</p>
           </div>
         </div>
 
-        <div className="flex items-center justify-center gap-3 bg-card border border-border/50 px-5 py-3 rounded-2xl shadow-sm w-full md:w-auto shrink-0">
+        {/* Dynamic Auto-Save Pill */}
+        <div className={cn("flex items-center justify-center gap-2 px-4 py-2 rounded-full border shadow-sm transition-all duration-500 shrink-0", autoSaveStatus === "saving" ? "bg-card border-primary/20" : "bg-emerald-500/10 border-emerald-500/20")}>
           {autoSaveStatus === "saving" ? (
-            <div className="flex items-center gap-2 text-primary animate-pulse">
-              <Cloud className="h-4 w-4 shrink-0" />
-              <span className="text-[10px] font-black uppercase tracking-widest">Salvando...</span>
-            </div>
+            <>
+              <Cloud className="h-3.5 w-3.5 text-primary animate-pulse" />
+              <span className="text-[9px] font-black uppercase tracking-widest text-primary">Salvando</span>
+            </>
           ) : (
-            <div className="flex items-center gap-2 text-emerald-500">
-              <ShieldCheck className="h-4 w-4 shrink-0" />
-              <span className="text-[10px] font-black uppercase tracking-widest">Protegido</span>
-            </div>
+            <>
+              <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
+              <span className="text-[9px] font-black uppercase tracking-widest text-emerald-600">Sincronizado</span>
+            </>
           )}
         </div>
       </header>
 
-      {/* Cartão de Visibilidade (Privacidade) */}
-      <div className={cn("p-5 sm:p-6 rounded-[24px] border transition-colors flex items-center justify-between cursor-pointer shadow-sm", profileData.is_public ? "bg-primary/5 border-primary/20 hover:bg-primary/10" : "bg-muted/30 border-border/50 hover:bg-muted/50")} onClick={() => togglePrivacy(!profileData.is_public)}>
-        <div className="flex items-center gap-4">
-          <div className={cn("h-12 w-12 rounded-full flex items-center justify-center transition-colors", profileData.is_public ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground")}>
-            {profileData.is_public ? <Eye className="h-6 w-6" /> : <EyeOff className="h-6 w-6" />}
-          </div>
-          <div>
-            <p className="text-sm font-black uppercase tracking-widest text-foreground">
-              {profileData.is_public ? "Perfil Visível na Rede" : "Perfil Oculto (Privado)"}
-            </p>
-            <p className="text-[10px] font-bold text-muted-foreground mt-1 max-w-[250px] sm:max-w-none">
-              {profileData.is_public ? "Outros estudantes poderão ver sua bio e links no EduFlow Connect." : "Somente o seu nome aparecerá em comentários e posts."}
-            </p>
-          </div>
-        </div>
-        <Switch checked={profileData.is_public} onCheckedChange={togglePrivacy} className="data-[state=checked]:bg-primary" />
-      </div>
-
-      {/* Cartão do Avatar */}
-      <Card className="rounded-[40px] border-border/40 bg-card overflow-hidden shadow-xl relative">
-        <div className="h-32 bg-gradient-to-r from-primary/20 via-primary/5 to-background" />
-        <CardContent className="px-6 sm:px-8 pb-10 flex flex-col items-center -mt-16 relative z-10">
+      {/* CARD DO AVATAR */}
+      <Card className="rounded-[32px] border-border/20 bg-card overflow-hidden shadow-sm relative">
+        <div className="h-32 sm:h-40 bg-gradient-to-tr from-primary/30 via-primary/5 to-background" />
+        <CardContent className="px-6 sm:px-8 pb-8 flex flex-col items-center -mt-16 sm:-mt-20 relative z-10">
           <div className="relative group">
-            <Avatar className="h-32 w-32 sm:h-36 sm:w-36 border-[6px] border-card shadow-2xl transition-transform group-hover:scale-105 duration-500">
+            <Avatar className="h-32 w-32 sm:h-36 sm:w-36 border-[6px] border-card shadow-xl transition-transform group-hover:scale-[1.02] duration-500 bg-muted/50">
               <AvatarImage src={avatarUrl} className="object-cover" />
               <AvatarFallback className="bg-primary/10 text-primary text-4xl font-black uppercase">
                 {profileData.full_name?.substring(0, 2) || <User className="h-10 w-10" />}
               </AvatarFallback>
             </Avatar>
-            <label className="absolute bottom-1 right-1 h-12 w-12 rounded-full bg-primary text-primary-foreground flex items-center justify-center cursor-pointer shadow-xl border-4 border-card hover:bg-primary/90 transition-all active:scale-90">
-              {isUploading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Camera className="h-5 w-5" />}
+            <label className="absolute bottom-1 right-1 h-11 w-11 rounded-full bg-primary text-primary-foreground flex items-center justify-center cursor-pointer shadow-lg border-4 border-card hover:scale-105 transition-all active:scale-95">
+              {isUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
               <input type="file" accept="image/*" className="hidden" onChange={uploadAvatar} disabled={isUploading} />
             </label>
           </div>
           
-          <div className="text-center mt-6 w-full px-4">
-            <h2 className="text-2xl sm:text-3xl font-black tracking-tight truncate">{profileData.full_name || "Estudante EduFlow"}</h2>
-            <p className="text-[10px] sm:text-[11px] font-bold text-muted-foreground uppercase tracking-[0.2em] mt-2 truncate">
-              {profileData.course ? `${profileData.course}` : "Vínculo Institucional Pendente"}
+          <div className="text-center mt-5 w-full px-4">
+            <h2 className="text-2xl sm:text-3xl font-black tracking-tight truncate text-foreground">{profileData.full_name || "Estudante EduFlow"}</h2>
+            <p className="text-[10px] sm:text-xs font-bold text-muted-foreground uppercase tracking-widest mt-1.5 truncate">
+              {profileData.course ? `${profileData.course}` : "Vínculo Pendente"}
             </p>
           </div>
         </CardContent>
       </Card>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      {/* TOGGLE DE PRIVACIDADE (Estilo iOS) */}
+      <div className={cn("p-5 rounded-[24px] border transition-all duration-300 flex items-center justify-between cursor-pointer shadow-sm active:scale-[0.99]", profileData.is_public ? "bg-primary/5 border-primary/20" : "bg-card border-border/40")} onClick={() => togglePrivacy(!profileData.is_public)}>
+        <div className="flex items-center gap-4">
+          <div className={cn("h-12 w-12 rounded-full flex items-center justify-center transition-colors shadow-inner", profileData.is_public ? "bg-primary/20 text-primary" : "bg-muted/50 text-muted-foreground")}>
+            {profileData.is_public ? <Eye className="h-5 w-5" /> : <EyeOff className="h-5 w-5" />}
+          </div>
+          <div className="flex-1 min-w-0 pr-4">
+            <p className="text-[13px] font-black uppercase tracking-widest text-foreground">
+              {profileData.is_public ? "Perfil Público" : "Perfil Privado"}
+            </p>
+            <p className="text-[11px] font-medium text-muted-foreground mt-0.5 leading-tight">
+              {profileData.is_public ? "Outros alunos podem ver sua bio e links no Connect." : "Somente seu nome aparecerá em interações."}
+            </p>
+          </div>
+        </div>
+        <Switch checked={profileData.is_public} onCheckedChange={togglePrivacy} className="data-[state=checked]:bg-primary shrink-0" />
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         
-        {/* Coluna 1: Dados Institucionais */}
-        <section className="space-y-6">
-          <h3 className="text-xs font-black uppercase tracking-[0.3em] flex items-center gap-3 ml-2">
-            <GraduationCap className="h-4 w-4 text-primary" /> Instituição & Vínculo
+        {/* COLUNA 1: DADOS INSTITUCIONAIS */}
+        <div className="space-y-4">
+          <h3 className="text-[10px] font-black uppercase tracking-[0.2em] flex items-center gap-2 text-muted-foreground ml-2">
+            <GraduationCap className="h-4 w-4 text-primary" /> Identidade Institucional
           </h3>
-          <Card className="rounded-[32px] border-border/40 bg-card p-6 sm:p-8 space-y-5 shadow-lg">
+          <Card className="rounded-[28px] border-0 shadow-sm bg-card p-6 space-y-5">
             <div className="space-y-2">
-              <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Nome Completo</Label>
+              <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Nome Completo</Label>
               <Input 
                 value={profileData.full_name} 
                 onChange={handleChange("full_name")}
-                placeholder="Ex: João da Silva" 
-                className="h-14 rounded-2xl bg-muted/20 border-border/40 font-bold focus:ring-primary/30" 
+                placeholder="Como você é conhecido no campus" 
+                className="h-14 rounded-2xl bg-muted/30 border-0 font-bold focus-visible:ring-primary text-base shadow-inner" 
               />
             </div>
-
-            <InstitutionalPicker value={institutional} onChange={handleInstitutionalChange} />
+            
+            {/* O Componente do Vínculo foi mantido exatamento como é importado */}
+            <div className="pt-2">
+              <InstitutionalPicker value={institutional} onChange={handleInstitutionalChange} />
+            </div>
           </Card>
-        </section>
+        </div>
 
-        {/* Coluna 2: Biografia (Movida para cima para equilibrar) */}
-        <section className="space-y-6">
-          <h3 className="text-xs font-black uppercase tracking-[0.3em] flex items-center gap-3 ml-2">
-            <User className="h-4 w-4 text-primary" /> Biografia Acadêmica
+        {/* COLUNA 2: BIOGRAFIA */}
+        <div className="space-y-4">
+          <h3 className="text-[10px] font-black uppercase tracking-[0.2em] flex items-center gap-2 text-muted-foreground ml-2">
+            <User className="h-4 w-4 text-primary" /> Sobre Mim
           </h3>
-          <Card className="rounded-[32px] border-border/40 bg-card p-6 sm:p-8 shadow-lg h-[calc(100%-2.5rem)]">
+          <Card className="rounded-[28px] border-0 shadow-sm bg-card p-6 h-[calc(100%-2.2rem)]">
             <div className="space-y-2 h-full flex flex-col">
-              <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Sobre mim (Aparece no seu Perfil)</Label>
+              <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Sua Trajetória</Label>
               <Textarea 
                 value={profileData.bio} 
                 onChange={handleChange("bio")}
-                placeholder="Conte um pouco sobre sua trajetória, interesses de pesquisa, participação em ligas ou diretórios..." 
-                className="flex-1 min-h-[180px] rounded-2xl bg-muted/20 border-border/40 font-medium resize-none p-5 text-base sm:text-lg leading-relaxed focus:ring-primary/30" 
+                placeholder="Conte um pouco sobre seus interesses, participação em projetos, empresas juniores, ligas..." 
+                className="flex-1 min-h-[160px] rounded-2xl bg-muted/30 border-0 font-medium resize-none p-5 text-sm leading-relaxed focus-visible:ring-primary shadow-inner" 
               />
             </div>
           </Card>
-        </section>
+        </div>
 
-        {/* Gerenciador de Links Dinâmicos */}
-        <section className="lg:col-span-2 space-y-6">
+        {/* SESSÃO: LINKS SOCIAIS (Ocupa 2 colunas no Desktop) */}
+        <div className="md:col-span-2 space-y-4 pt-2">
           <div className="flex items-center justify-between ml-2 mr-2">
-            <h3 className="text-xs font-black uppercase tracking-[0.3em] flex items-center gap-3">
-              <Globe className="h-4 w-4 text-amber-500" /> Links & Redes Sociais
+            <h3 className="text-[10px] font-black uppercase tracking-[0.2em] flex items-center gap-2 text-muted-foreground">
+              <Globe className="h-4 w-4 text-amber-500" /> Links & Portfólio
             </h3>
             {socialLinks.length < 5 && (
-              <Button variant="ghost" size="sm" onClick={addSocialLink} className="h-8 rounded-xl text-[10px] font-black uppercase tracking-widest text-primary hover:bg-primary/10">
-                <Plus className="mr-1 h-4 w-4" /> Adicionar Link
+              <Button variant="ghost" size="sm" onClick={addSocialLink} className="h-8 rounded-full text-[10px] font-black uppercase tracking-widest text-primary hover:bg-primary/10">
+                <Plus className="mr-1 h-3.5 w-3.5" /> Adicionar Link
               </Button>
             )}
           </div>
           
-          <Card className="rounded-[32px] border-border/40 bg-card p-6 sm:p-8 shadow-lg">
+          <Card className="rounded-[28px] border-0 shadow-sm bg-card p-6">
             {socialLinks.length === 0 ? (
-              <div className="text-center py-6">
-                <LinkIcon className="h-10 w-10 text-muted-foreground/30 mx-auto mb-3" />
-                <p className="text-sm font-bold text-muted-foreground">Nenhum link adicionado.</p>
-                <p className="text-[10px] uppercase tracking-widest text-muted-foreground mt-1">Adicione seu Lattes, LinkedIn ou Portfólio.</p>
+              <div className="text-center py-8 bg-muted/20 rounded-2xl border border-dashed border-border/40">
+                <LinkIcon className="h-8 w-8 text-muted-foreground/40 mx-auto mb-3" />
+                <p className="text-sm font-bold text-muted-foreground">Nenhum link configurado.</p>
+                <p className="text-[10px] uppercase tracking-widest text-muted-foreground mt-1">Conecte seu Lattes, LinkedIn ou Portfólio.</p>
               </div>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-3">
                 {socialLinks.map((link, index) => (
-                  <div key={index} className="flex flex-col sm:flex-row items-center gap-3 p-4 rounded-2xl bg-muted/20 border border-border/40 transition-all hover:border-primary/30">
+                  <div key={index} className="flex flex-col sm:flex-row items-center gap-3 p-3 rounded-2xl bg-muted/30 border border-border/30 transition-all hover:border-primary/30 group">
                     <Input 
                       placeholder="Título (Ex: LinkedIn)" 
                       value={link.title}
                       onChange={(e) => updateSocialLink(index, "title", e.target.value)}
-                      className="h-12 w-full sm:w-1/3 rounded-xl font-bold bg-background border-border/50"
+                      className="h-12 w-full sm:w-1/3 rounded-xl font-bold bg-background border-0 focus-visible:ring-primary shadow-sm"
                     />
                     <Input 
                       placeholder="URL (https://...)" 
                       value={link.url}
                       onChange={(e) => updateSocialLink(index, "url", e.target.value)}
-                      className="h-12 flex-1 rounded-xl font-medium text-primary bg-background border-border/50"
+                      className="h-12 flex-1 rounded-xl font-medium text-foreground bg-background border-0 focus-visible:ring-primary shadow-sm"
                     />
                     <Button variant="ghost" size="icon" onClick={() => removeSocialLink(index)} className="h-12 w-12 shrink-0 rounded-xl text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors">
                       <Trash2 className="h-5 w-5" />
@@ -388,7 +392,7 @@ export default function Profile() {
               </div>
             )}
           </Card>
-        </section>
+        </div>
 
       </div>
     </div>
