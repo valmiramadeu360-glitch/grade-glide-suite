@@ -6,8 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  MessageSquare, Send, Loader2, User, ArrowLeft, Search, MoreVertical
+  MessageSquare, Send, Loader2, ArrowLeft, Search, MoreVertical, Users, Phone, Paperclip
 } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -38,6 +39,8 @@ export default function Messages() {
   const { user } = useAuth();
   const { toast } = useToast();
   
+  const [activeTab, setActiveTab] = useState<"private" | "communities">("private");
+
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
@@ -52,17 +55,15 @@ export default function Messages() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [selectedProfile, setSelectedProfile] = useState<{ full_name: string | null; avatar_url: string | null; course: string | null } | null>(null);
 
-  // Carrega contatos na inicialização
   useEffect(() => {
     if (user) loadConversations();
   }, [user]);
 
-  // Scroll automático para a última mensagem
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // WebSocket (Ouvido em Tempo Real para novas mensagens)
+  // WebSocket
   useEffect(() => {
     if (!user) return;
     const channel = supabase
@@ -70,24 +71,17 @@ export default function Messages() {
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'direct_messages' }, (payload) => {
         const msg = payload.new as Message;
         
-        // Se a mensagem for pra mim ou de mim
         if (msg.sender_id === user.id || msg.receiver_id === user.id) {
-          
-          // Se eu estiver com a conversa aberta, adiciono a mensagem na tela e marco como lida
           if (selectedUserId && (msg.sender_id === selectedUserId || msg.receiver_id === selectedUserId)) {
-            // Evita duplicação por causa da atualização otimista
             setMessages(prev => {
               if (prev.find(m => m.id === msg.id)) return prev;
               return [...prev, msg];
             });
-            
-            // Marca como lida silenciosamente se eu recebi
             if (msg.receiver_id === user.id) {
               supabase.from("direct_messages").update({ read_at: new Date().toISOString() }).eq("id", msg.id).then();
             }
           }
-          
-          loadConversations(); // Atualiza a lista por trás
+          loadConversations();
         }
       })
       .subscribe();
@@ -154,10 +148,9 @@ export default function Messages() {
   async function openConversation(userId: string) {
     setSelectedUserId(userId);
     setLoadingMessages(true);
-    setSearchQuery(""); // Limpa a busca ao abrir
+    setSearchQuery("");
     setSearchResults([]);
 
-    // Busca o perfil da pessoa
     const conv = conversations.find(c => c.user_id === userId);
     if (conv) {
       setSelectedProfile({ full_name: conv.full_name, avatar_url: conv.avatar_url, course: conv.course });
@@ -166,7 +159,6 @@ export default function Messages() {
       if (data) setSelectedProfile(data as any);
     }
 
-    // Carrega Histórico
     const { data } = await supabase
       .from("direct_messages")
       .select("*")
@@ -176,7 +168,6 @@ export default function Messages() {
     setMessages(data ?? []);
     setLoadingMessages(false);
 
-    // CORE BUG FIX: Zera as mensagens não lidas
     await supabase
       .from("direct_messages")
       .update({ read_at: new Date().toISOString() })
@@ -184,18 +175,15 @@ export default function Messages() {
       .eq("receiver_id", user!.id)
       .is("read_at", null);
       
-    // Remove o balãozinho da lista lateral na hora
     setConversations(prev => prev.map(c => c.user_id === userId ? { ...c, unread_count: 0 } : c));
   }
 
-  // CORE BUG FIX: Atualização Otimista (Zero Delay)
   async function handleSend() {
     const text = newMessage.trim();
     if (!text || !selectedUserId || !user) return;
     
-    setNewMessage(""); // Limpa o input na hora pra não dar tela branca
+    setNewMessage("");
 
-    // 1. Cria a mensagem falsa na tela (Atualização Otimista)
     const optimisticMsg: Message = {
       id: `temp-${Date.now()}`,
       sender_id: user.id,
@@ -207,7 +195,6 @@ export default function Messages() {
     
     setMessages(prev => [...prev, optimisticMsg]);
 
-    // 2. Envia pro banco em Background (sem travar a tela)
     const { error } = await supabase.from("direct_messages").insert({
       sender_id: user.id,
       receiver_id: selectedUserId,
@@ -215,7 +202,6 @@ export default function Messages() {
     });
 
     if (error) {
-      // Se falhar, avisa e tira a mensagem falsa da tela
       toast({ title: "Falha na conexão", description: "A mensagem não foi enviada.", variant: "destructive" });
       setMessages(prev => prev.filter(m => m.id !== optimisticMsg.id));
     }
@@ -237,8 +223,8 @@ export default function Messages() {
 
   if (loading) {
     return (
-      <div className="flex h-[60vh] items-center justify-center">
-        <Loader2 className="h-10 w-10 animate-spin text-primary" />
+      <div className="flex h-[80vh] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
@@ -246,91 +232,99 @@ export default function Messages() {
   // ================== TELA DE CONVERSA ABERTA ==================
   if (selectedUserId) {
     return (
-      <div className="max-w-3xl mx-auto flex flex-col h-[calc(100dvh-6rem)] animate-in fade-in slide-in-from-right-4 duration-300 bg-background sm:rounded-[32px] sm:border sm:border-border/40 sm:shadow-2xl sm:mt-6 overflow-hidden">
+      <div className="max-w-4xl mx-auto flex flex-col h-[calc(100dvh-6rem)] animate-in fade-in slide-in-from-right-8 duration-300 bg-background sm:rounded-[32px] sm:border sm:border-border/40 sm:shadow-2xl sm:mt-6 overflow-hidden relative">
         
         {/* Header Elegante */}
-        <header className="flex items-center justify-between p-4 bg-card/80 backdrop-blur-xl border-b border-border/50 z-10">
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" className="rounded-xl h-10 w-10 hover:bg-muted" onClick={() => setSelectedUserId(null)}>
+        <header className="flex items-center justify-between p-4 sm:px-6 bg-card/90 backdrop-blur-2xl border-b border-border/50 z-20 shadow-sm shrink-0">
+          <div className="flex items-center gap-4">
+            <Button variant="ghost" size="icon" className="rounded-full h-11 w-11 bg-muted/40 hover:bg-muted transition-colors shrink-0" onClick={() => setSelectedUserId(null)}>
               <ArrowLeft className="h-5 w-5" />
             </Button>
             
-            {/* Clicar aqui poderia abrir o Perfil do usuário depois */}
-            <div className="flex items-center gap-3 cursor-pointer group rounded-xl p-1 pr-3 hover:bg-muted/50 transition-colors">
-              <Avatar className="h-10 w-10 border border-border">
-                <AvatarImage src={selectedProfile?.avatar_url || ""} />
+            <div className="flex items-center gap-3 cursor-pointer group rounded-2xl p-1.5 pr-4 hover:bg-muted/40 transition-colors">
+              <Avatar className="h-11 w-11 border-2 border-background shadow-sm">
+                <AvatarImage src={selectedProfile?.avatar_url || ""} className="object-cover" />
                 <AvatarFallback className="bg-primary/10 text-primary font-black">{selectedProfile?.full_name?.charAt(0) || "U"}</AvatarFallback>
               </Avatar>
               <div className="min-w-0">
-                <p className="text-sm font-black text-foreground truncate group-hover:text-primary transition-colors">
+                <p className="text-base font-black text-foreground truncate group-hover:text-primary transition-colors leading-none">
                   {selectedProfile?.full_name || "Estudante"}
                 </p>
-                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground truncate">{selectedProfile?.course || "Comunidade"}</p>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground truncate mt-1">
+                  {selectedProfile?.course || "Comunidade"}
+                </p>
               </div>
             </div>
           </div>
 
-          <Button variant="ghost" size="icon" className="rounded-xl text-muted-foreground">
-            <MoreVertical className="h-5 w-5" />
-          </Button>
+          <div className="flex items-center gap-1">
+            <Button variant="ghost" size="icon" className="rounded-full h-10 w-10 text-muted-foreground hover:bg-muted/50 hidden sm:flex" title="Chamada de Áudio (Em breve)">
+              <Phone className="h-4 w-4" />
+            </Button>
+            <Button variant="ghost" size="icon" className="rounded-full h-10 w-10 text-muted-foreground hover:bg-muted/50">
+              <MoreVertical className="h-5 w-5" />
+            </Button>
+          </div>
         </header>
 
         {/* Área de Mensagens (WhatsApp Style) */}
-        <ScrollArea className="flex-1 p-4 bg-muted/10" id="chat-container">
+        <ScrollArea className="flex-1 px-4 sm:px-6 py-6 bg-muted/10 relative" id="chat-container">
           {loadingMessages ? (
-            <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
+            <div className="flex justify-center py-20"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
           ) : messages.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-20 gap-4 opacity-50">
-              <MessageSquare className="h-12 w-12 text-muted-foreground" />
-              <p className="text-xs font-black uppercase tracking-widest text-muted-foreground text-center">Inicie uma nova conversa</p>
+            <div className="flex flex-col items-center justify-center h-full gap-4 opacity-50 absolute inset-0">
+              <div className="h-16 w-16 bg-muted rounded-full flex items-center justify-center"><MessageSquare className="h-8 w-8 text-muted-foreground" /></div>
+              <p className="text-xs font-black uppercase tracking-widest text-muted-foreground text-center">A conversa está vazia</p>
             </div>
           ) : (
-            <div className="space-y-4 pb-2">
+            <div className="space-y-4 pb-2 flex flex-col justify-end min-h-full">
               {messages.map((msg, index) => {
                 const isMe = msg.sender_id === user!.id;
-                // Lógica simples para não repetir a data toda hora se for no mesmo minuto
                 const showTime = index === 0 || new Date(msg.created_at).getMinutes() !== new Date(messages[index - 1].created_at).getMinutes();
 
                 return (
-                  <div key={msg.id} className={cn("flex flex-col", isMe ? "items-end" : "items-start")}>
+                  <div key={msg.id} className={cn("flex flex-col animate-in slide-in-from-bottom-2", isMe ? "items-end" : "items-start")}>
                     <div className={cn(
-                      "max-w-[80%] sm:max-w-[70%] px-4 py-2.5 shadow-sm text-[15px] font-medium leading-relaxed relative",
+                      "max-w-[85%] sm:max-w-[70%] px-5 py-3 text-[15px] font-medium leading-relaxed relative shadow-[0_2px_10px_rgb(0,0,0,0.04)]",
                       isMe 
-                        ? "bg-primary text-primary-foreground rounded-[20px] rounded-br-sm" 
-                        : "bg-card border border-border/50 text-foreground rounded-[20px] rounded-bl-sm"
+                        ? "bg-primary text-primary-foreground rounded-[24px] rounded-br-[8px]" 
+                        : "bg-card border border-border/40 text-foreground rounded-[24px] rounded-bl-[8px]"
                     )}>
                       <p className="whitespace-pre-wrap break-words">{msg.content}</p>
                     </div>
                     {showTime && (
-                      <span className="text-[9px] font-bold text-muted-foreground mt-1 mx-1">
+                      <span className="text-[9px] font-bold text-muted-foreground/60 mt-1 mx-2 uppercase tracking-widest">
                         {format(new Date(msg.created_at), "HH:mm")}
                       </span>
                     )}
                   </div>
                 );
               })}
-              <div ref={messagesEndRef} className="h-1" />
+              <div ref={messagesEndRef} className="h-2" />
             </div>
           )}
         </ScrollArea>
 
-        {/* Input Area */}
-        <div className="p-3 sm:p-4 bg-card border-t border-border/50">
-          <div className="flex items-end gap-2 bg-muted/30 p-1.5 rounded-[24px] border border-border/40 focus-within:border-primary/30 transition-colors">
+        {/* Input Area Premium */}
+        <div className="p-3 sm:p-5 bg-card/90 backdrop-blur-2xl border-t border-border/50 shrink-0">
+          <div className="flex items-end gap-2 bg-muted/40 p-1.5 rounded-[28px] border border-border/50 focus-within:border-primary/40 focus-within:bg-background transition-all shadow-sm">
+            <Button variant="ghost" size="icon" className="h-11 w-11 rounded-full shrink-0 mb-0.5 text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors" title="Anexar arquivo">
+              <Paperclip className="h-5 w-5" />
+            </Button>
             <Textarea
               value={newMessage}
               onChange={e => setNewMessage(e.target.value)}
-              placeholder="Digite uma mensagem..."
-              className="min-h-[44px] max-h-[120px] bg-transparent border-none shadow-none focus-visible:ring-0 text-base resize-none py-3 px-4"
+              placeholder="Digite sua mensagem..."
+              className="min-h-[44px] max-h-[120px] bg-transparent border-none shadow-none focus-visible:ring-0 text-base resize-none py-3 px-2 font-medium"
               onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
             />
             <Button 
               onClick={handleSend} 
               disabled={!newMessage.trim()} 
               size="icon" 
-              className={cn("h-12 w-12 rounded-full shrink-0 mb-0.5 mr-0.5 transition-transform", newMessage.trim() ? "bg-primary text-primary-foreground shadow-md hover:scale-105" : "bg-muted text-muted-foreground")}
+              className={cn("h-12 w-12 rounded-full shrink-0 mb-0.5 mr-0.5 transition-all duration-300 shadow-md", newMessage.trim() ? "bg-primary text-primary-foreground hover:scale-105" : "bg-muted text-muted-foreground opacity-50")}
             >
-              <Send className="h-5 w-5 ml-1" />
+              <Send className="h-5 w-5 ml-0.5" />
             </Button>
           </div>
         </div>
@@ -338,110 +332,144 @@ export default function Messages() {
     );
   }
 
-  // ================== TELA DE LISTA DE CONTATOS ==================
+  // ================== TELA DE LISTA DE CONTATOS E COMUNIDADES ==================
   return (
-    <div className="max-w-2xl mx-auto space-y-6 animate-in fade-in duration-500 pb-24 px-4 sm:px-6 pt-6">
+    <div className="max-w-3xl mx-auto space-y-6 animate-in fade-in duration-500 pb-28 px-4 sm:px-6 pt-4 sm:pt-8">
       
       {/* Header */}
-      <header className="flex items-center gap-3">
-        <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
-          <MessageSquare className="h-5 w-5 text-primary" />
+      <header className="flex items-center gap-4">
+        <div className="h-12 w-12 rounded-2xl bg-primary/10 flex items-center justify-center shadow-inner">
+          <MessageSquare className="h-6 w-6 text-primary" />
         </div>
         <div>
-          <h1 className="text-xl font-bold tracking-tight text-foreground">Mensagens</h1>
-          <p className="text-xs text-muted-foreground">Networking acadêmico</p>
+          <h1 className="text-2xl font-black tracking-tight text-foreground">Chat</h1>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mt-0.5">Networking & Grupos</p>
         </div>
       </header>
 
-      {/* Barra de Busca Premium */}
-      <div className="relative group">
-        <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground group-focus-within:text-primary transition-colors" />
-        <Input
-          value={searchQuery}
-          onChange={e => handleSearch(e.target.value)}
-          placeholder="Pesquisar contatos..."
-          className="pl-12 h-14 rounded-[20px] bg-card border-border/50 shadow-sm text-base font-medium focus:ring-primary/30 transition-all"
-        />
-      </div>
+      {/* Navegação da Arquitetura: Privado vs Comunidades */}
+      <Tabs value={activeTab} onValueChange={(v: any) => setActiveTab(v)}>
+        <TabsList className="w-full rounded-[24px] bg-muted/40 p-1.5 flex shadow-inner">
+          <TabsTrigger value="private" className="flex-1 rounded-[20px] font-bold text-sm h-11 gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-foreground text-muted-foreground transition-all">
+            <MessageSquare className="h-4 w-4 hidden sm:block" /> Conversas
+          </TabsTrigger>
+          <TabsTrigger value="communities" className="flex-1 rounded-[20px] font-bold text-sm h-11 gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-foreground text-muted-foreground transition-all">
+            <Users className="h-4 w-4 hidden sm:block" /> Comunidades
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
 
-      {/* Resultados da Busca (Overlay) */}
-      {searchResults.length > 0 && (
-        <Card className="rounded-[24px] border-border/50 shadow-xl overflow-hidden animate-in slide-in-from-top-2">
-          <div className="bg-muted/30 px-4 py-2 border-b border-border/30">
-            <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Resultados da Busca</p>
+      {activeTab === "private" && (
+        <div className="space-y-6 animate-in fade-in">
+          {/* Barra de Busca Premium */}
+          <div className="relative group">
+            <Search className="absolute left-5 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground group-focus-within:text-primary transition-colors" />
+            <Input
+              value={searchQuery}
+              onChange={e => handleSearch(e.target.value)}
+              placeholder="Pesquisar estudantes ou professores..."
+              className="pl-14 h-14 rounded-[24px] bg-card border-border/40 shadow-sm text-base font-medium focus-visible:ring-primary transition-all"
+            />
           </div>
-          <CardContent className="p-2 space-y-1 max-h-[300px] overflow-y-auto custom-scrollbar">
-            {searchResults.map(p => (
-              <button
-                key={p.user_id}
-                onClick={() => openConversation(p.user_id)}
-                className="w-full flex items-center gap-4 p-3 rounded-xl hover:bg-muted transition-colors text-left"
-              >
-                <Avatar className="h-10 w-10 border border-border">
-                  <AvatarImage src={p.avatar_url || ""} />
-                  <AvatarFallback className="bg-primary/10 text-primary font-black">{p.full_name?.charAt(0) || "U"}</AvatarFallback>
-                </Avatar>
-                <div className="min-w-0">
-                  <p className="text-sm font-black text-foreground truncate">{p.full_name || "Estudante"}</p>
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground truncate">{p.course || "Comunidade"}</p>
-                </div>
-              </button>
-            ))}
-          </CardContent>
-        </Card>
-      )}
 
-      {/* Lista de Conversas Recentes */}
-      {!searchQuery && (
-        <div className="space-y-4 pt-2">
-          <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-2">Mensagens Recentes</p>
-          
-          {conversations.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 gap-4 bg-card/30 rounded-[32px] border-2 border-dashed border-border/40">
-              <MessageSquare className="h-12 w-12 text-muted-foreground/30" />
-              <p className="text-xs font-bold text-muted-foreground text-center px-4">Busque por um nome acima para iniciar um chat.</p>
-            </div>
-          ) : (
-            <div className="space-y-2.5">
-              {conversations.map(conv => (
-                <Card 
-                  key={conv.user_id} 
-                  className="rounded-[24px] border-none bg-transparent hover:bg-card hover:shadow-md transition-all cursor-pointer overflow-hidden group" 
-                  onClick={() => openConversation(conv.user_id)}
-                >
-                  <CardContent className="p-3 sm:p-4 flex items-center gap-4">
-                    <div className="relative shrink-0">
-                      <Avatar className="h-12 w-12 border border-border/50 group-hover:scale-105 transition-transform">
-                        <AvatarImage src={conv.avatar_url || ""} />
-                        <AvatarFallback className="bg-primary/10 text-primary font-black">{(conv.full_name || "U").charAt(0)}</AvatarFallback>
-                      </Avatar>
-                      {conv.unread_count > 0 && (
-                        <span className="absolute -top-1 -right-1 h-5 min-w-[20px] rounded-full bg-primary text-primary-foreground text-[10px] font-black flex items-center justify-center px-1.5 shadow-sm border-2 border-background">
-                          {conv.unread_count}
-                        </span>
-                      )}
+          {/* Resultados da Busca (Overlay Dinâmico) */}
+          {searchResults.length > 0 && (
+            <Card className="rounded-[28px] border-border/30 shadow-xl overflow-hidden animate-in slide-in-from-top-2 bg-card">
+              <div className="bg-muted/20 px-5 py-3 border-b border-border/20 flex items-center justify-between">
+                <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Resultados da Busca</p>
+                <Badge variant="secondary" className="rounded-lg">{searchResults.length}</Badge>
+              </div>
+              <CardContent className="p-3 space-y-1 max-h-[350px] overflow-y-auto custom-scrollbar">
+                {searchResults.map(p => (
+                  <button
+                    key={p.user_id}
+                    onClick={() => openConversation(p.user_id)}
+                    className="w-full flex items-center gap-4 p-3 rounded-2xl hover:bg-muted/50 transition-colors text-left group"
+                  >
+                    <Avatar className="h-12 w-12 border border-border/40 shadow-sm group-hover:scale-105 transition-transform">
+                      <AvatarImage src={p.avatar_url || ""} className="object-cover" />
+                      <AvatarFallback className="bg-primary/10 text-primary font-black">{p.full_name?.charAt(0) || "U"}</AvatarFallback>
+                    </Avatar>
+                    <div className="min-w-0">
+                      <p className="text-[15px] font-black text-foreground truncate group-hover:text-primary transition-colors">{p.full_name || "Estudante"}</p>
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground truncate mt-0.5">{p.course || "Usuário da Rede"}</p>
                     </div>
-                    
-                    <div className="flex-1 min-w-0 border-b border-border/40 pb-4 pt-2 group-hover:border-transparent transition-colors">
-                      <div className="flex items-center justify-between mb-1">
-                        <p className={cn("text-[15px] truncate transition-colors", conv.unread_count > 0 ? "font-black text-foreground" : "font-bold text-foreground/80")}>
-                          {conv.full_name || "Estudante"}
-                        </p>
-                        <p className={cn("text-[10px] font-bold shrink-0 ml-2", conv.unread_count > 0 ? "text-primary" : "text-muted-foreground")}>
-                          {formatDistanceToNow(new Date(conv.last_message_at), { locale: ptBR }).replace("aproximadamente ", "")}
-                        </p>
-                      </div>
-                      <p className={cn("text-sm truncate", conv.unread_count > 0 ? "font-bold text-foreground" : "font-medium text-muted-foreground")}>
-                        {conv.last_message}
-                      </p>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+                  </button>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Lista de Conversas Recentes */}
+          {!searchQuery && (
+            <div className="space-y-4 pt-2">
+              {conversations.length > 0 && (
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground ml-3">Histórico Recente</p>
+              )}
+              
+              {conversations.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-20 gap-4 bg-muted/10 rounded-[32px] border-2 border-dashed border-border/40 shadow-sm">
+                  <div className="h-16 w-16 bg-card rounded-full flex items-center justify-center shadow-sm"><Search className="h-8 w-8 text-muted-foreground/50" /></div>
+                  <div className="text-center px-6">
+                    <p className="text-base font-black text-foreground">Sua caixa de entrada está limpa.</p>
+                    <p className="text-sm font-medium text-muted-foreground mt-1">Pesquise por alguém acima para iniciar uma conversa ou tirar uma dúvida.</p>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {conversations.map(conv => (
+                    <Card 
+                      key={conv.user_id} 
+                      className={cn("rounded-[28px] border-0 shadow-sm transition-all cursor-pointer overflow-hidden group", conv.unread_count > 0 ? "bg-primary/5 hover:bg-primary/10 border border-primary/20" : "bg-card hover:shadow-md hover:border-border/50")}
+                      onClick={() => openConversation(conv.user_id)}
+                    >
+                      <CardContent className="p-4 sm:p-5 flex items-center gap-4">
+                        <div className="relative shrink-0">
+                          <Avatar className="h-14 w-14 border border-border/40 shadow-sm group-hover:scale-105 transition-transform">
+                            <AvatarImage src={conv.avatar_url || ""} className="object-cover" />
+                            <AvatarFallback className="bg-primary/10 text-primary font-black text-lg">{(conv.full_name || "U").charAt(0)}</AvatarFallback>
+                          </Avatar>
+                          {conv.unread_count > 0 && (
+                            <span className="absolute -top-1 -right-1 h-5 min-w-[20px] rounded-full bg-primary text-primary-foreground text-[10px] font-black flex items-center justify-center px-1.5 shadow-md border-2 border-background">
+                              {conv.unread_count}
+                            </span>
+                          )}
+                        </div>
+                        
+                        <div className="flex-1 min-w-0 flex flex-col justify-center">
+                          <div className="flex items-center justify-between mb-1">
+                            <p className={cn("text-base truncate transition-colors", conv.unread_count > 0 ? "font-black text-foreground" : "font-bold text-foreground")}>
+                              {conv.full_name || "Estudante"}
+                            </p>
+                            <p className={cn("text-[10px] font-bold uppercase tracking-widest shrink-0 ml-3", conv.unread_count > 0 ? "text-primary" : "text-muted-foreground")}>
+                              {formatDistanceToNow(new Date(conv.last_message_at), { locale: ptBR }).replace("aproximadamente ", "")}
+                            </p>
+                          </div>
+                          <p className={cn("text-sm truncate", conv.unread_count > 0 ? "font-bold text-foreground" : "font-medium text-muted-foreground/80")}>
+                            {conv.last_message}
+                          </p>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Aba de Comunidades (Estrutura pronta para integrar as mensagens de grupo depois) */}
+      {activeTab === "communities" && (
+        <div className="flex flex-col items-center justify-center py-20 gap-4 bg-muted/10 rounded-[32px] border-2 border-dashed border-border/40 shadow-sm animate-in fade-in">
+          <div className="h-16 w-16 bg-card rounded-full flex items-center justify-center shadow-sm"><Users className="h-8 w-8 text-muted-foreground/50" /></div>
+          <div className="text-center px-6">
+            <p className="text-lg font-black text-foreground">As comunidades chegarão em breve.</p>
+            <p className="text-sm font-medium text-muted-foreground mt-1 max-w-sm">Este será o espaço para você interagir em grupos da sua turma, disciplinas e atléticas.</p>
+          </div>
         </div>
       )}
     </div>
   );
 }
+
