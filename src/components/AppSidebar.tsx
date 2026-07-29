@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
-import { LayoutDashboard, BookOpen, Bell, Settings, Sparkles, LogOut, User, MessageSquare, Globe } from "lucide-react";
+import { 
+  LayoutDashboard, BookOpen, Bell, Settings, Sparkles, 
+  LogOut, User, MessageSquare, Globe, Building2, HelpCircle 
+} from "lucide-react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -18,15 +21,17 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 
-// Lista de navegação atualizada: "Mensagens" removida daqui
+// Lista de navegação atualizada com a nova Arquitetura do Super App
 const mainItems = [
-  { title: "Dashboard", url: "/", icon: LayoutDashboard },
-  { title: "Minhas Disciplinas", url: "/disciplines", icon: BookOpen },
+  { title: "Home", url: "/", icon: LayoutDashboard },
+  { title: "Campus", url: "/campus", icon: Building2 },
   { title: "Connect", url: "/connect", icon: Globe },
-  { title: "Assistente IA", url: "/assistant", icon: Sparkles },
+  { title: "Chat", url: "/messages", icon: MessageSquare },
+  { title: "Disciplinas", url: "/disciplines", icon: BookOpen },
   { title: "Cronograma", url: "/reminders", icon: Bell },
+  { title: "Assistente IA", url: "/assistant", icon: Sparkles },
   { title: "Configurações", url: "/settings", icon: Settings },
-  { title: "Central de Ajuda", url: "/feedback", icon: MessageSquare },
+  { title: "Ajuda", url: "/feedback", icon: HelpCircle },
 ];
 
 export function AppSidebar() {
@@ -78,7 +83,7 @@ export function AppSidebar() {
 
         <SidebarGroup>
           <SidebarGroupLabel className="px-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 mb-2">
-            Navegação Principal
+            Menu Principal
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu className="space-y-1.5 px-2">
