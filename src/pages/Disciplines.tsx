@@ -68,7 +68,7 @@ export default function Disciplines({ extraOnly = false }: { extraOnly?: boolean
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false); 
   const [deleteTargetLabel, setDeleteTargetLabel] = useState("");
 
-  // Campos do Formulário de Criação (Com Código SIGA incluído)
+  // Campos do Formulário de Criação
   const [newName, setNewName] = useState(""); 
   const [newCode, setNewCode] = useState(""); 
   const [newProfessor, setNewProfessor] = useState(""); 
@@ -125,13 +125,13 @@ export default function Disciplines({ extraOnly = false }: { extraOnly?: boolean
   }, [allDisciplines, searchQuery]);
 
   async function handleCreate() {
-    if (!newName.trim()) return;
+    if (!newName.trim() || !newCode.trim()) return;
     setIsSubmitting(true);
     try {
       const { error } = await supabase.from("disciplines").insert({ 
         user_id: user!.id, 
         name: newName.trim(), 
-        code: newCode.trim().toUpperCase() || null, // Código SIGA salvo
+        code: newCode.trim().toUpperCase(), 
         professor: newProfessor.trim() || null, 
         color: newColor, 
         is_extra_course: extraOnly, 
@@ -250,11 +250,30 @@ export default function Disciplines({ extraOnly = false }: { extraOnly?: boolean
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Código SIGA</Label>
-                  <Input value={newCode} onChange={(e) => setNewCode(e.target.value)} placeholder="Ex: CECO0078" className="h-11 rounded-xl bg-muted/30 border-0 focus-visible:ring-primary font-bold text-sm uppercase shadow-inner" />
+                  <div className="flex items-center justify-between ml-1">
+                    <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Código SIGA *</Label>
+                    
+                    {/* Ponto de Dúvida (?) explicativo */}
+                    <Dialog>
+                      <DialogTrigger asChild>
+                        <button type="button" className="text-[10px] font-bold text-primary bg-primary/10 hover:bg-primary/20 h-4 w-4 rounded-full flex items-center justify-center transition-colors" title="Onde encontro?">
+                          ?
+                        </button>
+                      </DialogTrigger>
+                      <DialogContent className="rounded-2xl max-w-xs p-5 bg-background">
+                        <DialogHeader>
+                          <DialogTitle className="text-sm font-black">Onde encontrar o Código SIGA?</DialogTitle>
+                        </DialogHeader>
+                        <p className="text-xs text-muted-foreground leading-relaxed mt-2">
+                          Você encontra o código oficial (ex: <code className="text-primary font-bold">CECO0078</code>) diretamente no seu **Histórico Escolar**, na **Grade Curricular** do portal da faculdade ou no comprovante de matrícula.
+                        </p>
+                      </DialogContent>
+                    </Dialog>
+                  </div>
+                  <Input value={newCode} onChange={(e) => setNewCode(e.target.value)} placeholder="Ex: CECO0078" required className="h-11 rounded-xl bg-muted/30 border-0 focus-visible:ring-primary font-bold text-sm uppercase shadow-inner" />
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Docente</Label>
+                  <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Docente (Opcional)</Label>
                   <Input value={newProfessor} onChange={(e) => setNewProfessor(e.target.value)} placeholder="Nome do professor" className="h-11 rounded-xl bg-muted/30 border-0 focus-visible:ring-primary font-medium text-sm shadow-inner" />
                 </div>
               </div>
@@ -267,7 +286,7 @@ export default function Disciplines({ extraOnly = false }: { extraOnly?: boolean
                   ))}
                 </div>
               </div>
-              <Button onClick={handleCreate} disabled={isSubmitting || !newName.trim()} className="w-full h-11 rounded-xl font-bold text-xs uppercase tracking-widest shadow-sm mt-2">
+              <Button onClick={handleCreate} disabled={isSubmitting || !newName.trim() || !newCode.trim()} className="w-full h-11 rounded-xl font-bold text-xs uppercase tracking-widest shadow-sm mt-2">
                 {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                 {isSubmitting ? "Gerando Grade..." : "Adicionar à Grade"}
               </Button>
