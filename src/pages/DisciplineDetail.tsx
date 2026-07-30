@@ -12,6 +12,7 @@ import { DisciplineChecklist } from "@/components/discipline/DisciplineChecklist
 import { DisciplineMaterials } from "@/components/discipline/DisciplineMaterials";
 import { DisciplineNotes } from "@/components/discipline/DisciplineNotes";
 import { DisciplineBooks } from "@/components/discipline/DisciplineBooks";
+import { DisciplineCommunity } from "@/components/discipline/DisciplineCommunity";
 import { cn } from "@/lib/utils";
 
 export default function DisciplineDetail() {
@@ -215,20 +216,21 @@ export default function DisciplineDetail() {
         </Button>
       </div>
 
-      {/* Navegação de Abas Limpa e Compacta */}
+      {/* Navegação de Abas Expandida com a Comunidade da Turma */}
       <Tabs defaultValue="general" className="w-full space-y-4">
-        <TabsList className="w-full bg-card border border-border/40 p-1 rounded-xl flex overflow-x-auto no-scrollbar shadow-sm sm:grid sm:grid-cols-5 gap-1 items-center">
+        <TabsList className="w-full bg-card border border-border/40 p-1 rounded-xl flex overflow-x-auto no-scrollbar shadow-sm sm:grid sm:grid-cols-6 gap-1 items-center">
           {[
             { value: "general", label: "Painel Geral" },
-            { value: "checklist", label: "Plano de Estudos" },
-            { value: "materials", label: "Mídias & Links" },
+            { value: "checklist", label: "Estudos" },
+            { value: "materials", label: "Mídias" },
             { value: "books", label: "Biblioteca" },
-            { value: "notes", label: "Caderno (Resumos)" }
+            { value: "notes", label: "Caderno" },
+            { value: "community", label: "Turma" }
           ].map((tab) => (
             <TabsTrigger 
               key={tab.value}
               value={tab.value} 
-              className="flex-shrink-0 sm:flex-1 rounded-lg font-bold text-[10px] uppercase tracking-wider py-2.5 px-4 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all"
+              className="flex-shrink-0 sm:flex-1 rounded-lg font-bold text-[10px] uppercase tracking-wider py-2.5 px-3 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground transition-all"
             >
               {tab.label}
             </TabsTrigger>
@@ -250,6 +252,9 @@ export default function DisciplineDetail() {
           </TabsContent>
           <TabsContent value="notes" className="animate-in fade-in duration-300 m-0">
             <DisciplineNotes disciplineId={discipline.id} disciplineName={discipline.name} />
+          </TabsContent>
+          <TabsContent value="community" className="animate-in fade-in duration-300 m-0">
+            <DisciplineCommunity disciplineCode={discipline.code} disciplineName={discipline.name} />
           </TabsContent>
         </div>
       </Tabs>
