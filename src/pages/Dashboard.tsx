@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Calendar } from "@/components/ui/calendar"; 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { RuWidget } from "@/components/campus/RuWidget";
 import { 
   BookOpen, Clock, AlertTriangle, CheckCircle2, ArrowRight, Cloud, CloudOff, History, 
   Loader2, Sparkles, Calendar as CalendarIcon, HandHelping, Trophy, Target, FileText, BrainCircuit
@@ -335,7 +336,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* COLUNA DIREITA: PROGRESSO E CONTEXTO */}
+        {/* COLUNA DIREITA: PROGRESSO, RU E CONTEXTO */}
         <div className="space-y-6">
           
           {/* CARD DE PROGRESSO ACADÊMICO */}
@@ -354,24 +355,8 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          {/* ARQUIVOS RECENTES (Atalho Contextual) */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground flex items-center gap-1.5"><FileText className="h-3.5 w-3.5" /> Arquivos Recentes</h3>
-              <span className="text-[9px] font-bold text-primary cursor-pointer hover:underline">Ver todos</span>
-            </div>
-            <div className="space-y-2">
-              {/* Mock de arquivos para manter a interface sugerida por você */}
-              <div className="bg-card border border-border/20 p-3 rounded-2xl flex items-center gap-3 shadow-sm opacity-60">
-                <div className="h-8 w-8 bg-blue-500/10 text-blue-500 rounded-lg flex items-center justify-center shrink-0"><FileText className="h-4 w-4" /></div>
-                <p className="text-xs font-bold truncate">Resumo_Anatomia.pdf</p>
-              </div>
-              <div className="bg-card border border-border/20 p-3 rounded-2xl flex items-center gap-3 shadow-sm opacity-60">
-                <div className="h-8 w-8 bg-amber-500/10 text-amber-500 rounded-lg flex items-center justify-center shrink-0"><FileText className="h-4 w-4" /></div>
-                <p className="text-xs font-bold truncate">Anotacoes_Calculo.docx</p>
-              </div>
-            </div>
-          </div>
+          {/* WIDGET DO RU (RESTAURANTE UNIVERSITÁRIO) INTEGRADO */}
+          <RuWidget />
 
           {/* OBJETIVOS DA SEMANA */}
           <div className="space-y-3">
@@ -419,4 +404,3 @@ export default function Dashboard() {
     </div>
   );
 }
-
