@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent } from "@/components/ui/card";
@@ -9,10 +9,11 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
+import { generateRandomCodename } from "@/lib/codenameGenerator";
 import { 
   ArrowLeft, User, Camera, Loader2, Cloud, 
   GraduationCap, Globe, ShieldCheck, 
-  Plus, Trash2, Eye, EyeOff, Link as LinkIcon
+  Plus, Trash2, Eye, EyeOff, Link as LinkIcon, RefreshCw, Shield
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
@@ -40,7 +41,9 @@ export default function Profile() {
     study_plans: "",
     university: "",
     course: "",
-    is_public: true, // Controle de privacidade
+    is_public: true, // Controle de privacidade geral
+    is_anonymous: true, // Modo anônimo nos chats/turmas
+    codename: "", // Codinome acadêmico do aluno
   });
 
   const [institutional, setInstitutional] = useState<InstitutionalSelection>({
@@ -68,6 +71,14 @@ export default function Profile() {
         .maybeSingle();
 
       if (data) {
+        // Se o usuário ainda não tiver codinome cadastrado, gera um automático na hora
+        let currentCodename = (data as any).codename;
+        if (!currentCodename) {
+          currentCodename = generateRandomCodename();
+          // Salva imediatamente no banco para persistir
+          await supabase.from("profiles").update({ codename: currentCodename }).eq("user_id", user!.id);
+        }
+
         setProfileData({
           full_name: data.full_name ?? "",
           bio: data.bio ?? "",
@@ -76,6 +87,8 @@ export default function Profile() {
           university: data.university ?? "",
           course: data.course ?? "",
           is_public: data.is_public ?? true,
+          is_anonymous: (data as any).is_anonymous ?? true,
+          codename: currentCodename,
         });
         setSocialLinks((Array.isArray(data.social_links) ? data.social_links : []) as any);
         setAvatarUrl(data.avatar_url ?? "");
@@ -91,7 +104,7 @@ export default function Profile() {
     }
   }
 
-  // AutoSave para os campos de texto
+  // AutoSave para os campos de texto e configurações
   const triggerAutoSave = useCallback((field: string, value: any) => {
     if (!user) return;
     setAutoSaveStatus("saving");
@@ -143,6 +156,24 @@ export default function Profile() {
     setSocialLinks(newLinks);
     triggerAutoSave("social_links", newLinks);
   };
+
+  // Gerar novo Codinome aleatório sob demanda
+  const handleGenerateNewCodename = () => {
+    const newName = generateRandomCodename();
+    setProfileData(prev => ({ ...prev, codename: newName }));
+    triggerAutoSave("codename", newName);
+    toast({ title: "Novo codinome gerado! 🎲", description: newName });
+  };
+
+  // Alternar Modo Anônimo nas Turmas/Chats
+  async function toggleAnonymous(checked: boolean) {
+    setProfileData(prev => ({ ...prev, is_anonymous: checked }));
+    triggerAutoSave("is_anonymous", checked);
+    toast({ 
+      title: checked ? "Modo Anônimo Ativado 🛡️" : "Nome Real Visível", 
+      description: checked ? `Seu codinome (${profileData.codename}) será exibido nas turmas.` : "Sua identidade real aparecerá nas interações." 
+    });
+  }
 
   async function togglePrivacy(checked: boolean) {
     setProfileData(prev => ({ ...prev, is_public: checked }));
@@ -280,14 +311,72 @@ export default function Profile() {
           
           <div className="text-center mt-5 w-full px-4">
             <h2 className="text-2xl sm:text-3xl font-black tracking-tight truncate text-foreground">{profileData.full_name || "Estudante EduFlow"}</h2>
-            <p className="text-[10px] sm:text-xs font-bold text-muted-foreground uppercase tracking-widest mt-1.5 truncate">
+            <div className="flex items-center justify-center gap-2 mt-1.5">
+              <span className="text-[10px] sm:text-xs font-bold text-primary bg-primary/10 px-3 py-1 rounded-full uppercase tracking-wider">
+                {profileData.codename || "Estudante Anônimo"}
+              </span>
+            </div>
+            <p className="text-[10px] sm:text-xs font-bold text-muted-foreground uppercase tracking-widest mt-2 truncate">
               {profileData.course ? `${profileData.course}` : "Vínculo Pendente"}
             </p>
           </div>
         </CardContent>
       </Card>
 
-      {/* TOGGLE DE PRIVACIDADE (Estilo iOS) */}
+      {/* SEÇÃO DE PRIVACIDADE & CODINOME (ESTILO iOS) */}
+      <div className="space-y-4">
+        <h3 className="text-[10px] font-black uppercase tracking-[0.2em] flex items-center gap-2 text-muted-foreground ml-2">
+          <Shield className="h-4 w-4 text-primary" /> Identidade & Privacidade nas Turmas
+        </h3>
+        
+        <Card className="rounded-[28px] border-0 shadow-sm bg-card p-6 space-y-6">
+          {/* Toggle de Modo Anônimo */}
+          <div className={cn("p-4 rounded-2xl border transition-all duration-300 flex items-center justify-between", profileData.is_anonymous ? "bg-primary/5 border-primary/20" : "bg-muted/30 border-border/40")}>
+            <div className="flex items-center gap-4">
+              <div className={cn("h-11 w-11 rounded-full flex items-center justify-center transition-colors shadow-inner", profileData.is_anonymous ? "bg-primary/20 text-primary" : "bg-muted text-muted-foreground")}>
+                {profileData.is_anonymous ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+              </div>
+              <div className="flex-1 min-w-0 pr-4">
+                <p className="text-[12px] font-black uppercase tracking-widest text-foreground">
+                  Modo Anônimo Ativo
+                </p>
+                <p className="text-[11px] font-medium text-muted-foreground mt-0.5 leading-tight">
+                  Seu nome real e foto ficam ocultos nos chats das turmas, exibindo apenas seu codinome.
+                </p>
+              </div>
+            </div>
+            <Switch checked={profileData.is_anonymous} onCheckedChange={toggleAnonymous} className="data-[state=checked]:bg-primary shrink-0" />
+          </div>
+
+          {/* Campo do Codinome Acadêmico Editável */}
+          <div className="space-y-2">
+            <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Seu Codinome Acadêmico</Label>
+            <div className="flex items-center gap-2">
+              <div className="relative flex-1">
+                <User className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input 
+                  value={profileData.codename} 
+                  onChange={handleChange("codename")}
+                  placeholder="Ex: Economista Focado #409" 
+                  className="h-14 pl-11 rounded-2xl bg-muted/30 border-0 font-bold focus-visible:ring-primary text-base shadow-inner" 
+                />
+              </div>
+              <Button 
+                type="button"
+                variant="outline"
+                onClick={handleGenerateNewCodename}
+                className="h-14 px-4 rounded-2xl border-border/50 hover:bg-primary/10 hover:text-primary transition-all shrink-0"
+                title="Sortear outro codinome aleatório"
+              >
+                <RefreshCw className="h-5 w-5" />
+              </Button>
+            </div>
+            <p className="text-[10px] text-muted-foreground pl-1">Você pode personalizar livremente ou sortear um codinome novo a qualquer momento.</p>
+          </div>
+        </Card>
+      </div>
+
+      {/* TOGGLE DE PERFIL PÚBLICO GERAL */}
       <div className={cn("p-5 rounded-[24px] border transition-all duration-300 flex items-center justify-between cursor-pointer shadow-sm active:scale-[0.99]", profileData.is_public ? "bg-primary/5 border-primary/20" : "bg-card border-border/40")} onClick={() => togglePrivacy(!profileData.is_public)}>
         <div className="flex items-center gap-4">
           <div className={cn("h-12 w-12 rounded-full flex items-center justify-center transition-colors shadow-inner", profileData.is_public ? "bg-primary/20 text-primary" : "bg-muted/50 text-muted-foreground")}>
@@ -295,10 +384,10 @@ export default function Profile() {
           </div>
           <div className="flex-1 min-w-0 pr-4">
             <p className="text-[13px] font-black uppercase tracking-widest text-foreground">
-              {profileData.is_public ? "Perfil Público" : "Perfil Privado"}
+              {profileData.is_public ? "Perfil Público na Rede" : "Perfil Privado na Rede"}
             </p>
             <p className="text-[11px] font-medium text-muted-foreground mt-0.5 leading-tight">
-              {profileData.is_public ? "Outros alunos podem ver sua bio e links no Connect." : "Somente seu nome aparecerá em interações."}
+              {profileData.is_public ? "Outros alunos podem ver sua bio e links no Connect." : "Suas informações acadêmicas gerais estão ocultas."}
             </p>
           </div>
         </div>
@@ -314,7 +403,7 @@ export default function Profile() {
           </h3>
           <Card className="rounded-[28px] border-0 shadow-sm bg-card p-6 space-y-5">
             <div className="space-y-2">
-              <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Nome Completo</Label>
+              <Label className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground ml-1">Nome Completo (Real)</Label>
               <Input 
                 value={profileData.full_name} 
                 onChange={handleChange("full_name")}
@@ -323,7 +412,7 @@ export default function Profile() {
               />
             </div>
             
-            {/* O Componente do Vínculo foi mantido exatamento como é importado */}
+            {/* O Componente do Vínculo mantido exatamento como é importado */}
             <div className="pt-2">
               <InstitutionalPicker value={institutional} onChange={handleInstitutionalChange} />
             </div>
@@ -398,3 +487,4 @@ export default function Profile() {
     </div>
   );
 }
+
