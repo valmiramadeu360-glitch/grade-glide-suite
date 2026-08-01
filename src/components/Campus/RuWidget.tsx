@@ -27,7 +27,7 @@ export function RuWidget() {
   async function fetchLatestRuStatus() {
     try {
       setLoading(true);
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from("ru_status_reports")
         .select("status_level, estimated_minutes, created_at")
         .order("created_at", { ascending: false })
@@ -47,7 +47,7 @@ export function RuWidget() {
     if (!user) return;
     setSubmitting(true);
     try {
-      const { error } = await (supabase as any).from("ru_status_reports").insert({
+      const { error } = await supabase.from("ru_status_reports").insert({
         user_id: user.id,
         status_level: level,
         estimated_minutes: minutes
@@ -86,61 +86,61 @@ export function RuWidget() {
     <Card className="rounded-[24px] border border-border/30 bg-card shadow-sm overflow-hidden p-5 sm:p-6 space-y-4">
       
       {/* Header do Widget */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
           <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary shrink-0 shadow-inner">
             <UtensilsCrossed className="h-5 w-5" />
           </div>
-          <div>
-            <h2 className="text-sm font-black tracking-tight text-foreground">Restaurante Universitário (RU)</h2>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mt-0.5">Estimativa Colaborativa</p>
+          <div className="min-w-0">
+            <h2 className="text-sm font-bold tracking-tight text-foreground truncate">Restaurante Universitário</h2>
+            <p className="text-[11px] text-muted-foreground mt-0.5 truncate">Estimativa colaborativa da fila</p>
           </div>
         </div>
 
-        <div className={cn("px-3 py-1 rounded-full border text-[10px] font-black uppercase tracking-wider flex items-center gap-1.5 shadow-sm", currentConfig.color)}>
+        <div className={cn("px-2.5 py-1 rounded-full border text-[10px] font-bold uppercase tracking-wide flex items-center gap-1.5 shadow-sm shrink-0", currentConfig.color)}>
           <div className={cn("h-2 w-2 rounded-full animate-pulse", currentConfig.dot)} />
-          {loading ? "Carregando..." : latestReport ? `${latestReport.estimated_minutes} min` : "Indefinido"}
+          {loading ? "..." : latestReport ? `${latestReport.estimated_minutes} min` : "s/ dados"}
         </div>
       </div>
 
       {/* Status Atual */}
-      <div className="bg-muted/30 p-3.5 rounded-2xl border border-border/30 flex items-center justify-between">
-        <div>
-          <p className="text-xs font-bold text-foreground">{currentConfig.label}</p>
-          <p className="text-[10px] text-muted-foreground mt-0.5">Baseado em relatos recentes de estudantes no local.</p>
+      <div className="bg-muted/30 p-3.5 rounded-2xl border border-border/30 flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-foreground truncate">{currentConfig.label}</p>
+          <p className="text-[11px] text-muted-foreground mt-0.5">Baseado em relatos recentes de estudantes.</p>
         </div>
         <Clock className="h-4 w-4 text-muted-foreground/60 shrink-0" />
       </div>
 
       {/* Ações de Crowdsourcing */}
       <div className="space-y-2 pt-1">
-        <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground ml-1">Você está no RU agora? Atualize a fila:</p>
+        <p className="text-[11px] font-medium text-muted-foreground ml-1">Está no RU agora? Atualize a fila:</p>
         <div className="grid grid-cols-3 gap-2">
           <Button 
             variant="outline" 
             disabled={submitting}
             onClick={() => handleReportStatus('fast', 5)}
-            className="h-10 rounded-xl text-[11px] font-bold border-emerald-500/30 bg-emerald-500/5 hover:bg-emerald-500/10 text-emerald-600 transition-all shadow-sm"
+            className="h-11 px-1 rounded-xl text-[11px] font-semibold border-emerald-500/30 bg-emerald-500/5 hover:bg-emerald-500/10 text-emerald-600 transition-all shadow-sm"
           >
-            {submitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Rápida (~5m)"}
+            {submitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Rápida ~5m"}
           </Button>
           
           <Button 
             variant="outline" 
             disabled={submitting}
             onClick={() => handleReportStatus('moderate', 15)}
-            className="h-10 rounded-xl text-[11px] font-bold border-amber-500/30 bg-amber-500/5 hover:bg-amber-500/10 text-amber-600 transition-all shadow-sm"
+            className="h-11 px-1 rounded-xl text-[11px] font-semibold border-amber-500/30 bg-amber-500/5 hover:bg-amber-500/10 text-amber-600 transition-all shadow-sm"
           >
-            {submitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Média (~15m)"}
+            {submitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Média ~15m"}
           </Button>
 
           <Button 
             variant="outline" 
             disabled={submitting}
             onClick={() => handleReportStatus('slow', 30)}
-            className="h-10 rounded-xl text-[11px] font-bold border-rose-500/30 bg-rose-500/5 hover:bg-rose-500/10 text-rose-600 transition-all shadow-sm"
+            className="h-11 px-1 rounded-xl text-[11px] font-semibold border-rose-500/30 bg-rose-500/5 hover:bg-rose-500/10 text-rose-600 transition-all shadow-sm"
           >
-            {submitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Cheia (30m+)"}
+            {submitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Cheia 30m+"}
           </Button>
         </div>
       </div>
