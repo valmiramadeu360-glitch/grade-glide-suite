@@ -1584,6 +1584,14 @@ export type Database = {
       }
     }
     Functions: {
+      can_dm_user: {
+        Args: { _receiver: string; _sender: string }
+        Returns: boolean
+      }
+      can_view_user_posts: {
+        Args: { _author: string; _viewer: string }
+        Returns: boolean
+      }
       get_announcement_poll_totals: {
         Args: { _announcement_id: string }
         Returns: {
@@ -1603,6 +1611,10 @@ export type Database = {
           _role: Database["public"]["Enums"]["app_role"]
           _user_id: string
         }
+        Returns: boolean
+      }
+      is_following: {
+        Args: { _follower: string; _following: string }
         Returns: boolean
       }
       is_user_banned: { Args: { _user_id: string }; Returns: boolean }
