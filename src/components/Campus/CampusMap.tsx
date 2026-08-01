@@ -5,9 +5,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { CampusAdminModal } from "./CampusAdminModal";
 import { 
   MapPin, Search, Navigation, Clock, Building2, PhoneCall, 
-  Info, Loader2, Sparkles, Filter, ChevronRight, X, ExternalLink 
+  Info, Loader2, Sparkles, Filter, ChevronRight, X, ExternalLink, Settings 
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
@@ -34,6 +35,10 @@ export function CampusMap() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [isListOpenMobile, setIsListOpenMobile] = useState(false);
+  const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
+
+  // Verifica se o usuário logado é o administrador oficial
+  const isAdmin = user?.email === "eduflow.adm.academy@gmail.com";
 
   useEffect(() => {
     fetchBuildings();
@@ -49,7 +54,6 @@ export function CampusMap() {
 
       if (error) throw error;
       setBuildings(data || []);
-      // Seleciona o primeiro por padrão se houver dados
       if (data && data.length > 0 && !selectedBuilding) {
         setSelectedBuilding(data[0]);
       }
@@ -91,12 +95,22 @@ export function CampusMap() {
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Botão do Admin (Visível apenas para o e-mail oficial) */}
+          {isAdmin && (
+            <Button 
+              onClick={() => setIsAdminModalOpen(true)}
+              className="rounded-xl font-bold text-xs h-11 px-4 bg-primary text-primary-foreground shadow-md gap-2"
+            >
+              <Settings className="h-4 w-4 animate-spin-slow" /> Gerenciar Prédios
+            </Button>
+          )}
+
           <Button 
             variant="outline" 
             onClick={() => setIsListOpenMobile(!isListOpenMobile)}
             className="rounded-xl font-bold text-xs h-11 px-4 border-border/60 bg-background shadow-sm lg:hidden gap-2"
           >
-            <Filter className="h-4 w-4 text-primary" /> Índice de Edifícios
+            <Filter className="h-4 w-4 text-primary" /> Índice
           </Button>
         </div>
       </div>
@@ -104,27 +118,19 @@ export function CampusMap() {
       {/* Grid Principal: Mapa Interativo à Esquerda | Painel de Detalhes à Direita */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         
-        {/* MAPA VISUAL (Área Principal - 8 colunas no Desktop) */}
+        {/* MAPA VISUAL */}
         <div className="lg:col-span-8 bg-card border border-border/40 rounded-[32px] overflow-hidden shadow-sm relative flex flex-col min-h-[500px] sm:min-h-[650px]">
-          
-          {/* Contâiner da Imagem do Mapa com rolagem/zoom suave */}
           <div className="relative flex-1 overflow-auto bg-muted/25 flex items-center justify-center p-4">
             <div className="relative max-w-4xl w-full select-none shadow-2xl rounded-2xl overflow-hidden border border-border/30">
               
-              {/* Imagem do Mapa limpa (Sem o coração!) */}
               <img 
                 src="/lovable-uploads/1000161999.jpg" 
                 alt="Mapa do Campus UFAL A.C. Simões" 
                 className="w-full h-auto object-contain block"
               />
 
-              {/* Exemplo de Marcadores Interativos Posicionados sobre a Imagem */}
-              {/* Nota: Você pode ajustar as coordenadas percentuais (top/left) para alinhar perfeitamente com os números do mapa oficial se necessário */}
               {buildings.map((b) => {
                 const isSelected = selectedBuilding?.id === b.id;
-                
-                // Mapeamento aproximado de exemplo para alguns principais blocos baseados na arte oficial
-                // O admin poderá cadastrar ou refinar isso facilmente
                 return (
                   <button
                     key={b.id}
@@ -137,7 +143,6 @@ export function CampusMap() {
                         : "bg-background/95 text-foreground border-2 border-primary hover:bg-primary hover:text-primary-foreground"
                     )}
                     style={{
-                      // Coordenadas dinâmicas ou fallback baseado no número do prédio para demonstração visual imediata
                       top: `${30 + (b.building_number % 5) * 12}%`,
                       left: `${20 + (b.building_number * 7) % 65}%`
                     }}
@@ -168,10 +173,9 @@ export function CampusMap() {
           </div>
         </div>
 
-        {/* PAINEL LATERAL DE DETALHES DO PRÉDIO (4 colunas no Desktop) */}
+        {/* PAINEL LATERAL DE DETALHES DO PRÉDIO */}
         <div className="lg:col-span-4 space-y-4">
           
-          {/* Caixa de Pesquisa de Prédios */}
           <div className="bg-card border border-border/40 p-4 rounded-[24px] shadow-sm space-y-3">
             <div className="relative">
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -184,11 +188,8 @@ export function CampusMap() {
             </div>
           </div>
 
-          {/* Cartão de Detalhes do Prédio Selecionado */}
           {selectedBuilding ? (
             <Card className="rounded-[32px] border border-border/40 bg-card shadow-sm overflow-hidden animate-in fade-in duration-300">
-              
-              {/* Foto Real do Prédio (Se cadastrada) */}
               <div className="relative h-48 w-full bg-muted/40 overflow-hidden">
                 {selectedBuilding.photo_url ? (
                   <img src={selectedBuilding.photo_url} alt={selectedBuilding.name} className="w-full h-full object-cover" />
@@ -199,7 +200,6 @@ export function CampusMap() {
                     <p className="text-[10px] text-muted-foreground mt-0.5">O administrador cadastrará a fachada real deste local.</p>
                   </div>
                 )}
-                
                 <div className="absolute top-3 left-3 bg-primary text-primary-foreground font-black text-xs px-3 py-1 rounded-full shadow-md">
                   Nº {selectedBuilding.building_number}
                 </div>
@@ -219,7 +219,6 @@ export function CampusMap() {
                   </p>
                 )}
 
-                {/* Serviços / Departamentos */}
                 {selectedBuilding.services && selectedBuilding.services.length > 0 && (
                   <div className="space-y-1.5 pt-1 border-t border-border/30">
                     <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Setores & Serviços:</p>
@@ -233,7 +232,6 @@ export function CampusMap() {
                   </div>
                 )}
 
-                {/* Horário de Funcionamento */}
                 {selectedBuilding.opening_hours && (
                   <div className="flex items-center gap-2.5 text-xs font-medium text-muted-foreground bg-muted/30 p-3 rounded-2xl border border-border/30">
                     <Clock className="h-4 w-4 text-primary shrink-0" />
@@ -241,7 +239,6 @@ export function CampusMap() {
                   </div>
                 )}
 
-                {/* Botão de Navegação / Como Chegar */}
                 <Button 
                   onClick={() => openRoute(selectedBuilding.latitude, selectedBuilding.longitude, selectedBuilding.name)}
                   className="w-full h-12 rounded-2xl font-black text-xs gap-2 shadow-lg transition-transform hover:scale-[1.02]"
@@ -258,7 +255,6 @@ export function CampusMap() {
             </Card>
           )}
 
-          {/* Lista Compacta de Acesso Rápido */}
           <div className="bg-card border border-border/40 p-4 rounded-[28px] shadow-sm space-y-3">
             <h3 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Edifícios Cadastrados ({filteredBuildings.length})</h3>
             <div className="max-h-60 overflow-y-auto space-y-1.5 pr-1 no-scrollbar">
@@ -286,6 +282,13 @@ export function CampusMap() {
         </div>
 
       </div>
+
+      {/* Modal do Painel Administrativo */}
+      <CampusAdminModal 
+        isOpen={isAdminModalOpen} 
+        onClose={() => setIsAdminModalOpen(false)} 
+        onUpdate={fetchBuildings} 
+      />
     </div>
   );
 }
