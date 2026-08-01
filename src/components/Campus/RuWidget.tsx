@@ -27,7 +27,7 @@ export function RuWidget() {
   async function fetchLatestRuStatus() {
     try {
       setLoading(true);
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from("ru_status_reports")
         .select("status_level, estimated_minutes, created_at")
         .order("created_at", { ascending: false })
@@ -47,7 +47,7 @@ export function RuWidget() {
     if (!user) return;
     setSubmitting(true);
     try {
-      const { error } = await supabase.from("ru_status_reports").insert({
+      const { error } = await (supabase as any).from("ru_status_reports").insert({
         user_id: user.id,
         status_level: level,
         estimated_minutes: minutes
@@ -140,11 +140,11 @@ export function RuWidget() {
             onClick={() => handleReportStatus('slow', 30)}
             className="h-10 rounded-xl text-[11px] font-bold border-rose-500/30 bg-rose-500/5 hover:bg-rose-500/10 text-rose-600 transition-all shadow-sm"
           >
-             {submitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Cheia (30m+)"} {submitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Cheia (30m+)"}
+            {submitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Cheia (30m+)"}
           </Button>
         </div>
       </div>
 
-     </Card> </Card>
+    </Card>
   );
 }

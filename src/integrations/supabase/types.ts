@@ -457,6 +457,30 @@ export type Database = {
         }
         Relationships: []
       }
+      discipline_community_messages: {
+        Row: {
+          content: string
+          created_at: string
+          discipline_code: string
+          id: string
+          user_id: string | null
+        }
+        Insert: {
+          content: string
+          created_at?: string
+          discipline_code: string
+          id?: string
+          user_id?: string | null
+        }
+        Update: {
+          content?: string
+          created_at?: string
+          discipline_code?: string
+          id?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       discipline_schedules: {
         Row: {
           day_of_week: number
@@ -498,6 +522,7 @@ export type Database = {
       disciplines: {
         Row: {
           archived: boolean | null
+          code: string | null
           color: string | null
           created_at: string
           current_grade: number | null
@@ -513,6 +538,7 @@ export type Database = {
         }
         Insert: {
           archived?: boolean | null
+          code?: string | null
           color?: string | null
           created_at?: string
           current_grade?: number | null
@@ -528,6 +554,7 @@ export type Database = {
         }
         Update: {
           archived?: boolean | null
+          code?: string | null
           color?: string | null
           created_at?: string
           current_grade?: number | null
@@ -1139,9 +1166,13 @@ export type Database = {
           created_at: string
           document_url: string | null
           id: string
+          is_sold: boolean | null
           link_url: string | null
           media_type: string
           media_url: string | null
+          media_urls: string[] | null
+          original_price: number | null
+          price: number | null
           tag: string | null
           title: string | null
           updated_at: string
@@ -1154,9 +1185,13 @@ export type Database = {
           created_at?: string
           document_url?: string | null
           id?: string
+          is_sold?: boolean | null
           link_url?: string | null
           media_type?: string
           media_url?: string | null
+          media_urls?: string[] | null
+          original_price?: number | null
+          price?: number | null
           tag?: string | null
           title?: string | null
           updated_at?: string
@@ -1169,9 +1204,13 @@ export type Database = {
           created_at?: string
           document_url?: string | null
           id?: string
+          is_sold?: boolean | null
           link_url?: string | null
           media_type?: string
           media_url?: string | null
+          media_urls?: string[] | null
+          original_price?: number | null
+          price?: number | null
           tag?: string | null
           title?: string | null
           updated_at?: string
@@ -1194,6 +1233,7 @@ export type Database = {
           bio: string | null
           campus_id: string | null
           career_goal: string | null
+          codename: string | null
           course: string | null
           course_id: string | null
           created_at: string
@@ -1203,6 +1243,7 @@ export type Database = {
           full_name: string | null
           hide_name: boolean
           id: string
+          is_anonymous: boolean | null
           is_banned: boolean | null
           is_public: boolean | null
           notification_email: boolean | null
@@ -1230,6 +1271,7 @@ export type Database = {
           bio?: string | null
           campus_id?: string | null
           career_goal?: string | null
+          codename?: string | null
           course?: string | null
           course_id?: string | null
           created_at?: string
@@ -1239,6 +1281,7 @@ export type Database = {
           full_name?: string | null
           hide_name?: boolean
           id?: string
+          is_anonymous?: boolean | null
           is_banned?: boolean | null
           is_public?: boolean | null
           notification_email?: boolean | null
@@ -1266,6 +1309,7 @@ export type Database = {
           bio?: string | null
           campus_id?: string | null
           career_goal?: string | null
+          codename?: string | null
           course?: string | null
           course_id?: string | null
           created_at?: string
@@ -1275,6 +1319,7 @@ export type Database = {
           full_name?: string | null
           hide_name?: boolean
           id?: string
+          is_anonymous?: boolean | null
           is_banned?: boolean | null
           is_public?: boolean | null
           notification_email?: boolean | null
@@ -1539,6 +1584,14 @@ export type Database = {
       }
     }
     Functions: {
+      can_dm_user: {
+        Args: { _receiver: string; _sender: string }
+        Returns: boolean
+      }
+      can_view_user_posts: {
+        Args: { _author: string; _viewer: string }
+        Returns: boolean
+      }
       get_announcement_poll_totals: {
         Args: { _announcement_id: string }
         Returns: {
@@ -1558,6 +1611,10 @@ export type Database = {
           _role: Database["public"]["Enums"]["app_role"]
           _user_id: string
         }
+        Returns: boolean
+      }
+      is_following: {
+        Args: { _follower: string; _following: string }
         Returns: boolean
       }
       is_user_banned: { Args: { _user_id: string }; Returns: boolean }
