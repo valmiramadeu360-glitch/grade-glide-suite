@@ -2,14 +2,13 @@ import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { useAuth } from "@/hooks/useAuth";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { 
   Building2, Utensils, BookOpen, Bus, Calendar, 
-  FlaskConical, Trophy, FileText, Users, 
-  ChevronRight, Clock, AlertCircle, ArrowUpRight, Compass
+  FlaskConical, Trophy, Map, FileText, Users, 
+  ChevronRight, Clock, AlertCircle 
 } from "lucide-react";
 
 export default function Campus() {
@@ -21,7 +20,9 @@ export default function Campus() {
   const ruStatus = { status: "open", queueTime: "15 min", menu: "Feijoada e Frango Assado" };
   const libraryStatus = { status: "open", availableRooms: 3 };
   
+  // Lista de serviços com o Mapa Interativo direcionando corretamente para a rota do mapa
   const campusServices = [
+    { title: "Mapa Interativo", icon: Map, desc: "Explore blocos e salas da UFAL", color: "text-blue-500", bg: "bg-blue-500/10", path: "/campus" },
     { title: "Transporte", icon: Bus, desc: "Horários e rotas do circular", color: "text-amber-500", bg: "bg-amber-500/10", path: "#" },
     { title: "Laboratórios", icon: FlaskConical, desc: "Reserva de equipamentos", color: "text-emerald-500", bg: "bg-emerald-500/10", path: "#" },
     { title: "Editais", icon: FileText, desc: "Bolsas e monitorias", color: "text-purple-500", bg: "bg-purple-500/10", path: "#" },
@@ -52,29 +53,6 @@ export default function Campus() {
           Trocar Campus
         </Button>
       </header>
-
-      {/* BANNER DE DESTAQUE PARA O MAPA INTERATIVO DA UFAL */}
-      <Card 
-        onClick={() => navigate("/campus")}
-        className="rounded-[32px] border-0 shadow-lg bg-gradient-to-br from-primary/90 to-primary text-primary-foreground overflow-hidden group cursor-pointer hover:scale-[1.01] transition-all relative"
-      >
-        <CardContent className="p-6 sm:p-8 flex flex-col sm:flex-row items-center justify-between gap-6 relative z-10">
-          <div className="space-y-2 text-center sm:text-left">
-            <div className="inline-flex items-center gap-2 bg-white/20 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest backdrop-blur-sm">
-              <Compass className="h-3.5 w-3.5 animate-spin" /> Recurso Novo · Guia do Calouro
-            </div>
-            <h2 className="text-2xl sm:text-3xl font-black tracking-tight">Explore o Mapa Interativo da UFAL</h2>
-            <p className="text-xs sm:text-sm font-medium text-primary-foreground/90 max-w-lg">
-              Nunca mais se perca no A.C. Simões. Encontre blocos, laboratórios, fotos reais das fachadas e rotas em poucos cliques.
-            </p>
-          </div>
-          <Button size="lg" className="rounded-2xl bg-white text-primary hover:bg-white/90 font-black tracking-wide shadow-xl shrink-0 h-14 px-6 gap-2">
-            Abrir Mapa <ArrowUpRight className="h-5 w-5" />
-          </Button>
-        </CardContent>
-        {/* Elemento decorativo de fundo */}
-        <div className="absolute right-0 bottom-0 translate-x-10 translate-y-10 h-64 w-64 rounded-full bg-white/10 blur-2xl pointer-events-none" />
-      </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
@@ -195,7 +173,7 @@ export default function Campus() {
             </div>
           </div>
 
-          {/* GRID DE SERVIÇOS */}
+          {/* GRID DE SERVIÇOS (COM O MAPA INTERATIVO NO TOPO) */}
           <div className="pt-2">
             <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground flex items-center gap-1.5 ml-2 mb-3">
               <Building2 className="h-3.5 w-3.5" /> Mais Serviços
@@ -227,4 +205,3 @@ export default function Campus() {
     </div>
   );
 }
-
