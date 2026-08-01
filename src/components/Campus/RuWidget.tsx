@@ -35,7 +35,7 @@ export function RuWidget() {
         .maybeSingle();
 
       if (error) throw error;
-      setLatestReport(data);
+      setLatestReport((data as RuReport) ?? null);
     } catch (error: any) {
       console.error("Erro ao buscar status do RU:", error.message);
     } finally {
