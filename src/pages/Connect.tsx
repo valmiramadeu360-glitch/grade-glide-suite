@@ -18,7 +18,9 @@ import { Label } from "@/components/ui/label";
 import {
   Globe, Heart, MessageSquare, MoreHorizontal, Image as ImageIcon, FileText, Video,
   Send, Loader2, Trash2, Download, Bookmark, Share2, X, Plus, Newspaper, PenLine,
-  ExternalLink, Pin, Store, Check, UploadCloud, Search, ShoppingBag, Tag, ChevronRight, CheckCircle2
+  ExternalLink, Pin, Store, Check, UploadCloud, Search, ShoppingBag, Tag, ChevronRight, CheckCircle2,
+  Sparkles, TrendingUp, Building2, GraduationCap, Users, BadgeCheck, HelpCircle, Brain,
+  FlaskConical, Award, Briefcase, Home as HomeIcon
 } from "lucide-react";
 
 import { formatDistanceToNow } from "date-fns";
@@ -27,8 +29,52 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { useCommunities } from "@/hooks/useCommunities";
 
-const ACADEMIC_TAGS = ["Dúvida", "Resumo", "Evento", "Desabafo", "Networking"];
+// Capítulo 6, seção 4 — categorias do feed acadêmico (Foto/Vídeo/Enquete usam
+// mediaType, não tag; Livro/Venda/República ficam nas MARKETPLACE_TAGS).
+const ACADEMIC_TAGS = ["Resumo", "Dúvida", "Flashcards", "Artigo", "Pesquisa", "Projeto", "Evento", "Estágio", "Desabafo", "Networking", "Aviso"];
+// "Aviso" é restrito a autores com selo institucional (professor/universidade/admin) — ver isRestrictedTagAllowed.
+const RESTRICTED_TAGS = ["Aviso"];
 const MARKETPLACE_TAGS = ["Livro/Apostila", "Eletrônicos", "República", "Vaga de Estágio", "Serviço Acadêmico", "Vestuário", "Outros"];
+
+// Capítulo 6, seção 3 — as 7 abas do feed do Connect. Cada uma tem sua própria
+// fonte de dados/regra de ordenação (ver loadPosts abaixo).
+const FEED_TABS = [
+  { value: "foryou", label: "Para Você", icon: Sparkles },
+  { value: "trending", label: "Em Alta", icon: TrendingUp },
+  { value: "university", label: "Universidade", icon: Building2 },
+  { value: "course", label: "Curso", icon: GraduationCap },
+  { value: "communities", label: "Comunidades", icon: Users },
+  { value: "market", label: "Marketplace", icon: Store },
+  { value: "news", label: "Notícias", icon: Newspaper },
+] as const;
+
+// Selos de verificação (Capítulo 6, seção 5) — mapeados a partir de user_roles.role
+const ROLE_BADGES: Record<string, { label: string; icon: any }> = {
+  student_verified: { label: "Estudante Verificado", icon: BadgeCheck },
+  professor: { label: "Professor", icon: GraduationCap },
+  university_official: { label: "Universidade Oficial", icon: Building2 },
+  company: { label: "Empresa", icon: Briefcase },
+  library: { label: "Biblioteca", icon: FileText },
+  ru: { label: "Restaurante Universitário", icon: HomeIcon },
+  project: { label: "Projeto/Centro Acadêmico", icon: FlaskConical },
+  admin: { label: "Administrador EduFlow", icon: Award },
+};
+
+// Categorias de publicação expandidas (Capítulo 6, seção 4)
+const POST_CATEGORY_ICONS: Record<string, any> = {
+  "Resumo": FileText,
+  "Dúvida": HelpCircle,
+  "Flashcards": Brain,
+  "Artigo": FileText,
+  "Pesquisa": FlaskConical,
+  "Projeto": GraduationCap,
+  "Evento": Pin,
+  "Aviso": BadgeCheck,
+  "Estágio": Briefcase,
+  "República": HomeIcon,
+  "Desabafo": MessageSquare,
+  "Networking": Users,
+};
 
 interface Post {
   id: string;
@@ -43,12 +89,24 @@ interface Post {
   document_url: string | null;
   video_url: string | null;
   tag: string | null;
+  category?: string | null;
+  event_at?: string | null;
+  event_location?: string | null;
   created_at: string;
   profiles?: any;
   likes_count: number;
   comments_count: number;
   user_liked: boolean;
   user_saved: boolean;
+  author_badge?: string | null;
+}
+
+// Perfil resumido do usuário logado, usado para filtrar as abas
+// Universidade / Curso (Capítulo 6, seção 3).
+interface MyProfile {
+  university_id: string | null;
+  campus_id: string | null;
+  course_id: string | null;
 }
 
 export default function Connect() {
@@ -58,9 +116,22 @@ export default function Connect() {
   const { communities } = useCommunities();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const initialTab = searchParams.get("tab") || "global";
+  // "global" continua aceito na URL por compatibilidade com links antigos,
+  // mas o novo padrão de abas é "foryou" (Capítulo 6, seção 3).
+  const rawInitialTab = searchParams.get("tab") || "foryou";
+  const initialTab = rawInitialTab === "global" ? "foryou" : rawInitialTab;
   const [activeTab, setActiveTab] = useState<string>(initialTab);
-  
+
+  // Perfil do usuário logado (universidade/campus/curso), necessário para
+  // filtrar as abas Universidade e Curso.
+  const [myProfile, setMyProfile] = useState<MyProfile | null>(null);
+  // Papéis do usuário logado — usado para liberar a categoria "Aviso"
+  // (Capítulo 6, seção 4: restrita a selos institucionais).
+  const [myRoles, setMyRoles] = useState<string[]>([]);
+  // Campos extras quando a categoria selecionada é "Evento".
+  const [eventAt, setEventAt] = useState<string>("");
+  const [eventLocation, setEventLocation] = useState<string>("");
+
   // Market States
   const [marketView, setMarketView] = useState<"explore" | "my_ads">("explore");
   const [marketSearch, setMarketSearch] = useState<string>("");
@@ -104,16 +175,33 @@ export default function Connect() {
 
   useEffect(() => {
     if (!user) return;
+    supabase
+      .from("profiles")
+      .select("university_id,campus_id,course_id")
+      .eq("user_id", user.id)
+      .maybeSingle()
+      .then(({ data }) => setMyProfile(data as MyProfile ?? { university_id: null, campus_id: null, course_id: null }));
+    supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", user.id)
+      .then(({ data }) => setMyRoles((data ?? []).map((r: any) => r.role)));
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    // As abas Universidade e Curso dependem do perfil carregado; aguarda.
+    if ((activeTab === "university" || activeTab === "course") && myProfile === null) return;
     if (activeTab === "news") loadNews();
     else loadPosts();
-  }, [user, activeTab, marketView, showSavedOnly]);
+  }, [user, activeTab, marketView, showSavedOnly, myProfile]);
 
   function changeTab(v: string) {
     setActiveTab(v);
     setShowSavedOnly(false);
     setMarketSearch("");
     setMarketView("explore");
-    setSearchParams(v === "global" ? {} : { tab: v }, { replace: true });
+    setSearchParams(v === "foryou" ? {} : { tab: v }, { replace: true });
   }
 
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
@@ -165,14 +253,75 @@ export default function Connect() {
         return;
       }
 
+      // Capítulo 6, seção 3 — cada aba tem sua própria fonte/ordenação.
+      if (activeTab === "trending") {
+        // Aba "Em Alta": usa a view trending_posts (engagement_score desc).
+        const { data, error } = await supabase
+          .from("trending_posts")
+          .select("*")
+          .order("engagement_score", { ascending: false })
+          .limit(60);
+        if (error) throw error;
+        const ids = (data ?? []).map((p: any) => p.id).filter(Boolean);
+        if (ids.length === 0) { setPosts([]); return; }
+        const { data: fullPosts } = await supabase.from("posts").select("*").in("id", ids);
+        // Preserva a ordem de engajamento retornada por trending_posts.
+        const order = new Map(ids.map((id: string, i: number) => [id, i]));
+        const ordered = (fullPosts ?? []).sort((a: any, b: any) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
+        setPosts(await fetchMetricsForPosts(ordered));
+        return;
+      }
+
+      if (activeTab === "university" || activeTab === "course") {
+        // Abas "Universidade" e "Curso": filtra pelos autores que compartilham
+        // university_id / course_id com o usuário logado.
+        const field = activeTab === "university" ? "university_id" : "course_id";
+        const myValue = myProfile?.[field as keyof MyProfile];
+        if (!myValue) { setPosts([]); return; }
+        const { data: peers } = await supabase.from("profiles").select("user_id").eq(field, myValue);
+        const peerIds = (peers ?? []).map((p: any) => p.user_id);
+        if (peerIds.length === 0) { setPosts([]); return; }
+        const { data, error } = await supabase
+          .from("posts")
+          .select("*")
+          .in("user_id", peerIds)
+          .not("tag", "in", `(${MARKETPLACE_TAGS.join(',')})`)
+          .order("created_at", { ascending: false })
+          .limit(60);
+        if (error) throw error;
+        if (data) setPosts(await fetchMetricsForPosts(data));
+        return;
+      }
+
+      if (activeTab === "communities") {
+        // Aba "Comunidades": só posts de comunidades das quais o usuário participa.
+        const { data: memberships } = await supabase.from("community_members").select("community_id").eq("user_id", user!.id);
+        const communityIds = (memberships ?? []).map((m: any) => m.community_id);
+        if (communityIds.length === 0) { setPosts([]); return; }
+        const { data, error } = await supabase
+          .from("posts")
+          .select("*")
+          .in("community_id", communityIds)
+          .order("created_at", { ascending: false })
+          .limit(60);
+        if (error) throw error;
+        if (data) setPosts(await fetchMetricsForPosts(data));
+        return;
+      }
+
+      // Abas "Para Você" (foryou) e "Marketplace" (market) seguem daqui.
       let query = supabase.from("posts").select("*").order("created_at", { ascending: false }).limit(60);
-      
+
       if (activeTab === "market") {
         query = query.in("tag", MARKETPLACE_TAGS);
         if (marketView === "my_ads") {
           query = query.eq("user_id", user!.id);
         }
       } else {
+        // "foryou": exclui marketplace do feed acadêmico (Capítulo 6, regra de isolamento).
+        // TODO (roadmap item 1, próxima iteração): aplicar o score de prioridade
+        // completo da seção 6 (universidade > curso > comunidades > eventos > ...)
+        // via view materializada dedicada, em vez de só cronológico.
         query = query.not("tag", "in", `(${MARKETPLACE_TAGS.join(',')})`);
       }
 
@@ -191,11 +340,13 @@ export default function Connect() {
     const postIds = postsData.map(p => p.id);
     const userIds = Array.from(new Set(postsData.map(p => p.user_id)));
 
-    const [likes, comments, saved, profs] = await Promise.all([
+    const [likes, comments, saved, profs, roles] = await Promise.all([
       supabase.from("post_likes").select("post_id,user_id").in("post_id", postIds),
       supabase.from("post_comments").select("post_id").in("post_id", postIds),
       supabase.from("saved_posts").select("post_id").eq("user_id", user.id).in("post_id", postIds),
-      supabase.from("profiles").select("user_id,full_name,avatar_url").in("user_id", userIds)
+      supabase.from("profiles").select("user_id,full_name,avatar_url").in("user_id", userIds),
+      // Capítulo 6, seção 5 — selos de verificação por autor.
+      supabase.from("user_roles").select("user_id,role").in("user_id", userIds)
     ]);
 
     const likesMap: any = {};
@@ -212,13 +363,25 @@ export default function Connect() {
     const profileMap: Record<string, any> = {};
     (profs.data ?? []).forEach((p: any) => { profileMap[p.user_id] = p; });
 
+    // Um usuário pode ter mais de um papel; prioriza o mais "institucional"
+    // para exibir um único selo no card do post.
+    const badgePriority = ["university_official", "admin", "company", "library", "ru", "professor", "project", "student_verified"];
+    const badgeMap: Record<string, string> = {};
+    (roles.data ?? []).forEach((r: any) => {
+      const current = badgeMap[r.user_id];
+      if (!current || badgePriority.indexOf(r.role) < badgePriority.indexOf(current)) {
+        if (ROLE_BADGES[r.role]) badgeMap[r.user_id] = r.role;
+      }
+    });
+
     return postsData.map(p => ({
       ...p,
       profiles: profileMap[p.user_id] ?? null,
       likes_count: likesMap[p.id]?.count || 0,
       comments_count: commentsMap[p.id] || 0,
       user_liked: likesMap[p.id]?.userLiked || false,
-      user_saved: savedSet.has(p.id)
+      user_saved: savedSet.has(p.id),
+      author_badge: badgeMap[p.user_id] ?? null
     }));
   }
 
@@ -252,6 +415,7 @@ export default function Connect() {
 
       const pPrice = newPrice ? parseFloat(newPrice.replace(",", ".")) : null;
       const pOriginal = newOriginalPrice ? parseFloat(newOriginalPrice.replace(",", ".")) : null;
+      const isEvent = activeTab !== "market" && selectedTag === "Evento";
 
       const { error } = await supabase.from("posts").insert({
         user_id: user.id, 
@@ -263,6 +427,9 @@ export default function Connect() {
         original_price: activeTab === "market" ? pOriginal : null,
         is_sold: false,
         tag: selectedTag, 
+        category: activeTab !== "market" ? selectedTag : null,
+        event_at: isEvent && eventAt ? new Date(eventAt).toISOString() : null,
+        event_location: isEvent ? (eventLocation.trim() || null) : null,
         media_type: mediaType, 
         document_url: documentUrl, 
         video_url: videoUrl,
@@ -271,6 +438,7 @@ export default function Connect() {
 
       setNewContent(""); setNewTitle(""); setNewPrice(""); setNewOriginalPrice(""); 
       setSelectedFiles([]); setPreviewUrls([]); setSelectedTag(null); setMediaType("text"); setComposerOpen(false);
+      setEventAt(""); setEventLocation("");
       toast({ title: activeTab === "market" ? "Anúncio publicado na loja!" : "Publicação no ar!" });
       loadPosts();
     } catch (e: any) {
@@ -361,6 +529,23 @@ export default function Connect() {
     } catch (e: any) { toast({ title: "Erro ao atualizar status", variant: "destructive" }); }
   }
 
+  // Capítulo 6, seção 8 — ação rápida "Adicionar ao meu calendário" em posts de Evento.
+  async function handleAddToCalendar(post: Post) {
+    if (!user || !post.event_at) return;
+    try {
+      const { error } = await supabase.from("reminders").insert({
+        user_id: user.id,
+        title: post.title?.trim() || post.content.slice(0, 80),
+        due_date: post.event_at,
+        type: "evento",
+      });
+      if (error) throw error;
+      toast({ title: "Adicionado aos seus lembretes!" });
+    } catch (e: any) {
+      toast({ title: "Erro ao adicionar ao calendário", variant: "destructive" });
+    }
+  }
+
   async function openComments(post: Post) {
     setActivePost(post);
     setCommentModalOpen(true);
@@ -445,19 +630,24 @@ export default function Connect() {
         </div>
       </div>
 
-      {/* TABS ÚNICAS E LIMPAS */}
+      {/* Capítulo 6, seção 3 — as 7 abas do Connect (Para Você / Em Alta /
+          Universidade / Curso / Comunidades / Marketplace / Notícias).
+          Roláveis horizontalmente porque não cabem 7 em uma linha em telas móveis. */}
       <Tabs value={activeTab} onValueChange={changeTab}>
-        <TabsList className="w-full rounded-[24px] bg-muted/40 p-1.5 flex shadow-inner">
-          <TabsTrigger value="global" className="flex-1 rounded-[20px] font-bold text-sm h-11 gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-foreground text-muted-foreground transition-all">
-            <MessageSquare className="h-4 w-4 hidden sm:block" /> Geral
-          </TabsTrigger>
-          <TabsTrigger value="market" className="flex-1 rounded-[20px] font-bold text-sm h-11 gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-foreground text-muted-foreground transition-all">
-            <Store className="h-4 w-4 hidden sm:block" /> Loja
-          </TabsTrigger>
-          <TabsTrigger value="news" className="flex-1 rounded-[20px] font-bold text-sm h-11 gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-foreground text-muted-foreground transition-all">
-            <Newspaper className="h-4 w-4 hidden sm:block" /> Painel
-          </TabsTrigger>
-        </TabsList>
+        <ScrollArea className="w-full whitespace-nowrap">
+          <TabsList className="rounded-[24px] bg-muted/40 p-1.5 inline-flex shadow-inner gap-1">
+            {FEED_TABS.map(({ value, label, icon: Icon }) => (
+              <TabsTrigger
+                key={value}
+                value={value}
+                className="rounded-[20px] font-bold text-sm h-11 gap-2 px-4 data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-foreground text-muted-foreground transition-all"
+              >
+                <Icon className="h-4 w-4" /> {label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+          <ScrollBar orientation="horizontal" className="h-1.5" />
+        </ScrollArea>
       </Tabs>
 
       {/* SUB-MENU DO MERCADO (Painel do Vendedor vs Explorar) */}
@@ -514,14 +704,35 @@ export default function Connect() {
               </div>
             )}
 
-            {/* CAMPOS GERAIS DO CONNECT */}
-            {activeTab === "global" && (
+            {/* CAMPOS GERAIS DO CONNECT — em qualquer aba acadêmica (Para Você, Em Alta,
+                Universidade, Curso, Comunidades), nunca no Marketplace/Notícias */}
+            {activeTab !== "market" && activeTab !== "news" && (
               <div className="flex gap-2 flex-wrap">
-                {ACADEMIC_TAGS.map((t) => (
-                  <button key={t} type="button" onClick={() => setSelectedTag(selectedTag === t ? null : t)} className={cn("text-[10px] font-bold uppercase tracking-wider px-4 py-2 rounded-full transition-all border", selectedTag === t ? "bg-primary text-primary-foreground border-primary shadow-sm" : "bg-card text-muted-foreground border-border/40 hover:bg-muted")}>
-                    {selectedTag === t && <Check className="h-3 w-3 inline-block mr-1" />} {t}
-                  </button>
-                ))}
+                {ACADEMIC_TAGS
+                  .filter((t) => !RESTRICTED_TAGS.includes(t) || myRoles.some((r) => ["professor", "university_official", "admin"].includes(r)))
+                  .map((t) => {
+                    const TagIcon = POST_CATEGORY_ICONS[t];
+                    return (
+                      <button key={t} type="button" onClick={() => setSelectedTag(selectedTag === t ? null : t)} className={cn("text-[10px] font-bold uppercase tracking-wider px-4 py-2 rounded-full transition-all border flex items-center gap-1.5", selectedTag === t ? "bg-primary text-primary-foreground border-primary shadow-sm" : "bg-card text-muted-foreground border-border/40 hover:bg-muted")}>
+                        {selectedTag === t ? <Check className="h-3 w-3" /> : TagIcon && <TagIcon className="h-3 w-3" />} {t}
+                      </button>
+                    );
+                  })}
+              </div>
+            )}
+
+            {/* Campos extras da categoria Evento (Capítulo 6, seção 4 e 8 — data usada
+                pela IA para "adicionar ao meu calendário") */}
+            {selectedTag === "Evento" && (
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold uppercase text-muted-foreground">Data e hora</Label>
+                  <Input type="datetime-local" value={eventAt} onChange={(e) => setEventAt(e.target.value)} className="h-12 rounded-2xl bg-card border border-border/40 text-sm shadow-inner" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-bold uppercase text-muted-foreground">Local</Label>
+                  <Input value={eventLocation} onChange={(e) => setEventLocation(e.target.value)} placeholder="Ex: Auditório do CTEC" className="h-12 rounded-2xl bg-card border border-border/40 text-sm shadow-inner" />
+                </div>
               </div>
             )}
             
@@ -642,19 +853,28 @@ export default function Connect() {
         </DialogContent>
       </Dialog>
 
-      {/* RENDERIZAÇÃO DO FEED DE POSTAGENS E MERCADO */}
-      {(activeTab === "global" || activeTab === "market") && (
+      {/* RENDERIZAÇÃO DO FEED — cobre as 6 abas de posts (Para Você, Em Alta,
+          Universidade, Curso, Comunidades, Marketplace). "news" tem seu próprio
+          bloco abaixo, pois usa a tabela news_posts, não posts. */}
+      {activeTab !== "news" && (
         loading ? (
           <div className="flex justify-center py-20"><Loader2 className="h-10 w-10 animate-spin text-primary" /></div>
-        ) : posts.length === 0 ? (
+        ) : visiblePosts.length === 0 ? (
           <div className="p-12 text-center rounded-[32px] bg-card border border-border/30 shadow-sm animate-in fade-in mt-6">
             {activeTab === "market" ? <Store className="h-16 w-16 mx-auto mb-4 text-muted-foreground/30" /> : <Globe className="h-16 w-16 mx-auto mb-4 text-muted-foreground/30" />}
             <p className="text-xl font-black text-foreground">Nada por aqui.</p>
-            <p className="text-sm font-medium text-muted-foreground mt-2">{activeTab === "market" ? "Não há produtos ou serviços listados agora." : "Seja o primeiro a postar no campus."}</p>
+            <p className="text-sm font-medium text-muted-foreground mt-2">
+              {activeTab === "market" ? "Não há produtos ou serviços listados agora."
+                : activeTab === "university" ? "Nenhuma publicação da sua universidade ainda."
+                : activeTab === "course" ? "Nenhuma publicação do seu curso ainda."
+                : activeTab === "communities" ? "Entre em uma comunidade para ver publicações aqui."
+                : activeTab === "trending" ? "Ainda não há publicações em alta."
+                : "Seja o primeiro a postar no campus."}
+            </p>
           </div>
         ) : (
           <div className="space-y-6 mt-4">
-            {posts.map((p) => (
+            {visiblePosts.map((p) => (
               <PostCard 
                 key={p.id} 
                 post={p} 
@@ -666,21 +886,137 @@ export default function Connect() {
                 onComment={() => openComments(p)} 
                 onDelete={() => handleDelete(p)} 
                 onMarkAsSold={() => handleMarkAsSold(p)}
+                onAddToCalendar={() => handleAddToCalendar(p)}
               />
             ))}
           </div>
         )
       )}
 
-      {/* AQUI FICAM AS NOTÍCIAS E COMENTÁRIOS, MANTIDOS IDÊNTICOS À VERSÃO ANTERIOR PARA ECONOMIZAR ESPAÇO NO EXEMPLO... */}
-      {/* (Mantenha o código renderizando activeTab === "news" e a Dialog do commentModalOpen que te passei na mensagem anterior) */}
+      {/* RENDERIZAÇÃO DA ABA NOTÍCIAS (news_posts via news_channels) */}
+      {activeTab === "news" && (
+        newsLoading ? (
+          <div className="flex justify-center py-20"><Loader2 className="h-10 w-10 animate-spin text-primary" /></div>
+        ) : newsItems.length === 0 ? (
+          <div className="p-12 text-center rounded-[32px] bg-card border border-border/30 shadow-sm animate-in fade-in mt-6">
+            <Newspaper className="h-16 w-16 mx-auto mb-4 text-muted-foreground/30" />
+            <p className="text-xl font-black text-foreground">Nenhuma notícia publicada ainda.</p>
+            <p className="text-sm font-medium text-muted-foreground mt-2">Os canais oficiais (universidade, campus, cursos) aparecerão aqui.</p>
+          </div>
+        ) : (
+          <div className="space-y-5 mt-4">
+            {newsItems.map((n) => (
+              <Card
+                key={n.id}
+                onClick={() => setActiveNews(n)}
+                className="rounded-[32px] border border-border/20 bg-card shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden cursor-pointer hover:shadow-lg transition-all"
+              >
+                {n.cover_url && <img src={n.cover_url} className="w-full h-44 object-cover" />}
+                <CardContent className="p-5 space-y-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {n.pinned && (
+                      <Badge className="bg-primary/10 text-primary border-0 text-[10px] font-black gap-1"><Pin className="h-3 w-3" /> Fixado</Badge>
+                    )}
+                    <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">{n.news_channels?.name ?? "Painel Oficial"}</span>
+                  </div>
+                  <h3 className="font-black text-lg leading-snug text-foreground">{n.title}</h3>
+                  <p className="text-sm text-muted-foreground line-clamp-2">{n.content}</p>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">{formatDistanceToNow(new Date(n.published_at), { locale: ptBR, addSuffix: true })}</p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )
+      )}
+
+      {/* MODAL DE LEITURA DE NOTÍCIA */}
+      <Dialog open={!!activeNews} onOpenChange={(open) => !open && setActiveNews(null)}>
+        <DialogContent className="rounded-[32px] max-w-lg p-0 overflow-hidden border-0 shadow-2xl bg-background max-h-[85vh] flex flex-col">
+          {activeNews && (
+            <>
+              {activeNews.cover_url && <img src={activeNews.cover_url} className="w-full h-52 object-cover shrink-0" />}
+              <ScrollArea className="p-6 overflow-y-auto">
+                <DialogHeader className="text-left space-y-2">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-primary">{activeNews.news_channels?.name ?? "Painel Oficial"}</span>
+                  <DialogTitle className="text-2xl font-black leading-tight">{activeNews.title}</DialogTitle>
+                  <DialogDescription className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                    {formatDistanceToNow(new Date(activeNews.published_at), { locale: ptBR, addSuffix: true })}
+                  </DialogDescription>
+                </DialogHeader>
+                <p className="text-base text-foreground/90 whitespace-pre-wrap leading-relaxed mt-4">{activeNews.content}</p>
+                {activeNews.link_url && (
+                  <a href={activeNews.link_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 mt-4 text-sm font-black text-primary hover:underline">
+                    Saiba mais <ExternalLink className="h-3.5 w-3.5" />
+                  </a>
+                )}
+              </ScrollArea>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* MODAL DE COMENTÁRIOS — antes existia só o estado (commentModalOpen/postComments),
+          sem nenhuma Dialog renderizando; usuários não conseguiam ver nem escrever comentários. */}
+      <Dialog open={commentModalOpen} onOpenChange={setCommentModalOpen}>
+        <DialogContent className="rounded-[32px] max-w-lg p-0 overflow-hidden border-0 shadow-2xl bg-background max-h-[85vh] flex flex-col">
+          <DialogHeader className="p-6 pb-4 border-b border-border/40 bg-muted/20 shrink-0">
+            <DialogTitle className="text-xl font-black">Comentários</DialogTitle>
+            {activePost && <DialogDescription className="text-sm line-clamp-2">{activePost.content}</DialogDescription>}
+          </DialogHeader>
+
+          <ScrollArea className="flex-1 p-6">
+            {postComments.length === 0 ? (
+              <div className="text-center py-10">
+                <MessageSquare className="h-10 w-10 mx-auto mb-3 text-muted-foreground/30" />
+                <p className="text-sm font-bold text-muted-foreground">Seja o primeiro a comentar.</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {postComments.map((c) => (
+                  <div key={c.id} className="flex gap-3">
+                    <Avatar className="h-9 w-9 shrink-0 border border-border/30">
+                      <AvatarImage src={c.profiles?.avatar_url} />
+                      <AvatarFallback className="bg-primary/10 text-primary font-black text-xs">{c.profiles?.full_name?.charAt(0) || "U"}</AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 bg-muted/40 rounded-2xl rounded-tl-sm px-4 py-2.5">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-black text-foreground">{c.profiles?.full_name || "Estudante"}</span>
+                        <span className="text-[10px] font-bold text-muted-foreground">{formatDistanceToNow(new Date(c.created_at), { locale: ptBR, addSuffix: true })}</span>
+                      </div>
+                      <p className="text-sm text-foreground/90 mt-0.5 whitespace-pre-wrap">{c.content}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </ScrollArea>
+
+          <div className="p-4 border-t border-border/40 bg-background flex items-center gap-2 shrink-0">
+            <Input
+              value={newComment}
+              onChange={(e) => setNewComment(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" && !sendingComment) sendComment(); }}
+              placeholder="Escreva um comentário..."
+              className="h-12 rounded-full bg-muted/40 border-0 px-5 text-sm focus-visible:ring-primary"
+            />
+            <Button
+              size="icon"
+              onClick={sendComment}
+              disabled={sendingComment || !newComment.trim()}
+              className="h-12 w-12 rounded-full shrink-0 shadow-md"
+            >
+              {sendingComment ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
     </div>
   );
 }
 
 // O NOVO POST CARD COM O SUPER APP DO MERCADO (Painel, Preços, Carrossel)
-function PostCard({ post, onLike, onSave, onComment, isOwner, onDelete, navigate, isMarketplace, onMarkAsSold }: any) {
+function PostCard({ post, onLike, onSave, onComment, isOwner, onDelete, navigate, isMarketplace, onMarkAsSold, onAddToCalendar }: any) {
   const isVideo = post.media_url?.match(/\.(mp4|webm|mov)$/i);
   const isPdf = post.media_url?.match(/\.pdf$/i) || post.document_url;
   
@@ -707,6 +1043,14 @@ function PostCard({ post, onLike, onSave, onComment, isOwner, onDelete, navigate
           <div className="flex flex-col">
             <p className="font-black text-[15px] text-foreground leading-tight group-hover:text-primary transition-colors flex items-center gap-1">
               {post.profiles?.full_name || "Estudante"}
+              {post.author_badge && ROLE_BADGES[post.author_badge] && (() => {
+                const BadgeIcon = ROLE_BADGES[post.author_badge].icon;
+                return (
+                  <span title={ROLE_BADGES[post.author_badge].label}>
+                    <BadgeIcon className="h-3.5 w-3.5 text-primary shrink-0" />
+                  </span>
+                );
+              })()}
               {isMarketplace && isOwner && <Badge variant="secondary" className="ml-2 text-[8px] bg-primary/10 text-primary border-0">Seu Anúncio</Badge>}
             </p>
             <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mt-0.5">{formatDistanceToNow(new Date(post.created_at), { locale: ptBR, addSuffix: true })}</p>
@@ -760,10 +1104,30 @@ function PostCard({ post, onLike, onSave, onComment, isOwner, onDelete, navigate
             </div>
           </div>
         ) : (
-          post.tag && <Badge variant="secondary" className="mb-3 rounded-lg text-[9px] font-black uppercase tracking-widest px-3 py-1 bg-primary/10 text-primary border-0">{post.tag}</Badge>
+          post.tag && (() => {
+            const CatIcon = POST_CATEGORY_ICONS[post.tag];
+            return (
+              <Badge variant="secondary" className="mb-3 rounded-lg text-[9px] font-black uppercase tracking-widest px-3 py-1 bg-primary/10 text-primary border-0 gap-1">
+                {CatIcon && <CatIcon className="h-3 w-3" />} {post.tag}
+              </Badge>
+            );
+          })()
         )}
         
         <p className="whitespace-pre-wrap text-[15px] leading-relaxed text-foreground/90">{post.content}</p>
+
+        {/* Capítulo 6, seção 8 — post do tipo Evento mostra data/local e ação de calendário */}
+        {post.tag === "Evento" && post.event_at && (
+          <div className="mt-3 flex items-center justify-between gap-3 bg-primary/5 border border-primary/20 rounded-2xl px-4 py-3">
+            <div className="text-xs font-bold text-foreground">
+              <p>{new Date(post.event_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</p>
+              {post.event_location && <p className="text-muted-foreground font-semibold mt-0.5">{post.event_location}</p>}
+            </div>
+            <Button size="sm" variant="secondary" className="rounded-full text-[11px] font-black h-9 shrink-0" onClick={onAddToCalendar}>
+              Adicionar ao calendário
+            </Button>
+          </div>
+        )}
         
         {/* Renderização de Múltiplas Imagens (Carrossel Horizontal) */}
         {mediaList.length > 0 && !isPdf && !isVideo && (
@@ -822,9 +1186,32 @@ function PostCard({ post, onLike, onSave, onComment, isOwner, onDelete, navigate
               <MessageSquare className="h-4 w-4 mr-1.5"/> {post.comments_count > 0 ? post.comments_count : "Comentar"}
             </Button>
           </div>
-          <Button variant="ghost" size="icon" onClick={onSave} className={cn("h-11 w-11 rounded-2xl transition-all border border-transparent", post.user_saved ? "text-amber-500 bg-amber-500/10 border-amber-500/20" : "text-muted-foreground hover:bg-muted/80")}>
-            <Bookmark className={cn("h-5 w-5", post.user_saved && "fill-current")} />
-          </Button>
+          <div className="flex gap-1">
+            {/* IA contextual (Capítulo 6, seção 8) — não aparece no Marketplace, que não tem conteúdo a explicar/resumir */}
+            {!isMarketplace && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" className="h-11 w-11 rounded-2xl text-primary hover:bg-primary/10" title="Perguntar à IA sobre este post">
+                    <Sparkles className="h-5 w-5" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="rounded-2xl border border-border/20 shadow-xl bg-background/95 backdrop-blur-xl p-2 min-w-[220px]">
+                  <DropdownMenuItem className="rounded-xl font-bold text-sm gap-2 py-2.5" onClick={() => navigate("/assistant", { state: { initialPrompt: `Explique este conteúdo de forma clara e didática:\n\n"${post.content}"` } })}>
+                    <Sparkles className="h-4 w-4 text-primary" /> Explicar este conteúdo
+                  </DropdownMenuItem>
+                  <DropdownMenuItem className="rounded-xl font-bold text-sm gap-2 py-2.5" onClick={() => navigate("/assistant", { state: { initialPrompt: `Gere flashcards (pergunta e resposta) a partir deste conteúdo:\n\n"${post.content}"` } })}>
+                    <Brain className="h-4 w-4 text-primary" /> Gerar flashcards
+                  </DropdownMenuItem>
+                  <DropdownMenuItem className="rounded-xl font-bold text-sm gap-2 py-2.5" onClick={() => navigate("/assistant", { state: { initialPrompt: `Resuma em 5 tópicos objetivos:\n\n"${post.content}"` } })}>
+                    <FileText className="h-4 w-4 text-primary" /> Resumir em 5 tópicos
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+            <Button variant="ghost" size="icon" onClick={onSave} className={cn("h-11 w-11 rounded-2xl transition-all border border-transparent", post.user_saved ? "text-amber-500 bg-amber-500/10 border-amber-500/20" : "text-muted-foreground hover:bg-muted/80")}>
+              <Bookmark className={cn("h-5 w-5", post.user_saved && "fill-current")} />
+            </Button>
+          </div>
         </div>
       </CardFooter>
     </Card>
