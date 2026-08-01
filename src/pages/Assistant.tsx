@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -68,6 +68,11 @@ async function buildUserContext(userId: string): Promise<string> {
 export default function Assistant() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Capítulo 6, seção 8 — botão de IA contextual em um post do Connect chega
+  // aqui via navigate("/assistant", { state: { initialPrompt } }).
+  const initialPrompt = (location.state as any)?.initialPrompt as string | undefined;
 
   // Controle de Tela (Chat, Summary, Flashcards, Plan)
   const [activeTool, setActiveTool] = useState<"chat" | "summary" | "flashcards" | "plan">("chat");
@@ -100,7 +105,7 @@ export default function Assistant() {
 
       {/* RENDERIZAÇÃO DINÂMICA DA FERRAMENTA */}
       <div className="mt-4">
-        {activeTool === "chat" && <ChatTab userId={user?.id} onToolSelect={setActiveTool} />}
+        {activeTool === "chat" && <ChatTab userId={user?.id} onToolSelect={setActiveTool} initialPrompt={initialPrompt} />}
         {activeTool === "summary" && <SummaryTab userId={user?.id} onBack={() => setActiveTool("chat")} />}
         {activeTool === "flashcards" && <FlashcardsTab userId={user?.id} onBack={() => setActiveTool("chat")} />}
         {activeTool === "plan" && <StudyPlanTab userId={user?.id} onBack={() => setActiveTool("chat")} />}
@@ -110,19 +115,33 @@ export default function Assistant() {
 }
 
 /* --------------------------- 1. CHAT (COM MENU +) --------------------------- */
-function ChatTab({ userId, onToolSelect }: { userId?: string; onToolSelect: (tool: any) => void }) {
+function ChatTab({ userId, onToolSelect, initialPrompt }: { userId?: string; onToolSelect: (tool: any) => void; initialPrompt?: string }) {
   const [threads, setThreads] = useState<ChatThread[]>(() => loadThreads());
   const [activeId, setActiveId] = useState<string | null>(() => { const t = loadThreads(); return t[0]?.id ?? null; });
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const firedInitialPrompt = useRef(false);
 
   const activeThread = useMemo(() => threads.find((t) => t.id === activeId) ?? null, [threads, activeId]);
   const messages = activeThread?.messages ?? [];
 
   useEffect(() => { saveThreads(threads); }, [threads]);
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, loading]);
+
+  // Capítulo 6, seção 8 — chegada vinda de um post do Connect ("Explique isso",
+  // "Gere flashcards", "Resuma"). Dispara uma única vez e limpa o state da
+  // rota para não reenviar em caso de refresh.
+  useEffect(() => {
+    if (!initialPrompt || firedInitialPrompt.current) return;
+    firedInitialPrompt.current = true;
+    send(initialPrompt);
+    navigate(location.pathname, { replace: true, state: {} });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialPrompt]);
 
   function newThread(): string {
     const id = `t_${Date.now()}`;
@@ -502,3 +521,4 @@ function StudyPlanTab({ userId, onBack }: { userId?: string; onBack: () => void 
     </div>
   );
 }
+
