@@ -479,7 +479,15 @@ export type Database = {
           id?: string
           user_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "discipline_community_messages_profile_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["user_id"]
+          },
+        ]
       }
       discipline_schedules: {
         Row: {
@@ -1407,6 +1415,41 @@ export type Database = {
           },
         ]
       }
+      ru_status_reports: {
+        Row: {
+          campus_id: string | null
+          created_at: string
+          estimated_minutes: number
+          id: string
+          status_level: string
+          user_id: string
+        }
+        Insert: {
+          campus_id?: string | null
+          created_at?: string
+          estimated_minutes?: number
+          id?: string
+          status_level: string
+          user_id: string
+        }
+        Update: {
+          campus_id?: string | null
+          created_at?: string
+          estimated_minutes?: number
+          id?: string
+          status_level?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ru_status_reports_campus_id_fkey"
+            columns: ["campus_id"]
+            isOneToOne: false
+            referencedRelation: "campuses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       saved_posts: {
         Row: {
           post_id: string
@@ -1618,6 +1661,10 @@ export type Database = {
         Returns: boolean
       }
       is_user_banned: { Args: { _user_id: string }; Returns: boolean }
+      owns_discipline_code: {
+        Args: { _code: string; _user_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
       app_role: "admin" | "moderator" | "user" | "channel_admin"
