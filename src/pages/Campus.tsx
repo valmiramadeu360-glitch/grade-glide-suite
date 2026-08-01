@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 import { 
   Building2, Utensils, BookOpen, Bus, Calendar, 
   FlaskConical, Trophy, Map, FileText, Users, 
-  ChevronRight, Clock, AlertCircle, ArrowUpRight
+  ChevronRight, Clock, AlertCircle, ArrowUpRight, Compass
 } from "lucide-react";
 
 export default function Campus() {
@@ -22,12 +22,12 @@ export default function Campus() {
   const libraryStatus = { status: "open", availableRooms: 3 };
   
   const campusServices = [
-    { title: "Transporte", icon: Bus, desc: "Horários e rotas do circular", color: "text-amber-500", bg: "bg-amber-500/10" },
-    { title: "Laboratórios", icon: FlaskConical, desc: "Reserva de equipamentos", color: "text-emerald-500", bg: "bg-emerald-500/10" },
-    { title: "Mapa do Campus", icon: Map, desc: "Localize blocos e salas", color: "text-blue-500", bg: "bg-blue-500/10" },
-    { title: "Editais", icon: FileText, desc: "Bolsas e monitorias", color: "text-purple-500", bg: "bg-purple-500/10" },
-    { title: "Esportes", icon: Trophy, desc: "Atléticas e quadras", color: "text-rose-500", bg: "bg-rose-500/10" },
-    { title: "Coordenações", icon: Users, desc: "Contatos e horários", color: "text-indigo-500", bg: "bg-indigo-500/10" },
+    { title: "Mapa Interativo", icon: Map, desc: "Explore blocos e salas da UFAL", color: "text-blue-500", bg: "bg-blue-500/10", path: "/campus" }, // Direciona para o mapa
+    { title: "Transporte", icon: Bus, desc: "Horários e rotas do circular", color: "text-amber-500", bg: "bg-amber-500/10", path: "#" },
+    { title: "Laboratórios", icon: FlaskConical, desc: "Reserva de equipamentos", color: "text-emerald-500", bg: "bg-emerald-500/10", path: "#" },
+    { title: "Editais", icon: FileText, desc: "Bolsas e monitorias", color: "text-purple-500", bg: "bg-purple-500/10", path: "#" },
+    { title: "Esportes", icon: Trophy, desc: "Atléticas e quadras", color: "text-rose-500", bg: "bg-rose-500/10", path: "#" },
+    { title: "Coordenações", icon: Users, desc: "Contatos e horários", color: "text-indigo-500", bg: "bg-indigo-500/10", path: "#" },
   ];
 
   return (
@@ -53,6 +53,29 @@ export default function Campus() {
           Trocar Campus
         </Button>
       </header>
+
+      {/* BANNER DE DESTAQUE PARA O MAPA INTERATIVO DA UFAL */}
+      <Card 
+        onClick={() => navigate("/campus")}
+        className="rounded-[32px] border-0 shadow-lg bg-gradient-to-br from-primary/90 to-primary text-primary-foreground overflow-hidden group cursor-pointer hover:scale-[1.01] transition-all relative"
+      >
+        <CardContent className="p-6 sm:p-8 flex flex-col sm:flex-row items-center justify-between gap-6 relative z-10">
+          <div className="space-y-2 text-center sm:text-left">
+            <div className="inline-flex items-center gap-2 bg-white/20 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest backdrop-blur-sm">
+              <Compass className="h-3.5 w-3.5 animate-spin" /> Recurso Novo · Guia do Calouro
+            </div>
+            <h2 className="text-2xl sm:text-3xl font-black tracking-tight">Explore o Mapa Interativo da UFAL</h2>
+            <p className="text-xs sm:text-sm font-medium text-primary-foreground/90 max-w-lg">
+              Nunca mais se perca no A.C. Simões. Encontre blocos, laboratórios, fotos reais das fachadas e rotas em poucos cliques.
+            </p>
+          </div>
+          <Button size="lg" className="rounded-2xl bg-white text-primary hover:bg-white/90 font-black tracking-wide shadow-xl shrink-0 h-14 px-6 gap-2">
+            Abrir Mapa <ArrowUpRight className="h-5 w-5" />
+          </Button>
+        </CardContent>
+        {/* Elemento decorativo de fundo */}
+        <div className="absolute right-0 bottom-0 translate-x-10 translate-y-10 h-64 w-64 rounded-full bg-white/10 blur-2xl pointer-events-none" />
+      </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
@@ -180,7 +203,14 @@ export default function Campus() {
             </h3>
             <div className="grid grid-cols-2 gap-3">
               {campusServices.map((service, i) => (
-                <div key={i} className="bg-card border border-border/30 p-4 rounded-[24px] shadow-sm hover:shadow-md hover:border-border/60 transition-all cursor-pointer group flex flex-col items-start gap-3">
+                <div 
+                  key={i} 
+                  onClick={() => service.path !== "#" && navigate(service.path)}
+                  className={cn(
+                    "bg-card border border-border/30 p-4 rounded-[24px] shadow-sm transition-all group flex flex-col items-start gap-3",
+                    service.path !== "#" ? "cursor-pointer hover:shadow-md hover:border-primary/50" : "opacity-80"
+                  )}
+                >
                   <div className={cn("h-10 w-10 rounded-xl flex items-center justify-center transition-transform group-hover:scale-110", service.bg, service.color)}>
                     <service.icon className="h-5 w-5" />
                   </div>
