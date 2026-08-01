@@ -8,7 +8,7 @@ import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { 
   Building2, Utensils, BookOpen, Bus, Calendar, 
-  FlaskConical, Trophy, Map, FileText, Users, 
+  FlaskConical, Trophy, FileText, Users, 
   ChevronRight, Clock, AlertCircle, ArrowUpRight, Compass
 } from "lucide-react";
 
@@ -22,7 +22,6 @@ export default function Campus() {
   const libraryStatus = { status: "open", availableRooms: 3 };
   
   const campusServices = [
-    { title: "Mapa Interativo", icon: Map, desc: "Explore blocos e salas da UFAL", color: "text-blue-500", bg: "bg-blue-500/10", path: "/campus" }, // Direciona para o mapa
     { title: "Transporte", icon: Bus, desc: "Horários e rotas do circular", color: "text-amber-500", bg: "bg-amber-500/10", path: "#" },
     { title: "Laboratórios", icon: FlaskConical, desc: "Reserva de equipamentos", color: "text-emerald-500", bg: "bg-emerald-500/10", path: "#" },
     { title: "Editais", icon: FileText, desc: "Bolsas e monitorias", color: "text-purple-500", bg: "bg-purple-500/10", path: "#" },
@@ -228,3 +227,4 @@ export default function Campus() {
     </div>
   );
 }
+
