@@ -1169,10 +1169,13 @@ export type Database = {
       }
       posts: {
         Row: {
+          category: string | null
           community_id: string | null
           content: string
           created_at: string
           document_url: string | null
+          event_at: string | null
+          event_location: string | null
           id: string
           is_sold: boolean | null
           link_url: string | null
@@ -1188,10 +1191,13 @@ export type Database = {
           video_url: string | null
         }
         Insert: {
+          category?: string | null
           community_id?: string | null
           content: string
           created_at?: string
           document_url?: string | null
+          event_at?: string | null
+          event_location?: string | null
           id?: string
           is_sold?: boolean | null
           link_url?: string | null
@@ -1207,10 +1213,13 @@ export type Database = {
           video_url?: string | null
         }
         Update: {
+          category?: string | null
           community_id?: string | null
           content?: string
           created_at?: string
           document_url?: string | null
+          event_at?: string | null
+          event_location?: string | null
           id?: string
           is_sold?: boolean | null
           link_url?: string | null
@@ -1450,6 +1459,79 @@ export type Database = {
           },
         ]
       }
+      ru_locations: {
+        Row: {
+          campus_id: string
+          id: string
+          latitude: number | null
+          longitude: number | null
+          radius_meters: number
+          updated_at: string
+        }
+        Insert: {
+          campus_id: string
+          id?: string
+          latitude?: number | null
+          longitude?: number | null
+          radius_meters?: number
+          updated_at?: string
+        }
+        Update: {
+          campus_id?: string
+          id?: string
+          latitude?: number | null
+          longitude?: number | null
+          radius_meters?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ru_locations_campus_id_fkey"
+            columns: ["campus_id"]
+            isOneToOne: true
+            referencedRelation: "campuses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ru_menu_posts: {
+        Row: {
+          ai_menu_text: string | null
+          campus_id: string | null
+          created_at: string
+          id: string
+          meal_period: string
+          original_photo_url: string
+          user_id: string
+        }
+        Insert: {
+          ai_menu_text?: string | null
+          campus_id?: string | null
+          created_at?: string
+          id?: string
+          meal_period?: string
+          original_photo_url: string
+          user_id: string
+        }
+        Update: {
+          ai_menu_text?: string | null
+          campus_id?: string | null
+          created_at?: string
+          id?: string
+          meal_period?: string
+          original_photo_url?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ru_menu_posts_campus_id_fkey"
+            columns: ["campus_id"]
+            isOneToOne: false
+            referencedRelation: "campuses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       saved_posts: {
         Row: {
           post_id: string
@@ -1649,6 +1731,16 @@ export type Database = {
           votes: number
         }[]
       }
+      get_ru_current_status: {
+        Args: { _campus_id?: string; _window_minutes?: number }
+        Returns: {
+          status_level: string
+          votes_count: number
+          total_votes: number
+          avg_minutes: number
+          window_minutes: number
+        }[]
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -1667,7 +1759,7 @@ export type Database = {
       }
     }
     Enums: {
-      app_role: "admin" | "moderator" | "user" | "channel_admin"
+      app_role: "admin" | "moderator" | "user" | "channel_admin" | "student_verified" | "professor" | "university_official" | "company" | "library" | "ru" | "project"
       community_role: "member" | "moderator" | "admin"
       community_type: "university" | "campus" | "course" | "period"
       news_channel_scope: "global" | "university" | "campus" | "course"
@@ -1799,7 +1891,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "moderator", "user", "channel_admin"],
+      app_role: ["admin", "moderator", "user", "channel_admin", "student_verified", "professor", "university_official", "company", "library", "ru", "project"],
       community_role: ["member", "moderator", "admin"],
       community_type: ["university", "campus", "course", "period"],
       news_channel_scope: ["global", "university", "campus", "course"],
