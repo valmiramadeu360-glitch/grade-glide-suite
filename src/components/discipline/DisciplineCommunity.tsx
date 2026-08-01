@@ -76,7 +76,7 @@ export function DisciplineCommunity({ disciplineCode, disciplineName }: { discip
           content,
           created_at,
           user_id,
-          profiles (
+          profiles!discipline_community_messages_profile_fkey (
             codename,
             is_anonymous,
             full_name
@@ -87,7 +87,7 @@ export function DisciplineCommunity({ disciplineCode, disciplineName }: { discip
         .limit(50);
 
       if (error) throw error;
-      setMessages((data as any) || []);
+      setMessages(((data as unknown) as Message[]) || []);
       scrollToBottom();
     } catch (error: any) {
       console.error("Erro ao carregar mensagens da turma:", error.message);
@@ -142,17 +142,17 @@ export function DisciplineCommunity({ disciplineCode, disciplineName }: { discip
       
       {/* Header do Chat */}
       <div className="p-4 sm:p-5 border-b border-border/30 bg-muted/20 flex items-center justify-between shrink-0">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 min-w-0">
           <div className="h-9 w-9 rounded-xl bg-primary/10 text-primary flex items-center justify-center shadow-inner">
             <MessageSquare className="h-4 w-4" />
           </div>
-          <div>
-            <h3 className="text-xs sm:text-sm font-black text-foreground">Comunidade da Turma ({disciplineCode})</h3>
-            <p className="text-[10px] text-muted-foreground font-medium">Conectado com todos os alunos cursando {disciplineName}</p>
+          <div className="min-w-0">
+            <h3 className="text-sm font-bold text-foreground truncate">Turma · {disciplineCode}</h3>
+            <p className="text-[11px] text-muted-foreground font-medium truncate">Alunos cursando {disciplineName}</p>
           </div>
         </div>
-        <div className="flex items-center gap-1.5 bg-primary/10 text-primary px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider">
-          <Sparkles className="h-3 w-3" /> Seguro por Codinome
+        <div className="hidden sm:flex items-center gap-1.5 bg-primary/10 text-primary px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide shrink-0">
+          <Sparkles className="h-3 w-3" /> Codinome
         </div>
       </div>
 
@@ -177,10 +177,10 @@ export function DisciplineCommunity({ disciplineCode, disciplineName }: { discip
 
             return (
               <div key={msg.id} className={cn("flex flex-col", isMe ? "items-end" : "items-start")}>
-                <span className="text-[9px] font-bold text-muted-foreground px-1 mb-0.5">
+                <span className="text-[10px] font-semibold text-muted-foreground px-1 mb-0.5 max-w-[80%] truncate">
                   {displayName} • {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </span>
-                <div className={cn("p-3 rounded-2xl max-w-[80%] text-xs font-medium shadow-sm leading-relaxed", isMe ? "bg-primary text-primary-foreground rounded-tr-none" : "bg-muted/50 text-foreground border border-border/30 rounded-tl-none")}>
+                <div className={cn("p-3 rounded-2xl max-w-[85%] sm:max-w-[75%] text-sm font-medium shadow-sm leading-relaxed break-words whitespace-pre-wrap", isMe ? "bg-primary text-primary-foreground rounded-tr-none" : "bg-muted/50 text-foreground border border-border/30 rounded-tl-none")}>
                   {msg.content}
                 </div>
               </div>
