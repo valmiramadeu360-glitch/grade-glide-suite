@@ -140,11 +140,11 @@ export function RuWidget() {
             onClick={() => handleReportStatus('slow', 30)}
             className="h-10 rounded-xl text-[11px] font-bold border-rose-500/30 bg-rose-500/5 hover:bg-rose-500/10 text-rose-600 transition-all shadow-sm"
           >
-             {submitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Cheia (30m+)"} {submitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Cheia (30m+)"}
+            {submitting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Cheia (30m+)"}
           </Button>
         </div>
       </div>
 
-     </Card> </Card>
+    </Card>
   );
 }
