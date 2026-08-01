@@ -22,7 +22,8 @@ import Profile from "./pages/Profile";
 import Feedback from "./pages/Feedback";
 import Connect from "./pages/Connect";
 import Messages from "./pages/Messages";
-import Campus from "./pages/Campus"; // <-- Importação da nova tela do Campus
+import Campus from "./pages/Campus";
+import { CampusMap } from "@/components/campus/CampusMap"; // <-- Importação do Mapa Interativo
 import NotFound from "./pages/NotFound";
 import AdminDashboard from "./pages/AdminDashboard";
 import Assistant from "./pages/Assistant";
@@ -55,7 +56,6 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
       }
 
       try {
-        // Busca o status de banimento direto no banco
         const { data, error } = await supabase
           .from("profiles")
           .select("is_banned")
@@ -135,12 +135,13 @@ const App = () => (
                 <Route path="/connect" element={<ProtectedRoute><Connect /></ProtectedRoute>} />
                 <Route path="/news" element={<Navigate to="/connect?tab=news" replace />} />
                 <Route path="/messages" element={<ProtectedRoute><Messages /></ProtectedRoute>} />
-                <Route path="/campus" element={<ProtectedRoute><Campus /></ProtectedRoute>} /> {/* <-- ROTA ADICIONADA */}
+                <Route path="/campus" element={<ProtectedRoute><Campus /></ProtectedRoute>} />
+                <Route path="/campus/map" element={<ProtectedRoute><CampusMap /></ProtectedRoute>} /> {/* <-- ROTA DO MAPA INTERATIVO ADICIONADA */}
                 <Route path="/extra-courses" element={<Navigate to="/disciplines?tab=extra" replace />} />
                 <Route path="/reminders" element={<ProtectedRoute><Reminders /></ProtectedRoute>} />
                 <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
                 <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-                <Route path="/profile/:id" element={<ProtectedRoute><Profile /></ProtectedRoute>} /> {/* Adicionado suporte dinâmico para visualização de outros perfis futuramente */}
+                <Route path="/profile/:id" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
                 <Route path="/feedback" element={<ProtectedRoute><Feedback /></ProtectedRoute>} />
                 <Route path="/assistant" element={<ProtectedRoute><Assistant /></ProtectedRoute>} />
                 
