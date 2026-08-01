@@ -7,8 +7,6 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "14.1"
   }
@@ -146,6 +144,48 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      campus_buildings: {
+        Row: {
+          building_number: number
+          category: string
+          created_at: string
+          description: string | null
+          id: string
+          latitude: number | null
+          longitude: number | null
+          name: string
+          opening_hours: string | null
+          photo_url: string | null
+          services: string[] | null
+        }
+        Insert: {
+          building_number: number
+          category: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          latitude?: number | null
+          longitude?: number | null
+          name: string
+          opening_hours?: string | null
+          photo_url?: string | null
+          services?: string[] | null
+        }
+        Update: {
+          building_number?: number
+          category?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          latitude?: number | null
+          longitude?: number | null
+          name?: string
+          opening_hours?: string | null
+          photo_url?: string | null
+          services?: string[] | null
+        }
+        Relationships: []
       }
       campuses: {
         Row: {
@@ -1424,41 +1464,6 @@ export type Database = {
           },
         ]
       }
-      ru_status_reports: {
-        Row: {
-          campus_id: string | null
-          created_at: string
-          estimated_minutes: number
-          id: string
-          status_level: string
-          user_id: string
-        }
-        Insert: {
-          campus_id?: string | null
-          created_at?: string
-          estimated_minutes?: number
-          id?: string
-          status_level: string
-          user_id: string
-        }
-        Update: {
-          campus_id?: string | null
-          created_at?: string
-          estimated_minutes?: number
-          id?: string
-          status_level?: string
-          user_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "ru_status_reports_campus_id_fkey"
-            columns: ["campus_id"]
-            isOneToOne: false
-            referencedRelation: "campuses"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       ru_locations: {
         Row: {
           campus_id: string
@@ -1520,11 +1525,46 @@ export type Database = {
           id?: string
           meal_period?: string
           original_photo_url?: string
-          user_id?: string
+          user_id: string
         }
         Relationships: [
           {
             foreignKeyName: "ru_menu_posts_campus_id_fkey"
+            columns: ["campus_id"]
+            isOneToOne: false
+            referencedRelation: "campuses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ru_status_reports: {
+        Row: {
+          campus_id: string | null
+          created_at: string
+          estimated_minutes: number
+          id: string
+          status_level: string
+          user_id: string
+        }
+        Insert: {
+          campus_id?: string | null
+          created_at?: string
+          estimated_minutes?: number
+          id?: string
+          status_level: string
+          user_id: string
+        }
+        Update: {
+          campus_id?: string | null
+          created_at?: string
+          estimated_minutes?: number
+          id?: string
+          status_level?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ru_status_reports_campus_id_fkey"
             columns: ["campus_id"]
             isOneToOne: false
             referencedRelation: "campuses"
@@ -1681,30 +1721,6 @@ export type Database = {
           updated_at: string | null
           user_id: string | null
         }
-        Insert: {
-          comments_count?: never
-          content?: string | null
-          created_at?: string | null
-          engagement_score?: never
-          id?: string | null
-          likes_count?: never
-          media_url?: string | null
-          tag?: string | null
-          updated_at?: string | null
-          user_id?: string | null
-        }
-        Update: {
-          comments_count?: never
-          content?: string | null
-          created_at?: string | null
-          engagement_score?: never
-          id?: string | null
-          likes_count?: never
-          media_url?: string | null
-          tag?: string | null
-          updated_at?: string | null
-          user_id?: string | null
-        }
         Relationships: []
       }
     }
@@ -1770,132 +1786,3 @@ export type Database = {
     }
   }
 }
-
-type DatabaseWithoutInternals = Omit<Database, "__InternalSupabase">
-
-type DefaultSchema = DatabaseWithoutInternals[Extract<keyof Database, "public">]
-
-export type Tables<
-  DefaultSchemaTableNameOrOptions extends
-    | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
-    | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
-  }
-    ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
-        DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
-> = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
-  ? (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
-      DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
-      Row: infer R
-    }
-    ? R
-    : never
-  : DefaultSchemaTableNameOrOptions extends keyof (DefaultSchema["Tables"] &
-        DefaultSchema["Views"])
-    ? (DefaultSchema["Tables"] &
-        DefaultSchema["Views"])[DefaultSchemaTableNameOrOptions] extends {
-        Row: infer R
-      }
-      ? R
-      : never
-    : never
-
-export type TablesInsert<
-  DefaultSchemaTableNameOrOptions extends
-    | keyof DefaultSchema["Tables"]
-    | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
-  }
-    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
-> = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
-  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
-      Insert: infer I
-    }
-    ? I
-    : never
-  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
-    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
-        Insert: infer I
-      }
-      ? I
-      : never
-    : never
-
-export type TablesUpdate<
-  DefaultSchemaTableNameOrOptions extends
-    | keyof DefaultSchema["Tables"]
-    | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
-  }
-    ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
-> = DefaultSchemaTableNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
-  ? DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"][TableName] extends {
-      Update: infer U
-    }
-    ? U
-    : never
-  : DefaultSchemaTableNameOrOptions extends keyof DefaultSchema["Tables"]
-    ? DefaultSchema["Tables"][DefaultSchemaTableNameOrOptions] extends {
-        Update: infer U
-      }
-      ? U
-      : never
-    : never
-
-export type Enums<
-  DefaultSchemaEnumNameOrOptions extends
-    | keyof DefaultSchema["Enums"]
-    | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
-  }
-    ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
-> = DefaultSchemaEnumNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
-  ? DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"][EnumName]
-  : DefaultSchemaEnumNameOrOptions extends keyof DefaultSchema["Enums"]
-    ? DefaultSchema["Enums"][DefaultSchemaEnumNameOrOptions]
-    : never
-
-export type CompositeTypes<
-  PublicCompositeTypeNameOrOptions extends
-    | keyof DefaultSchema["CompositeTypes"]
-    | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
-    schema: keyof DatabaseWithoutInternals
-  }
-    ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
-> = PublicCompositeTypeNameOrOptions extends {
-  schema: keyof DatabaseWithoutInternals
-}
-  ? DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"][CompositeTypeName]
-  : PublicCompositeTypeNameOrOptions extends keyof DefaultSchema["CompositeTypes"]
-    ? DefaultSchema["CompositeTypes"][PublicCompositeTypeNameOrOptions]
-    : never
-
-export const Constants = {
-  public: {
-    Enums: {
-      app_role: ["admin", "moderator", "user", "channel_admin", "student_verified", "professor", "university_official", "company", "library", "ru", "project"],
-      community_role: ["member", "moderator", "admin"],
-      community_type: ["university", "campus", "course", "period"],
-      news_channel_scope: ["global", "university", "campus", "course"],
-      report_status: ["pending", "reviewed", "resolved", "dismissed"],
-    },
-  },
-} as const
