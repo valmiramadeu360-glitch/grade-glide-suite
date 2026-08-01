@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Calendar } from "@/components/ui/calendar"; 
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { RuWidget } from "@/components/campus/RuWidget";
+import { RuWidget } from "@/components/Campus/RuWidget";
 import { 
   BookOpen, Clock, AlertTriangle, CheckCircle2, ArrowRight, Cloud, CloudOff, History, 
   Loader2, Sparkles, Calendar as CalendarIcon, HandHelping, Trophy, Target, FileText, BrainCircuit

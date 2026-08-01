@@ -27,7 +27,7 @@ export function RuWidget() {
   async function fetchLatestRuStatus() {
     try {
       setLoading(true);
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from("ru_status_reports")
         .select("status_level, estimated_minutes, created_at")
         .order("created_at", { ascending: false })
@@ -47,7 +47,7 @@ export function RuWidget() {
     if (!user) return;
     setSubmitting(true);
     try {
-      const { error } = await supabase.from("ru_status_reports").insert({
+      const { error } = await (supabase as any).from("ru_status_reports").insert({
         user_id: user.id,
         status_level: level,
         estimated_minutes: minutes

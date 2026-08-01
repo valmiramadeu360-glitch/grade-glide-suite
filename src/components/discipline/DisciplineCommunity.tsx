@@ -87,7 +87,7 @@ export function DisciplineCommunity({ disciplineCode, disciplineName }: { discip
         .limit(50);
 
       if (error) throw error;
-      setMessages(data || []);
+      setMessages((data as any) || []);
       scrollToBottom();
     } catch (error: any) {
       console.error("Erro ao carregar mensagens da turma:", error.message);
