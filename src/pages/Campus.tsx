@@ -20,9 +20,9 @@ export default function Campus() {
   const ruStatus = { status: "open", queueTime: "15 min", menu: "Feijoada e Frango Assado" };
   const libraryStatus = { status: "open", availableRooms: 3 };
   
-  // Lista de serviços com o Mapa Interativo direcionando corretamente para a rota do mapa
+  // Lista de serviços com o Mapa Interativo direcionando corretamente para a rota do mapa interativo
   const campusServices = [
-    { title: "Mapa Interativo", icon: Map, desc: "Explore blocos e salas da UFAL", color: "text-blue-500", bg: "bg-blue-500/10", path: "/campus" },
+    { title: "Mapa Interativo", icon: Map, desc: "Explore blocos e salas da UFAL", color: "text-blue-500", bg: "bg-blue-500/10", path: "/campus/map" },
     { title: "Transporte", icon: Bus, desc: "Horários e rotas do circular", color: "text-amber-500", bg: "bg-amber-500/10", path: "#" },
     { title: "Laboratórios", icon: FlaskConical, desc: "Reserva de equipamentos", color: "text-emerald-500", bg: "bg-emerald-500/10", path: "#" },
     { title: "Editais", icon: FileText, desc: "Bolsas e monitorias", color: "text-purple-500", bg: "bg-purple-500/10", path: "#" },
