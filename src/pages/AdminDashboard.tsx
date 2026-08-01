@@ -30,7 +30,6 @@ import {
   Send,
   Search,
   Sparkles,
-  BarChart3,
   Plus,
   Power,
   X,
@@ -207,9 +206,21 @@ export default function AdminDashboard() {
     if (!annTitle.trim()) { toast({ title: "Título obrigatório", variant: "destructive" }); return; }
     setSavingAnn(true);
     try {
+      let formattedUrl = annCtaUrl.trim();
+      if (formattedUrl && !formattedUrl.startsWith("http://") && !formattedUrl.startsWith("https://")) {
+        formattedUrl = `https://${formattedUrl}`;
+      }
+
       const payload: any = {
-        title: annTitle.trim(), body: annBody.trim() || null, type: annType, cta_label: annCtaLabel.trim() || null, cta_url: annCtaUrl.trim() || null, created_by: user?.id, active: true,
+        title: annTitle.trim(), 
+        body: annBody.trim() || null, 
+        type: annType, 
+        cta_label: annCtaLabel.trim() || null, 
+        cta_url: formattedUrl || null, 
+        created_by: user?.id, 
+        active: true,
       };
+
       if (annType === "poll") {
         const opts = annOptions.map((o) => o.trim()).filter(Boolean);
         if (opts.length < 2) {
