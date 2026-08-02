@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { 
   LayoutDashboard, BookOpen, Bell, Settings, Sparkles, 
-  LogOut, User, MessageSquare, Globe, Building2, HelpCircle 
+  LogOut, User, MessageSquare, Globe, Building2, HelpCircle, ShieldCheck 
 } from "lucide-react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
@@ -42,6 +42,11 @@ export function AppSidebar() {
   const { signOut, user } = useAuth();
   
   const [avatarUrl, setAvatarUrl] = useState("");
+  // Antes o painel admin só era alcançado pelo redirecionamento único feito
+  // no login (Auth.tsx) — saindo da tela, não havia mais nenhum jeito de
+  // voltar a não ser digitando a URL /admin de novo. Este estado deixa o
+  // item "Painel Admin" sempre fixo no menu para quem tem o papel.
+  const [isAdmin, setIsAdmin] = useState(false);
 
   // Carrega a foto de perfil e escuta atualizações
   useEffect(() => {
@@ -54,6 +59,12 @@ export function AppSidebar() {
         .then(({ data }) => {
           if (data?.avatar_url) setAvatarUrl(data.avatar_url);
         });
+
+      supabase
+        .rpc("has_role", { _user_id: user.id, _role: "admin" })
+        .then(({ data }) => setIsAdmin(!!data));
+    } else {
+      setIsAdmin(false);
     }
 
     const handleAvatarUpdate = (e: any) => setAvatarUrl(e.detail);
@@ -114,6 +125,38 @@ export function AppSidebar() {
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>
+
+        {/* Painel Admin — fixo no menu para quem tem o papel 'admin' (Capítulo Admin).
+            Antes só se chegava aqui pelo redirecionamento único do login; agora
+            fica sempre acessível, em qualquer tela do app. */}
+        {isAdmin && (
+          <SidebarGroup>
+            <SidebarGroupLabel className="px-4 text-[10px] font-black uppercase tracking-widest text-muted-foreground/60 mb-2">
+              Administração
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu className="space-y-1.5 px-2">
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    tooltip="Painel Admin"
+                    className={cn(
+                      "relative h-14 flex items-center gap-3.5 px-4 rounded-xl transition-all duration-200 active:scale-[0.98]",
+                      location.pathname.startsWith("/admin")
+                        ? "bg-amber-500 text-white shadow-lg shadow-amber-500/30 font-black before:absolute before:left-0 before:top-1/2 before:-translate-y-1/2 before:h-7 before:w-1 before:rounded-r-full before:bg-white/80"
+                        : "hover:bg-amber-500/10 text-amber-600 dark:text-amber-400 font-bold"
+                    )}
+                  >
+                    <NavLink to="/admin">
+                      <ShieldCheck className={cn("h-5 w-5 shrink-0 transition-transform", location.pathname.startsWith("/admin") && "scale-110")} />
+                      {!collapsed && <span className="text-sm tracking-wide">Painel Admin</span>}
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
       </SidebarContent>
 
       {/* Footer com Perfil e Logout */}
@@ -153,4 +196,4 @@ export function AppSidebar() {
       </SidebarFooter>
     </Sidebar>
   );
-}
+      }
