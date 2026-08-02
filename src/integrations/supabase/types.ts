@@ -1546,6 +1546,256 @@ export type Database = {
           },
         ]
       }
+      ru_menus: {
+        Row: {
+          created_at: string
+          id: string
+          is_official: boolean
+          items: Json
+          meal: Database["public"]["Enums"]["ru_meal"]
+          nutrition: Json | null
+          photo_url: string | null
+          raw_text: string | null
+          restaurant_id: string
+          service_date: string
+          submitted_by: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_official?: boolean
+          items?: Json
+          meal?: Database["public"]["Enums"]["ru_meal"]
+          nutrition?: Json | null
+          photo_url?: string | null
+          raw_text?: string | null
+          restaurant_id: string
+          service_date?: string
+          submitted_by?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_official?: boolean
+          items?: Json
+          meal?: Database["public"]["Enums"]["ru_meal"]
+          nutrition?: Json | null
+          photo_url?: string | null
+          raw_text?: string | null
+          restaurant_id?: string
+          service_date?: string
+          submitted_by?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ru_menus_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "ru_restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ru_notices: {
+        Row: {
+          active: boolean
+          body: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          restaurant_id: string
+          severity: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          body?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          restaurant_id: string
+          severity?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          body?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          restaurant_id?: string
+          severity?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ru_notices_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "ru_restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ru_queue_reports: {
+        Row: {
+          created_at: string
+          distance_meters: number
+          id: string
+          latitude: number
+          level: Database["public"]["Enums"]["ru_queue_level"]
+          longitude: number
+          restaurant_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          distance_meters: number
+          id?: string
+          latitude: number
+          level: Database["public"]["Enums"]["ru_queue_level"]
+          longitude: number
+          restaurant_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          distance_meters?: number
+          id?: string
+          latitude?: number
+          level?: Database["public"]["Enums"]["ru_queue_level"]
+          longitude?: number
+          restaurant_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ru_queue_reports_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "ru_restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ru_ratings: {
+        Row: {
+          cleanliness: number | null
+          created_at: string
+          food: number | null
+          id: string
+          restaurant_id: string
+          service: number | null
+          service_date: string
+          updated_at: string
+          user_id: string
+          waiting: number | null
+        }
+        Insert: {
+          cleanliness?: number | null
+          created_at?: string
+          food?: number | null
+          id?: string
+          restaurant_id: string
+          service?: number | null
+          service_date?: string
+          updated_at?: string
+          user_id: string
+          waiting?: number | null
+        }
+        Update: {
+          cleanliness?: number | null
+          created_at?: string
+          food?: number | null
+          id?: string
+          restaurant_id?: string
+          service?: number | null
+          service_date?: string
+          updated_at?: string
+          user_id?: string
+          waiting?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ru_ratings_restaurant_id_fkey"
+            columns: ["restaurant_id"]
+            isOneToOne: false
+            referencedRelation: "ru_restaurants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ru_restaurants: {
+        Row: {
+          campus_id: string | null
+          closed_reason: string | null
+          created_at: string
+          description: string | null
+          dinner_end: string | null
+          dinner_start: string | null
+          id: string
+          is_open: boolean
+          latitude: number
+          longitude: number
+          lunch_end: string | null
+          lunch_start: string | null
+          name: string
+          notice: string | null
+          radius_meters: number
+          updated_at: string
+        }
+        Insert: {
+          campus_id?: string | null
+          closed_reason?: string | null
+          created_at?: string
+          description?: string | null
+          dinner_end?: string | null
+          dinner_start?: string | null
+          id?: string
+          is_open?: boolean
+          latitude: number
+          longitude: number
+          lunch_end?: string | null
+          lunch_start?: string | null
+          name: string
+          notice?: string | null
+          radius_meters?: number
+          updated_at?: string
+        }
+        Update: {
+          campus_id?: string | null
+          closed_reason?: string | null
+          created_at?: string
+          description?: string | null
+          dinner_end?: string | null
+          dinner_start?: string | null
+          id?: string
+          is_open?: boolean
+          latitude?: number
+          longitude?: number
+          lunch_end?: string | null
+          lunch_start?: string | null
+          name?: string
+          notice?: string | null
+          radius_meters?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ru_restaurants_campus_id_fkey"
+            columns: ["campus_id"]
+            isOneToOne: false
+            referencedRelation: "campuses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ru_status_reports: {
         Row: {
           campus_id: string | null
@@ -1798,6 +2048,38 @@ export type Database = {
         Args: { _code: string; _user_id: string }
         Returns: boolean
       }
+      ru_distance_meters: {
+        Args: { _lat1: number; _lat2: number; _lon1: number; _lon2: number }
+        Returns: number
+      }
+      ru_peak_hours: {
+        Args: { _restaurant_id: string }
+        Returns: {
+          avg_score: number
+          hour: number
+          reports: number
+        }[]
+      }
+      ru_queue_status: {
+        Args: { _restaurant_id: string }
+        Returns: {
+          confidence: string
+          last_report_at: string
+          level: Database["public"]["Enums"]["ru_queue_level"]
+          sample_size: number
+          score: number
+        }[]
+      }
+      ru_rating_summary: {
+        Args: { _restaurant_id: string }
+        Returns: {
+          cleanliness: number
+          food: number
+          service: number
+          total: number
+          waiting: number
+        }[]
+      }
     }
     Enums: {
       app_role:
@@ -1816,6 +2098,8 @@ export type Database = {
       community_type: "university" | "campus" | "course" | "period"
       news_channel_scope: "global" | "university" | "campus" | "course"
       report_status: "pending" | "reviewed" | "resolved" | "dismissed"
+      ru_meal: "lunch" | "dinner"
+      ru_queue_level: "none" | "small" | "medium" | "large"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1960,6 +2244,8 @@ export const Constants = {
       community_type: ["university", "campus", "course", "period"],
       news_channel_scope: ["global", "university", "campus", "course"],
       report_status: ["pending", "reviewed", "resolved", "dismissed"],
+      ru_meal: ["lunch", "dinner"],
+      ru_queue_level: ["none", "small", "medium", "large"],
     },
   },
 } as const
