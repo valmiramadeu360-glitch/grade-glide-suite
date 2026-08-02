@@ -23,7 +23,7 @@ import Feedback from "./pages/Feedback";
 import Connect from "./pages/Connect";
 import Messages from "./pages/Messages";
 import Campus from "./pages/Campus";
-import { CampusMap } from "@/components/campus/CampusMap"; // <-- Importação do Mapa Interativo
+import { CampusMap } from "@/components/Campus/CampusMap"; // <-- Importação do Mapa Interativo
 import NotFound from "./pages/NotFound";
 import AdminDashboard from "./pages/AdminDashboard";
 import Assistant from "./pages/Assistant";
