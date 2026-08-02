@@ -23,6 +23,7 @@ import Feedback from "./pages/Feedback";
 import Connect from "./pages/Connect";
 import Messages from "./pages/Messages";
 import Campus from "./pages/Campus";
+import Ru from "./pages/Ru";
 import { CampusMap } from "@/components/Campus/CampusMap"; // <-- Importação do Mapa Interativo
 import NotFound from "./pages/NotFound";
 import AdminDashboard from "./pages/AdminDashboard";
@@ -136,6 +137,7 @@ const App = () => (
                 <Route path="/news" element={<Navigate to="/connect?tab=news" replace />} />
                 <Route path="/messages" element={<ProtectedRoute><Messages /></ProtectedRoute>} />
                 <Route path="/campus" element={<ProtectedRoute><Campus /></ProtectedRoute>} />
+                <Route path="/campus/ru" element={<ProtectedRoute><Ru /></ProtectedRoute>} />
                 <Route path="/campus/map" element={<ProtectedRoute><CampusMap /></ProtectedRoute>} /> {/* <-- ROTA DO MAPA INTERATIVO ADICIONADA */}
                 <Route path="/extra-courses" element={<Navigate to="/disciplines?tab=extra" replace />} />
                 <Route path="/reminders" element={<ProtectedRoute><Reminders /></ProtectedRoute>} />
