@@ -18,19 +18,23 @@ import { cn } from "@/lib/utils";
 
 type ChatMsg = { role: "user" | "assistant"; content: string };
 type ChatThread = { id: string; title: string; messages: ChatMsg[]; updatedAt: number };
-const THREADS_KEY = "eduflow.ai.threads.v1";
 
-function loadThreads(): ChatThread[] {
+// Chave antiga do localStorage — usada só para migrar o histórico existente
+// do aluno para o Supabase na primeira vez que ele abre o assistente depois
+// desta atualização. Depois da migração, essa chave é limpa.
+const LEGACY_THREADS_KEY = "eduflow.ai.threads.v1";
+
+function loadLegacyThreads(): ChatThread[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = window.localStorage.getItem(THREADS_KEY);
+    const raw = window.localStorage.getItem(LEGACY_THREADS_KEY);
     return raw ? (JSON.parse(raw) as ChatThread[]) : [];
   } catch {
     return [];
   }
 }
-function saveThreads(threads: ChatThread[]) {
-  try { window.localStorage.setItem(THREADS_KEY, JSON.stringify(threads)); } catch {}
+function clearLegacyThreads() {
+  try { window.localStorage.removeItem(LEGACY_THREADS_KEY); } catch {}
 }
 
 type Flashcard = { front: string; back: string };
@@ -70,12 +74,24 @@ export default function Assistant() {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // Capítulo 6, seção 8 — botão de IA contextual em um post do Connect chega
-  // aqui via navigate("/assistant", { state: { initialPrompt } }).
-  const initialPrompt = (location.state as any)?.initialPrompt as string | undefined;
+  // Capítulo 6, seção 8 — botões de IA em um post do Connect chegam aqui via
+  // navigate("/assistant", { state }). Três formatos de state são aceitos:
+  //  - { initialPrompt }              -> abre o Chat e já envia a pergunta
+  //  - { initialTool: "summary"|"flashcards", initialContent } -> abre a
+  //    ferramenta certa com o conteúdo do post pré-preenchido
+  const navState = (location.state as any) || {};
+  const initialPrompt = navState.initialPrompt as string | undefined;
+  const initialTool = navState.initialTool as "summary" | "flashcards" | undefined;
+  const initialContent = navState.initialContent as string | undefined;
 
-  // Controle de Tela (Chat, Summary, Flashcards, Plan)
-  const [activeTool, setActiveTool] = useState<"chat" | "summary" | "flashcards" | "plan">("chat");
+  const [activeTool, setActiveTool] = useState<"chat" | "summary" | "flashcards" | "plan">(initialTool ?? "chat");
+
+  // Limpa o state da rota depois de consumir, para não reabrir a mesma
+  // ferramenta em caso de refresh/voltar.
+  useEffect(() => {
+    if (initialTool) navigate(location.pathname, { replace: true, state: {} });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="max-w-5xl mx-auto space-y-6 animate-in fade-in duration-500 pb-28 px-4 sm:px-6 pt-4 sm:pt-8">
@@ -106,18 +122,19 @@ export default function Assistant() {
       {/* RENDERIZAÇÃO DINÂMICA DA FERRAMENTA */}
       <div className="mt-4">
         {activeTool === "chat" && <ChatTab userId={user?.id} onToolSelect={setActiveTool} initialPrompt={initialPrompt} />}
-        {activeTool === "summary" && <SummaryTab userId={user?.id} onBack={() => setActiveTool("chat")} />}
-        {activeTool === "flashcards" && <FlashcardsTab userId={user?.id} onBack={() => setActiveTool("chat")} />}
+        {activeTool === "summary" && <SummaryTab userId={user?.id} onBack={() => setActiveTool("chat")} initialContent={initialTool === "summary" ? initialContent : undefined} />}
+        {activeTool === "flashcards" && <FlashcardsTab userId={user?.id} onBack={() => setActiveTool("chat")} initialContent={initialTool === "flashcards" ? initialContent : undefined} />}
         {activeTool === "plan" && <StudyPlanTab userId={user?.id} onBack={() => setActiveTool("chat")} />}
       </div>
     </div>
   );
 }
 
-/* --------------------------- 1. CHAT (COM MENU +) --------------------------- */
+/* --------------------------- 1. CHAT (Supabase, sincronizado) --------------------------- */
 function ChatTab({ userId, onToolSelect, initialPrompt }: { userId?: string; onToolSelect: (tool: any) => void; initialPrompt?: string }) {
-  const [threads, setThreads] = useState<ChatThread[]>(() => loadThreads());
-  const [activeId, setActiveId] = useState<string | null>(() => { const t = loadThreads(); return t[0]?.id ?? null; });
+  const [threads, setThreads] = useState<ChatThread[]>([]);
+  const [threadsLoading, setThreadsLoading] = useState(true);
+  const [activeId, setActiveId] = useState<string | null>(null);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -129,54 +146,105 @@ function ChatTab({ userId, onToolSelect, initialPrompt }: { userId?: string; onT
   const activeThread = useMemo(() => threads.find((t) => t.id === activeId) ?? null, [threads, activeId]);
   const messages = activeThread?.messages ?? [];
 
-  useEffect(() => { saveThreads(threads); }, [threads]);
+  // Carrega o histórico do Supabase e, se for a primeira vez, migra o que
+  // estava salvo no navegador (localStorage) do aluno.
+  useEffect(() => {
+    if (!userId) return;
+    (async () => {
+      setThreadsLoading(true);
+      const { data } = await supabase
+        .from("ai_chat_threads")
+        .select("id,title,messages,updated_at")
+        .eq("user_id", userId)
+        .order("updated_at", { ascending: false })
+        .limit(50);
+
+      let loaded: ChatThread[] = (data ?? []).map((t: any) => ({
+        id: t.id, title: t.title, messages: (t.messages as ChatMsg[]) ?? [], updatedAt: new Date(t.updated_at).getTime(),
+      }));
+
+      const legacy = loadLegacyThreads();
+      if (legacy.length > 0 && loaded.length === 0) {
+        const migrated: ChatThread[] = [];
+        for (const t of legacy) {
+          const { data: row } = await supabase
+            .from("ai_chat_threads")
+            .insert({ user_id: userId, title: t.title, messages: t.messages as any })
+            .select("id,title,messages,updated_at")
+            .single();
+          if (row) migrated.push({ id: row.id, title: row.title, messages: (row.messages as ChatMsg[]) ?? [], updatedAt: new Date(row.updated_at).getTime() });
+        }
+        loaded = migrated.sort((a, b) => b.updatedAt - a.updatedAt);
+        clearLegacyThreads();
+      }
+
+      setThreads(loaded);
+      setActiveId(loaded[0]?.id ?? null);
+      setThreadsLoading(false);
+    })();
+  }, [userId]);
+
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, loading]);
 
-  // Capítulo 6, seção 8 — chegada vinda de um post do Connect ("Explique isso",
-  // "Gere flashcards", "Resuma"). Dispara uma única vez e limpa o state da
-  // rota para não reenviar em caso de refresh.
+  // Capítulo 6, seção 8 — chegada vinda de um post do Connect ("Explique isso").
   useEffect(() => {
-    if (!initialPrompt || firedInitialPrompt.current) return;
+    if (!initialPrompt || firedInitialPrompt.current || threadsLoading) return;
     firedInitialPrompt.current = true;
     send(initialPrompt);
     navigate(location.pathname, { replace: true, state: {} });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialPrompt]);
+  }, [initialPrompt, threadsLoading]);
 
-  function newThread(): string {
-    const id = `t_${Date.now()}`;
-    const t: ChatThread = { id, title: "Nova conversa", messages: [], updatedAt: Date.now() };
+  async function newThread(): Promise<string | null> {
+    if (!userId) return null;
+    const { data, error } = await supabase
+      .from("ai_chat_threads")
+      .insert({ user_id: userId, title: "Nova conversa", messages: [] })
+      .select("id,title,messages,updated_at")
+      .single();
+    if (error || !data) { toast.error("Não foi possível criar a conversa"); return null; }
+    const t: ChatThread = { id: data.id, title: data.title, messages: [], updatedAt: new Date(data.updated_at).getTime() };
     setThreads((prev) => [t, ...prev]);
-    setActiveId(id);
-    return id;
+    setActiveId(t.id);
+    return t.id;
   }
 
-  function deleteThread(id: string) {
+  async function deleteThread(id: string) {
     setThreads((prev) => {
       const next = prev.filter((t) => t.id !== id);
       if (activeId === id) setActiveId(next[0]?.id ?? null);
       return next;
     });
+    await supabase.from("ai_chat_threads").delete().eq("id", id);
   }
 
   async function send(customText?: string) {
     const text = customText || input.trim();
-    if (!text || loading) return;
+    if (!text || loading || !userId) return;
     let currentId = activeId;
-    if (!currentId) currentId = newThread();
+    if (!currentId) currentId = await newThread();
+    if (!currentId) return;
     if (!customText) setInput("");
-    
+
+    const userMsg: ChatMsg = { role: "user", content: text };
     setThreads((prev) => prev.map((t) => t.id === currentId
-      ? { ...t, title: t.messages.length === 0 ? text.slice(0, 40) : t.title, messages: [...t.messages, { role: "user", content: text }], updatedAt: Date.now() }
+      ? { ...t, title: t.messages.length === 0 ? text.slice(0, 40) : t.title, messages: [...t.messages, userMsg], updatedAt: Date.now() }
       : t
     ));
     setLoading(true);
     try {
       const { content } = await invokeAI({ action: "chat", message: text, history: messages }, userId);
-      setThreads((prev) => prev.map((t) => t.id === currentId
-        ? { ...t, messages: [...t.messages, { role: "assistant", content }], updatedAt: Date.now() }
-        : t
-      ));
+      setThreads((prev) => {
+        const next = prev.map((t) => t.id === currentId
+          ? { ...t, messages: [...t.messages, { role: "assistant", content } as ChatMsg], updatedAt: Date.now() }
+          : t
+        );
+        const updated = next.find((t) => t.id === currentId);
+        if (updated) {
+          supabase.from("ai_chat_threads").update({ title: updated.title, messages: updated.messages as any }).eq("id", currentId);
+        }
+        return next;
+      });
     } catch (e: any) { toast.error(e.message ?? "Falha ao consultar a IA"); } finally { setLoading(false); }
   }
 
@@ -187,11 +255,13 @@ function ChatTab({ userId, onToolSelect, initialPrompt }: { userId?: string; onT
       <aside className={cn("md:block", sidebarOpen ? "block" : "hidden")}>
         <Card className="h-full flex flex-col rounded-[32px] border-0 bg-card shadow-sm overflow-hidden">
           <CardHeader className="p-5 pb-3 border-b border-border/40 flex flex-row items-center justify-between">
-            <h3 className="text-sm font-black uppercase tracking-widest text-muted-foreground">Histórico Local</h3>
+            <h3 className="text-sm font-black uppercase tracking-widest text-muted-foreground">Histórico</h3>
             <Button size="icon" variant="ghost" onClick={newThread} className="h-8 w-8 rounded-full hover:bg-primary/10 hover:text-primary"><Plus className="h-4 w-4" /></Button>
           </CardHeader>
           <ScrollArea className="flex-1 px-3 py-2">
-            {threads.length === 0 ? (
+            {threadsLoading ? (
+              <div className="flex justify-center pt-10"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+            ) : threads.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-center p-4 opacity-50 mt-10">
                 <BrainCircuit className="h-10 w-10 text-muted-foreground mb-3" />
                 <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Sem histórico</p>
@@ -236,7 +306,6 @@ function ChatTab({ userId, onToolSelect, initialPrompt }: { userId?: string; onT
                 <p className="text-lg font-black text-foreground">Como posso ajudar hoje?</p>
                 <p className="text-sm font-medium text-muted-foreground mt-1">Converse comigo ou use o botão (+) abaixo para ferramentas avançadas.</p>
               </div>
-              {/* Botões de Ação Rápida no Chat Vazio */}
               <div className="flex flex-wrap justify-center gap-2 max-w-lg mx-auto">
                 <Button variant="outline" className="rounded-full bg-card shadow-sm text-xs font-bold" onClick={() => send("Me ajude a organizar meus estudos para esta semana.")}>📅 Organizar estudos</Button>
                 <Button variant="outline" className="rounded-full bg-card shadow-sm text-xs font-bold" onClick={() => send("Me explique um conceito complexo da minha área de forma simples.")}>💡 Explicar conceito</Button>
@@ -268,7 +337,6 @@ function ChatTab({ userId, onToolSelect, initialPrompt }: { userId?: string; onT
         <div className="p-3 sm:p-5 bg-card/90 backdrop-blur-2xl border-t border-border/40 shrink-0">
           <div className="flex items-end gap-2 bg-muted/40 p-1.5 rounded-[28px] border border-border/50 focus-within:border-primary/40 focus-within:bg-background transition-all shadow-sm">
             
-            {/* O MENU MÁGICO (+) */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="secondary" size="icon" className="h-11 w-11 rounded-full shrink-0 mb-0.5 ml-0.5 text-foreground shadow-sm hover:scale-105 transition-transform" title="Ferramentas Avançadas">
@@ -312,10 +380,11 @@ function ChatTab({ userId, onToolSelect, initialPrompt }: { userId?: string; onT
 }
 
 /* --------------------------- 2. RESUMO --------------------------- */
-function SummaryTab({ userId, onBack }: { userId?: string; onBack: () => void }) {
-  const [content, setContent] = useState("");
+function SummaryTab({ userId, onBack, initialContent }: { userId?: string; onBack: () => void; initialContent?: string }) {
+  const [content, setContent] = useState(initialContent ?? "");
   const [result, setResult] = useState("");
   const [loading, setLoading] = useState(false);
+  const autoRan = useRef(false);
 
   async function run() {
     if (!content.trim()) return;
@@ -325,6 +394,12 @@ function SummaryTab({ userId, onBack }: { userId?: string; onBack: () => void })
       setResult(out);
     } catch (e: any) { toast.error(e.message ?? "Erro ao gerar resumo"); } finally { setLoading(false); }
   }
+
+  // Veio de um post do Connect ("Faça um resumo") — gera automaticamente
+  useEffect(() => {
+    if (initialContent && !autoRan.current) { autoRan.current = true; run(); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialContent]);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in slide-in-from-right-8 duration-300">
@@ -345,7 +420,6 @@ function SummaryTab({ userId, onBack }: { userId?: string; onBack: () => void })
           </Button>
         </CardContent>
       </Card>
-      {/* ... (Mesmo código do Resultado do Resumo do código anterior) */}
        {result ? (
         <Card className="rounded-[32px] border border-primary/20 bg-primary/5 shadow-sm animate-in slide-in-from-bottom-4">
           <CardContent className="p-6 sm:p-8">
@@ -357,8 +431,8 @@ function SummaryTab({ userId, onBack }: { userId?: string; onBack: () => void })
         </Card>
       ) : (
         <div className="hidden lg:flex flex-col items-center justify-center p-10 opacity-40 border-2 border-dashed border-border/50 rounded-[32px]">
-          <FileText className="h-16 w-16 mb-4 text-muted-foreground" />
-          <p className="font-black text-lg text-center">Aguardando Texto</p>
+          {loading ? <Loader2 className="h-16 w-16 mb-4 text-muted-foreground animate-spin" /> : <FileText className="h-16 w-16 mb-4 text-muted-foreground" />}
+          <p className="font-black text-lg text-center">{loading ? "Gerando..." : "Aguardando Texto"}</p>
         </div>
       )}
     </div>
@@ -366,12 +440,13 @@ function SummaryTab({ userId, onBack }: { userId?: string; onBack: () => void })
 }
 
 /* --------------------------- 3. FLASHCARDS --------------------------- */
-function FlashcardsTab({ userId, onBack }: { userId?: string; onBack: () => void }) {
-  const [content, setContent] = useState("");
+function FlashcardsTab({ userId, onBack, initialContent }: { userId?: string; onBack: () => void; initialContent?: string }) {
+  const [content, setContent] = useState(initialContent ?? "");
   const [count, setCount] = useState(8);
   const [cards, setCards] = useState<Flashcard[]>([]);
   const [flipped, setFlipped] = useState<Record<number, boolean>>({});
   const [loading, setLoading] = useState(false);
+  const autoRan = useRef(false);
 
   async function run() {
     if (!content.trim()) return;
@@ -382,6 +457,12 @@ function FlashcardsTab({ userId, onBack }: { userId?: string; onBack: () => void
       else { toast.error("Falha ao criar as cartas."); console.log(raw); }
     } catch (e: any) { toast.error(e.message ?? "Erro ao gerar flashcards"); } finally { setLoading(false); }
   }
+
+  // Veio de um post do Connect ("Gere flashcards") — gera automaticamente
+  useEffect(() => {
+    if (initialContent && !autoRan.current) { autoRan.current = true; run(); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialContent]);
 
   return (
     <div className="space-y-6 animate-in slide-in-from-right-8 duration-300">
@@ -395,7 +476,7 @@ function FlashcardsTab({ userId, onBack }: { userId?: string; onBack: () => void
             </div>
             <div className="flex items-center gap-3 bg-muted/40 p-1.5 rounded-2xl w-fit border border-border/40">
               <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground px-2">Qtd:</span>
-              <Input type="number" min={3} max={20} value={count} onChange={(e) => setCount(Number(e.target.value))} className="w-16 h-9 rounded-xl bg-background border-0 text-center font-bold" />
+              <Input type="number" min={3} max={20} value={count} onChange={(e) => setCount(Math.min(20, Math.max(3, Number(e.target.value) || 3)))} className="w-16 h-9 rounded-xl bg-background border-0 text-center font-bold" />
             </div>
           </div>
           <div className="flex flex-col sm:flex-row gap-3">
@@ -407,7 +488,6 @@ function FlashcardsTab({ userId, onBack }: { userId?: string; onBack: () => void
         </CardContent>
       </Card>
       
-      {/* ... (Mesmo código do Resultado do Flashcard do código anterior) */}
        {cards.length > 0 && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 animate-in slide-in-from-bottom-4 pt-2">
           {cards.map((c, i) => (
@@ -472,11 +552,11 @@ function StudyPlanTab({ userId, onBack }: { userId?: string; onBack: () => void 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2 bg-muted/20 p-3 rounded-2xl border border-border/40">
               <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground text-center block">Dias</label>
-              <Input type="number" min={1} max={30} value={days} onChange={(e) => setDays(Number(e.target.value))} className="h-10 rounded-xl bg-background border-0 text-center font-black" />
+              <Input type="number" min={1} max={30} value={days} onChange={(e) => setDays(Math.min(30, Math.max(1, Number(e.target.value) || 1)))} className="h-10 rounded-xl bg-background border-0 text-center font-black" />
             </div>
             <div className="space-y-2 bg-muted/20 p-3 rounded-2xl border border-border/40">
               <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground text-center block">Horas/Dia</label>
-              <Input type="number" min={1} max={12} value={hoursPerDay} onChange={(e) => setHoursPerDay(Number(e.target.value))} className="h-10 rounded-xl bg-background border-0 text-center font-black" />
+              <Input type="number" min={1} max={12} value={hoursPerDay} onChange={(e) => setHoursPerDay(Math.min(12, Math.max(1, Number(e.target.value) || 1)))} className="h-10 rounded-xl bg-background border-0 text-center font-black" />
             </div>
           </div>
           <Button onClick={run} disabled={loading || !topic.trim()} className="w-full h-14 rounded-2xl font-black text-base shadow-lg bg-amber-500 hover:bg-amber-600 text-white mt-2 transition-transform hover:scale-[1.02]">
@@ -485,7 +565,6 @@ function StudyPlanTab({ userId, onBack }: { userId?: string; onBack: () => void 
         </CardContent>
       </Card>
       
-      {/* ... (Mesmo código do Resultado do Cronograma do código anterior) */}
       <div className="space-y-4">
         {plan.length > 0 ? (
           <div className="space-y-4 animate-in slide-in-from-bottom-4">
@@ -521,4 +600,3 @@ function StudyPlanTab({ userId, onBack }: { userId?: string; onBack: () => void 
     </div>
   );
 }
-
