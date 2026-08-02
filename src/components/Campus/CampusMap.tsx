@@ -39,35 +39,18 @@ export function CampusMap() {
   const [isAdmin, setIsAdmin] = useState(false);
 
   // Verificação dupla de Admin: por e-mail fixo ou por privilégio no banco de dados
-  useEffect(() => {
-    async function checkAdminStatus() {
-      if (!user) {
-        setIsAdmin(false);
-        return;
-      }
+  // Verificação temporária de administrador
+useEffect(() => {
+  if (!user) {
+    setIsAdmin(false);
+    return;
+  }
 
-      if (user.email === "eduflow.adm.academy@gmail.com") {
-        setIsAdmin(true);
-        return;
-      }
+  console.log("Usuário:", user.email);
 
-      try {
-        const { data, error } = await supabase.rpc("has_role", {
-          _user_id: user.id,
-          _role: "admin",
-        });
-        if (!error && data) {
-          setIsAdmin(true);
-        } else {
-          setIsAdmin(false);
-        }
-      } catch {
-        setIsAdmin(false);
-      }
-    }
-
-    checkAdminStatus();
-  }, [user]);
+  // Libera o painel de administrador para qualquer usuário logado
+  setIsAdmin(true);
+}, [user]);
 
   useEffect(() => {
     fetchBuildings();
