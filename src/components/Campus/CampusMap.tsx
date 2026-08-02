@@ -36,9 +36,38 @@ export function CampusMap() {
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [isListOpenMobile, setIsListOpenMobile] = useState(false);
   const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
 
-  // Verifica se o usuário logado é o administrador oficial
-  const isAdmin = user?.email === "eduflow.adm.academy@gmail.com";
+  // Verificação dupla de Admin: por e-mail fixo ou por privilégio no banco de dados
+  useEffect(() => {
+    async function checkAdminStatus() {
+      if (!user) {
+        setIsAdmin(false);
+        return;
+      }
+
+      if (user.email === "eduflow.adm.academy@gmail.com") {
+        setIsAdmin(true);
+        return;
+      }
+
+      try {
+        const { data, error } = await supabase.rpc("has_role", {
+          _user_id: user.id,
+          _role: "admin",
+        });
+        if (!error && data) {
+          setIsAdmin(true);
+        } else {
+          setIsAdmin(false);
+        }
+      } catch {
+        setIsAdmin(false);
+      }
+    }
+
+    checkAdminStatus();
+  }, [user]);
 
   useEffect(() => {
     fetchBuildings();
@@ -95,7 +124,7 @@ export function CampusMap() {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Botão do Admin (Visível apenas para o e-mail oficial) */}
+          {/* Botão do Admin */}
           {isAdmin && (
             <Button 
               onClick={() => setIsAdminModalOpen(true)}
@@ -292,3 +321,4 @@ export function CampusMap() {
     </div>
   );
 }
+
