@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -34,7 +35,10 @@ import {
   Power,
   X,
   Crown,
-  LayoutDashboard
+  LayoutDashboard,
+  MapPin,
+  ImagePlus,
+  Building2
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -67,6 +71,19 @@ export default function AdminDashboard() {
   const [annCtaUrl, setAnnCtaUrl] = useState("");
   const [annOptions, setAnnOptions] = useState<string[]>(["", ""]);
   const [savingAnn, setSavingAnn] = useState(false);
+
+  // Mapa do Campus — foto + blocos (RU, biblioteca, institutos, etc.)
+  const [campuses, setCampuses] = useState<any[]>([]);
+  const [selectedCampusId, setSelectedCampusId] = useState<string>("");
+  const [campusBlocks, setCampusBlocks] = useState<any[]>([]);
+  const [uploadingMap, setUploadingMap] = useState(false);
+  const [pendingPin, setPendingPin] = useState<{ x: number; y: number } | null>(null);
+  const [blockName, setBlockName] = useState("");
+  const [blockCategory, setBlockCategory] = useState("bloco");
+  const [blockDescription, setBlockDescription] = useState("");
+  const [savingBlock, setSavingBlock] = useState(false);
+
+  const selectedCampus = campuses.find((c) => c.id === selectedCampusId) || null;
 
   useEffect(() => {
     if (!user) return;
@@ -113,12 +130,95 @@ export default function AdminDashboard() {
       const { data: rolesData } = await supabase.from("user_roles").select("user_id").eq("role", "admin");
       setAdminIds(new Set((rolesData || []).map((r: any) => r.user_id)));
 
+      const { data: campusesData } = await supabase.from("campuses").select("*").order("name", { ascending: true });
+      setCampuses(campusesData || []);
+      if (campusesData && campusesData.length > 0 && !selectedCampusId) {
+        setSelectedCampusId(campusesData[0].id);
+      }
+
     } catch (error) {
       console.error("Erro Adm:", error);
       toast({ title: "Erro ao carregar painel", description: "Não foi possível buscar os dados.", variant: "destructive" });
     } finally {
       setLoading(false);
     }
+  }
+
+  useEffect(() => {
+    if (!selectedCampusId) return;
+    loadCampusBlocks(selectedCampusId);
+    setPendingPin(null);
+  }, [selectedCampusId]);
+
+  async function loadCampusBlocks(campusId: string) {
+    const { data, error } = await supabase.from("campus_blocks").select("*").eq("campus_id", campusId).order("created_at", { ascending: true });
+    if (error) { toast({ title: "Erro ao carregar blocos do campus", variant: "destructive" }); return; }
+    setCampusBlocks(data || []);
+  }
+
+  // Sobe a foto do mapa do campus (planta/imagem aérea) e grava em campuses.map_image_url
+  async function handleMapUpload(file: File) {
+    if (!selectedCampusId) return;
+    setUploadingMap(true);
+    try {
+      const ext = file.name.split(".").pop();
+      const filePath = `campus-maps/${selectedCampusId}-${Date.now()}.${ext}`;
+      const { error: uploadError } = await supabase.storage.from("campus-media").upload(filePath, file, { upsert: true });
+      if (uploadError) throw uploadError;
+      const { data } = supabase.storage.from("campus-media").getPublicUrl(filePath);
+      const { error: updateError } = await supabase.from("campuses").update({ map_image_url: data.publicUrl }).eq("id", selectedCampusId);
+      if (updateError) throw updateError;
+      setCampuses((prev) => prev.map((c) => c.id === selectedCampusId ? { ...c, map_image_url: data.publicUrl } : c));
+      toast({ title: "Mapa do campus atualizado! 🗺️" });
+    } catch (e: any) {
+      toast({ title: "Erro ao subir o mapa", description: e.message, variant: "destructive" });
+    } finally {
+      setUploadingMap(false);
+    }
+  }
+
+  // Clique na imagem do mapa define a posição (em %) do próximo bloco a cadastrar
+  function handleMapClick(e: React.MouseEvent<HTMLDivElement>) {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * 100;
+    const y = ((e.clientY - rect.top) / rect.height) * 100;
+    setPendingPin({ x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10 });
+    setBlockName(""); setBlockCategory("bloco"); setBlockDescription("");
+  }
+
+  async function handleCreateBlock() {
+    if (!selectedCampusId || !pendingPin || !blockName.trim()) {
+      toast({ title: "Dê um nome ao bloco antes de salvar", variant: "destructive" });
+      return;
+    }
+    setSavingBlock(true);
+    try {
+      const { data, error } = await supabase.from("campus_blocks").insert({
+        campus_id: selectedCampusId,
+        name: blockName.trim(),
+        category: blockCategory,
+        description: blockDescription.trim() || null,
+        x_percent: pendingPin.x,
+        y_percent: pendingPin.y,
+        created_by: user?.id,
+      }).select().single();
+      if (error) throw error;
+      setCampusBlocks((prev) => [...prev, data]);
+      setPendingPin(null); setBlockName(""); setBlockDescription("");
+      toast({ title: "Bloco cadastrado no mapa!" });
+    } catch (e: any) {
+      toast({ title: "Erro ao cadastrar bloco", description: e.message, variant: "destructive" });
+    } finally {
+      setSavingBlock(false);
+    }
+  }
+
+  async function handleDeleteBlock(id: string) {
+    if (!window.confirm("Remover este bloco do mapa do campus?")) return;
+    try {
+      await supabase.from("campus_blocks").delete().eq("id", id);
+      setCampusBlocks((prev) => prev.filter((b) => b.id !== id));
+    } catch { toast({ title: "Erro ao remover bloco", variant: "destructive" }); }
   }
 
   async function handleDeletePost(reportId: string, postId: string) {
@@ -333,6 +433,7 @@ export default function AdminDashboard() {
         <ScrollArea className="w-full mb-6">
           <TabsList className="w-full justify-start rounded-[24px] bg-transparent p-0 flex gap-2 h-auto">
             <TabsTrigger value="users" className="rounded-full font-bold text-sm h-11 px-5 gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground bg-muted/40 text-muted-foreground transition-all"><Users className="h-4 w-4" /> Usuários</TabsTrigger>
+            <TabsTrigger value="map" className="rounded-full font-bold text-sm h-11 px-5 gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground bg-muted/40 text-muted-foreground transition-all"><MapPin className="h-4 w-4" /> Mapa do Campus</TabsTrigger>
             <TabsTrigger value="announcements" className="rounded-full font-bold text-sm h-11 px-5 gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground bg-muted/40 text-muted-foreground transition-all"><LayoutDashboard className="h-4 w-4" /> Banners</TabsTrigger>
             <TabsTrigger value="reports" className="rounded-full font-bold text-sm h-11 px-5 gap-2 data-[state=active]:bg-destructive data-[state=active]:text-white bg-muted/40 text-muted-foreground transition-all"><AlertTriangle className="h-4 w-4" /> Denúncias {reports.length > 0 && <span className="bg-white text-destructive rounded-full px-2 py-0.5 text-[10px] ml-1">{reports.length}</span>}</TabsTrigger>
             <TabsTrigger value="feedbacks" className="rounded-full font-bold text-sm h-11 px-5 gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground bg-muted/40 text-muted-foreground transition-all"><MessageSquare className="h-4 w-4" /> Avaliações</TabsTrigger>
@@ -382,6 +483,122 @@ export default function AdminDashboard() {
               ))
             )}
           </div>
+        </TabsContent>
+
+        {/* 1.5 MAPA DO CAMPUS — foto + blocos (RU, biblioteca, institutos...) */}
+        <TabsContent value="map" className="space-y-5 animate-in fade-in">
+          <Card className="rounded-[32px] border-0 bg-card shadow-md">
+            <CardContent className="p-6 sm:p-8 space-y-5">
+              <div className="flex items-center gap-3 border-b border-border/40 pb-4">
+                <div className="h-10 w-10 bg-primary/10 rounded-xl flex items-center justify-center"><MapPin className="h-5 w-5 text-primary" /></div>
+                <div><h3 className="font-black text-lg">Mapa do Campus</h3><p className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">Suba a foto do mapa e clique nela para cadastrar cada bloco</p></div>
+              </div>
+
+              {campuses.length === 0 ? (
+                <EmptyState icon={<Building2 className="h-10 w-10" />} text="Nenhum campus cadastrado ainda. Cadastre um campus antes de configurar o mapa." />
+              ) : (
+                <>
+                  <div className="space-y-1.5">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Campus</p>
+                    <Select value={selectedCampusId} onValueChange={setSelectedCampusId}>
+                      <SelectTrigger className="h-12 rounded-2xl bg-muted/30 border-0 font-bold"><SelectValue placeholder="Selecione um campus" /></SelectTrigger>
+                      <SelectContent>
+                        {campuses.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}{c.city ? ` — ${c.city}` : ""}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {selectedCampus && (
+                    <>
+                      {!selectedCampus.map_image_url ? (
+                        <label className="flex flex-col items-center justify-center gap-3 h-56 rounded-[24px] border-2 border-dashed border-border/50 bg-muted/20 cursor-pointer hover:bg-muted/30 transition-all">
+                          {uploadingMap ? <Loader2 className="h-8 w-8 animate-spin text-primary" /> : <ImagePlus className="h-8 w-8 text-muted-foreground/50" />}
+                          <p className="text-xs font-black uppercase tracking-widest text-muted-foreground">{uploadingMap ? "Enviando..." : "Enviar foto do mapa do campus"}</p>
+                          <input type="file" accept="image/*" className="hidden" disabled={uploadingMap} onChange={(e) => e.target.files?.[0] && handleMapUpload(e.target.files[0])} />
+                        </label>
+                      ) : (
+                        <div className="space-y-3">
+                          <div
+                            onClick={handleMapClick}
+                            className="relative w-full rounded-[24px] overflow-hidden border border-border/40 shadow-inner cursor-crosshair select-none"
+                            title="Clique no mapa para marcar a posição de um novo bloco"
+                          >
+                            <img src={selectedCampus.map_image_url} alt="Mapa do campus" className="w-full h-auto block pointer-events-none" draggable={false} />
+                            {campusBlocks.map((b) => (
+                              <div key={b.id} style={{ left: `${b.x_percent}%`, top: `${b.y_percent}%` }} className="absolute -translate-x-1/2 -translate-y-full group/pin">
+                                <MapPin className="h-6 w-6 text-primary fill-primary/20 drop-shadow" />
+                                <span className="absolute left-1/2 -translate-x-1/2 -top-7 whitespace-nowrap text-[10px] font-black bg-foreground text-background rounded-md px-2 py-1 opacity-0 group-hover/pin:opacity-100 transition-opacity">{b.name}</span>
+                              </div>
+                            ))}
+                            {pendingPin && (
+                              <div style={{ left: `${pendingPin.x}%`, top: `${pendingPin.y}%` }} className="absolute -translate-x-1/2 -translate-y-full">
+                                <MapPin className="h-7 w-7 text-amber-500 animate-bounce drop-shadow" />
+                              </div>
+                            )}
+                          </div>
+
+                          <label className="inline-flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-muted-foreground cursor-pointer hover:text-primary transition-colors">
+                            {uploadingMap ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ImagePlus className="h-3.5 w-3.5" />} Trocar foto do mapa
+                            <input type="file" accept="image/*" className="hidden" disabled={uploadingMap} onChange={(e) => e.target.files?.[0] && handleMapUpload(e.target.files[0])} />
+                          </label>
+
+                          {/* Formulário do bloco pendente (aparece após clicar no mapa) */}
+                          {pendingPin && (
+                            <Card className="rounded-[20px] border border-amber-500/30 bg-amber-500/5">
+                              <CardContent className="p-5 space-y-3">
+                                <p className="text-[10px] font-black uppercase tracking-widest text-amber-600">Novo bloco na posição marcada</p>
+                                <Input placeholder="Nome do bloco (ex: Bloco de Engenharia, RU, Biblioteca Central)" value={blockName} onChange={(e) => setBlockName(e.target.value)} className="h-12 rounded-xl bg-background border-0 shadow-sm font-bold" />
+                                <Select value={blockCategory} onValueChange={setBlockCategory}>
+                                  <SelectTrigger className="h-12 rounded-xl bg-background border-0 shadow-sm"><SelectValue /></SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="bloco">Bloco de aulas</SelectItem>
+                                    <SelectItem value="instituto">Instituto/Faculdade</SelectItem>
+                                    <SelectItem value="ru">Restaurante Universitário</SelectItem>
+                                    <SelectItem value="biblioteca">Biblioteca</SelectItem>
+                                    <SelectItem value="laboratorio">Laboratório</SelectItem>
+                                    <SelectItem value="esporte">Esporte/Ginásio</SelectItem>
+                                    <SelectItem value="administrativo">Administrativo</SelectItem>
+                                    <SelectItem value="outro">Outro</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                                <Textarea placeholder="Descrição opcional (cursos ali alocados, observações...)" value={blockDescription} onChange={(e) => setBlockDescription(e.target.value)} rows={2} className="rounded-xl bg-background border-0 shadow-sm resize-none text-sm" />
+                                <div className="flex gap-2">
+                                  <Button onClick={handleCreateBlock} disabled={savingBlock || !blockName.trim()} className="flex-1 h-11 rounded-xl font-black">
+                                    {savingBlock ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Plus className="h-4 w-4 mr-2" />} Salvar Bloco
+                                  </Button>
+                                  <Button variant="outline" className="h-11 rounded-xl" onClick={() => setPendingPin(null)}><X className="h-4 w-4" /></Button>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Lista dos blocos já cadastrados */}
+                      <div className="space-y-2 pt-2">
+                        <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Blocos cadastrados ({campusBlocks.length})</p>
+                        {campusBlocks.length === 0 ? (
+                          <p className="text-xs text-muted-foreground font-medium">Nenhum bloco marcado no mapa ainda.</p>
+                        ) : (
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {campusBlocks.map((b) => (
+                              <div key={b.id} className="flex items-center justify-between gap-2 bg-muted/30 rounded-xl px-4 py-3">
+                                <div className="min-w-0">
+                                  <p className="text-sm font-bold truncate">{b.name}</p>
+                                  <p className="text-[9px] font-black uppercase tracking-widest text-muted-foreground">{b.category}</p>
+                                </div>
+                                <Button size="icon" variant="ghost" className="h-8 w-8 rounded-full shrink-0 hover:bg-destructive/10 hover:text-destructive" onClick={() => handleDeleteBlock(b.id)}><Trash2 className="h-4 w-4" /></Button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {/* 2. DASHBOARD ANNOUNCEMENTS (BANNERS) */}
