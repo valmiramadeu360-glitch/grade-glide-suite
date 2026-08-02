@@ -24,7 +24,7 @@ import Connect from "./pages/Connect";
 import Messages from "./pages/Messages";
 import Campus from "./pages/Campus";
 import Ru from "./pages/Ru";
-import { CampusMap } from "@/components/Campus/CampusMap"; // <-- Importação do Mapa Interativo
+import { CampusMap } from "@/components/Campus/CampusMap";
 import NotFound from "./pages/NotFound";
 import AdminDashboard from "./pages/AdminDashboard";
 import Assistant from "./pages/Assistant";
@@ -57,7 +57,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
       }
 
       try {
-        const { data, error } = await supabase
+        const { data } = await supabase
           .from("profiles")
           .select("is_banned")
           .eq("user_id", user.id)
@@ -108,6 +108,57 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 }
 
 /**
+ * Filtro exclusivo para rotas de Administrador
+ */
+function AdminRoute({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
+  const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    async function verifyAdmin() {
+      if (!user) {
+        setIsAdmin(false);
+        return;
+      }
+
+      // Liberação direta para o e-mail oficial administrativo
+      if (user.email === "eduflow.adm.academy@gmail.com") {
+        setIsAdmin(true);
+        return;
+      }
+
+      try {
+        const { data } = await supabase.rpc("has_role", {
+          _user_id: user.id,
+          _role: "admin",
+        });
+        setIsAdmin(!!data);
+      } catch {
+        setIsAdmin(false);
+      }
+    }
+
+    if (!loading) {
+      verifyAdmin();
+    }
+  }, [user, loading]);
+
+  if (loading || isAdmin === null) {
+    return (
+      <div className="flex h-[100dvh] w-full items-center justify-center bg-background">
+        <div className="animate-spin h-10 w-10 border-[3px] border-primary/20 border-t-primary rounded-full" />
+      </div>
+    );
+  }
+
+  if (!isAdmin) {
+    return <Navigate to="/" replace />;
+  }
+
+  return <ProtectedRoute>{children}</ProtectedRoute>;
+}
+
+/**
  * Filtro de Segurança: Impede acesso de logados na tela de Login
  */
 function PublicRoute({ children }: { children: React.ReactNode }) {
@@ -138,7 +189,7 @@ const App = () => (
                 <Route path="/messages" element={<ProtectedRoute><Messages /></ProtectedRoute>} />
                 <Route path="/campus" element={<ProtectedRoute><Campus /></ProtectedRoute>} />
                 <Route path="/campus/ru" element={<ProtectedRoute><Ru /></ProtectedRoute>} />
-                <Route path="/campus/map" element={<ProtectedRoute><CampusMap /></ProtectedRoute>} /> {/* <-- ROTA DO MAPA INTERATIVO ADICIONADA */}
+                <Route path="/campus/map" element={<ProtectedRoute><CampusMap /></ProtectedRoute>} />
                 <Route path="/extra-courses" element={<Navigate to="/disciplines?tab=extra" replace />} />
                 <Route path="/reminders" element={<ProtectedRoute><Reminders /></ProtectedRoute>} />
                 <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
@@ -147,8 +198,8 @@ const App = () => (
                 <Route path="/feedback" element={<ProtectedRoute><Feedback /></ProtectedRoute>} />
                 <Route path="/assistant" element={<ProtectedRoute><Assistant /></ProtectedRoute>} />
                 
-                {/* Rota Protegida Administrativa */}
-                <Route path="/admin" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
+                {/* Rota Protegida Administrativa Corrigida */}
+                <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
                 
                 {/* Fallback de Erro */}
                 <Route path="*" element={<NotFound />} />
