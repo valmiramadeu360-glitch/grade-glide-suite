@@ -60,7 +60,7 @@ export default function Campus() {
         <div className="lg:col-span-2 space-y-6">
           
           {/* PAINEL DO RESTAURANTE UNIVERSITÁRIO (RU) */}
-          <Card className="rounded-[32px] border-0 shadow-sm bg-card overflow-hidden group cursor-pointer hover:shadow-md transition-all">
+          <Card onClick={() => navigate("/campus/ru")} className="rounded-[32px] border-0 shadow-sm bg-card overflow-hidden group cursor-pointer hover:shadow-md transition-all">
             <div className="h-2 w-full bg-gradient-to-r from-orange-400 to-rose-500" />
             <CardContent className="p-6">
               <div className="flex items-start justify-between mb-4">
