@@ -174,6 +174,56 @@ export type Database = {
           },
         ]
       }
+      campus_blocks: {
+        Row: {
+          campus_id: string
+          category: string
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          name: string
+          photo_url: string | null
+          updated_at: string
+          x_percent: number
+          y_percent: number
+        }
+        Insert: {
+          campus_id: string
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          name: string
+          photo_url?: string | null
+          updated_at?: string
+          x_percent: number
+          y_percent: number
+        }
+        Update: {
+          campus_id?: string
+          category?: string
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          name?: string
+          photo_url?: string | null
+          updated_at?: string
+          x_percent?: number
+          y_percent?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campus_blocks_campus_id_fkey"
+            columns: ["campus_id"]
+            isOneToOne: false
+            referencedRelation: "campuses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       campus_buildings: {
         Row: {
           building_number: number
@@ -221,6 +271,7 @@ export type Database = {
           city: string | null
           created_at: string
           id: string
+          map_image_url: string | null
           name: string
           state: string | null
           university_id: string
@@ -230,6 +281,7 @@ export type Database = {
           city?: string | null
           created_at?: string
           id?: string
+          map_image_url?: string | null
           name: string
           state?: string | null
           university_id: string
@@ -239,6 +291,7 @@ export type Database = {
           city?: string | null
           created_at?: string
           id?: string
+          map_image_url?: string | null
           name?: string
           state?: string | null
           university_id?: string
