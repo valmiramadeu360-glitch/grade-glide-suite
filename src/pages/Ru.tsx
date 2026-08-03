@@ -16,7 +16,8 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import {
-  useRu, requestPosition, distanceMeters, LEVEL_META, CONFIDENCE_LABEL, type RuLevel,
+  useRu, requestPosition, distanceMeters, hashFile, currentMeal, MEAL_LABEL,
+  LEVEL_META, CONFIDENCE_LABEL, type RuLevel,
 } from "@/hooks/useRu";
 
 const LEVELS: RuLevel[] = ["none", "small", "medium", "large"];
@@ -47,8 +48,17 @@ export default function Ru() {
 
   const todayMenu = useMemo(() => {
     const today = new Date().toISOString().slice(0, 10);
-    return menus.find((m) => m.service_date === today) ?? menus[0] ?? null;
-  }, [menus]);
+    const meal = currentMeal(restaurant);
+    // Prioriza a refeição corrente (almoço/jantar) do dia, depois qualquer coisa de hoje.
+    return (
+      menus.find((m) => m.service_date === today && m.meal === meal) ??
+      menus.find((m) => m.service_date === today) ??
+      menus[0] ??
+      null
+    );
+  }, [menus, restaurant]);
+
+  const activeMeal = currentMeal(restaurant);
 
   const nutrition = (todayMenu?.nutrition ?? null) as Record<string, any> | null;
   const statusMeta = status?.level ? LEVEL_META[status.level] : null;
@@ -96,6 +106,37 @@ export default function Ru() {
     if (!user || !restaurant) return;
     setUploading(true);
     try {
+      const photoHash = await hashFile(file);
+
+      // 1) A mesma foto já foi enviada? Confirma o registro existente e reaproveita
+      // a MESMA estimativa nutricional (nada de calorias diferentes p/ a mesma refeição).
+      const { data: existing } = await supabase.rpc("ru_find_menu_by_hash", {
+        _restaurant_id: restaurant.id,
+        _photo_hash: photoHash,
+      });
+      const known = Array.isArray(existing) ? existing[0] : null;
+
+      if (known) {
+        const { error: confirmErr } = await supabase.rpc("ru_submit_menu", {
+          _restaurant_id: restaurant.id,
+          _service_date: known.service_date,
+          _meal: known.meal,
+          _photo_url: null,
+          _photo_hash: photoHash,
+          _raw_text: known.raw_text,
+          _items: known.items,
+          _nutrition: known.nutrition,
+        });
+        if (confirmErr) throw confirmErr;
+
+        toast({
+          title: "Cardápio já registrado ✅",
+          description: `Esta foto do ${MEAL_LABEL[known.meal as "lunch" | "dinner"]} já estava publicada — seu envio confirmou a informação e a estimativa nutricional foi mantida.`,
+        });
+        await reload();
+        return;
+      }
+
       const path = `${user.id}/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.]/g, "_")}`;
       const { error: upErr } = await supabase.storage.from("ru-menus").upload(path, file);
       if (upErr) throw upErr;
@@ -113,21 +154,35 @@ export default function Ru() {
       if (aiErr) throw aiErr;
       if (ai?.error) throw new Error(ai.error);
 
-      const hour = new Date().getHours();
-      const { error: insErr } = await supabase.from("ru_menus").insert({
-        restaurant_id: restaurant.id,
-        submitted_by: user.id,
-        meal: hour >= 16 ? "dinner" : "lunch",
-        photo_url: path,
-        raw_text: ai?.raw_text ?? null,
-        items: ai?.items ?? [],
-        nutrition: ai?.nutrition
+      // 2) Refeição e data vêm da própria foto (quadro do RU); se a IA não conseguir
+      // ler, o horário oficial de almoço/jantar decide.
+      const detectedMeal = ai?.meal === "lunch" || ai?.meal === "dinner" ? ai.meal : null;
+      const meal = detectedMeal ?? currentMeal(restaurant);
+      const serviceDate = ai?.service_date ?? new Date().toISOString().slice(0, 10);
+
+      const { data: submitted, error: insErr } = await supabase.rpc("ru_submit_menu", {
+        _restaurant_id: restaurant.id,
+        _service_date: serviceDate,
+        _meal: meal,
+        _photo_url: path,
+        _photo_hash: photoHash,
+        _raw_text: ai?.raw_text ?? null,
+        _items: ai?.items ?? [],
+        _nutrition: ai?.nutrition
           ? { ...ai.nutrition, vegetarian_option: ai.vegetarian_option ?? null, allergens: ai.allergens ?? [], tip: ai.tip ?? null }
           : null,
+        _detected_meal: detectedMeal,
+        _detected_date: ai?.service_date ?? null,
       });
       if (insErr) throw insErr;
 
-      toast({ title: "Cardápio publicado! 📸", description: "A foto original fica disponível para conferência." });
+      const variation = Array.isArray(submitted) ? submitted[0]?.was_duplicate : false;
+      toast({
+        title: `${MEAL_LABEL[meal as "lunch" | "dinner"]} publicado! 📸`,
+        description: variation
+          ? "Já havia um envio para esta refeição — o seu ficou registrado como conferência adicional."
+          : "A foto original fica disponível para conferência.",
+      });
       await reload();
     } catch (error: any) {
       toast({ title: "Erro ao enviar cardápio", description: error.message, variant: "destructive" });
@@ -299,8 +354,15 @@ export default function Ru() {
                 <div>
                   <h2 className="text-sm font-bold flex items-center gap-2"><UtensilsCrossed className="h-4 w-4 text-primary" /> Cardápio do dia</h2>
                   <p className="text-[11px] text-muted-foreground mt-0.5">
-                    {todayMenu ? `${todayMenu.meal === "dinner" ? "Jantar" : "Almoço"} • ${todayMenu.service_date}` : "Ainda não publicado hoje"}
+                    {todayMenu
+                      ? `${MEAL_LABEL[todayMenu.meal]} • ${todayMenu.service_date}`
+                      : `${MEAL_LABEL[activeMeal]} de hoje ainda não publicado`}
                   </p>
+                  {todayMenu && (todayMenu.confirmations ?? 1) > 1 && (
+                    <p className="text-[10px] font-bold text-emerald-600 mt-0.5">
+                      ✅ Confirmado por {todayMenu.confirmations} estudantes
+                    </p>
+                  )}
                 </div>
                 <input
                   ref={fileInput}
@@ -377,7 +439,11 @@ export default function Ru() {
                 {menus.slice(1).map((menu) => (
                   <div key={menu.id} className="flex items-center justify-between gap-3 bg-muted/30 rounded-xl p-3 border border-border/30">
                     <div className="min-w-0">
-                      <p className="text-xs font-bold">{menu.meal === "dinner" ? "Jantar" : "Almoço"} • {menu.service_date}</p>
+                      <p className="text-xs font-bold">
+                        {MEAL_LABEL[menu.meal]} • {menu.service_date}
+                        {menu.duplicate_of && <span className="ml-1.5 font-semibold text-muted-foreground">(variação)</span>}
+                        {(menu.confirmations ?? 1) > 1 && <span className="ml-1.5 text-emerald-600">✅ {menu.confirmations}</span>}
+                      </p>
                       <p className="text-[11px] text-muted-foreground truncate">{itemsOf(menu.items).join(", ") || menu.raw_text || "—"}</p>
                     </div>
                     {menu.signedPhoto && (

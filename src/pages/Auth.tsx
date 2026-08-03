@@ -77,10 +77,12 @@ export default function Auth() {
         const loggedUser = data?.user;
         if (!loggedUser) throw new Error("Falha ao autenticar usuário.");
 
-        if (loggedUser.email === ADMIN_EMAIL) {
+        const { data: isAdmin } = await supabase.rpc("is_admin");
+
+        if (isAdmin) {
           toast({
             title: "Acesso Administrativo 🛡️",
-            description: "Bem-vindo ao Painel de Comando Supremo do EduFlow.",
+            description: "Bem-vindo ao Painel de Comando do EduFlow.",
             className: "bg-emerald-500 text-white border-none"
           });
           navigate("/admin");

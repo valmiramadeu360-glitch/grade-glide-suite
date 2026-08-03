@@ -60,9 +60,7 @@ export function AppSidebar() {
           if (data?.avatar_url) setAvatarUrl(data.avatar_url);
         });
 
-      supabase
-        .rpc("has_role", { _user_id: user.id, _role: "admin" })
-        .then(({ data }) => setIsAdmin(!!data));
+      supabase.rpc("is_admin").then(({ data }) => setIsAdmin(!!data));
     } else {
       setIsAdmin(false);
     }

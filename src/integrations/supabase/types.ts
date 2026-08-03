@@ -1685,12 +1685,18 @@ export type Database = {
       }
       ru_menus: {
         Row: {
+          confirmations: number
           created_at: string
+          detected_date: string | null
+          detected_meal: string | null
+          duplicate_of: string | null
           id: string
           is_official: boolean
           items: Json
           meal: Database["public"]["Enums"]["ru_meal"]
           nutrition: Json | null
+          nutrition_source: string | null
+          photo_hash: string | null
           photo_url: string | null
           raw_text: string | null
           restaurant_id: string
@@ -1699,12 +1705,18 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          confirmations?: number
           created_at?: string
+          detected_date?: string | null
+          detected_meal?: string | null
+          duplicate_of?: string | null
           id?: string
           is_official?: boolean
           items?: Json
           meal?: Database["public"]["Enums"]["ru_meal"]
           nutrition?: Json | null
+          nutrition_source?: string | null
+          photo_hash?: string | null
           photo_url?: string | null
           raw_text?: string | null
           restaurant_id: string
@@ -1713,12 +1725,18 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          confirmations?: number
           created_at?: string
+          detected_date?: string | null
+          detected_meal?: string | null
+          duplicate_of?: string | null
           id?: string
           is_official?: boolean
           items?: Json
           meal?: Database["public"]["Enums"]["ru_meal"]
           nutrition?: Json | null
+          nutrition_source?: string | null
+          photo_hash?: string | null
           photo_url?: string | null
           raw_text?: string | null
           restaurant_id?: string
@@ -1727,6 +1745,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "ru_menus_duplicate_of_fkey"
+            columns: ["duplicate_of"]
+            isOneToOne: false
+            referencedRelation: "ru_menus"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "ru_menus_restaurant_id_fkey"
             columns: ["restaurant_id"]
@@ -2202,6 +2227,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_admin: { Args: never; Returns: boolean }
       is_following: {
         Args: { _follower: string; _following: string }
         Returns: boolean
@@ -2214,6 +2240,18 @@ export type Database = {
       ru_distance_meters: {
         Args: { _lat1: number; _lat2: number; _lon1: number; _lon2: number }
         Returns: number
+      }
+      ru_find_menu_by_hash: {
+        Args: { _photo_hash: string; _restaurant_id: string }
+        Returns: {
+          confirmations: number
+          id: string
+          items: Json
+          meal: Database["public"]["Enums"]["ru_meal"]
+          nutrition: Json
+          raw_text: string
+          service_date: string
+        }[]
       }
       ru_peak_hours: {
         Args: { _restaurant_id: string }
@@ -2241,6 +2279,25 @@ export type Database = {
           service: number
           total: number
           waiting: number
+        }[]
+      }
+      ru_submit_menu: {
+        Args: {
+          _detected_date?: string
+          _detected_meal?: string
+          _items: Json
+          _meal: Database["public"]["Enums"]["ru_meal"]
+          _nutrition: Json
+          _photo_hash: string
+          _photo_url: string
+          _raw_text: string
+          _restaurant_id: string
+          _service_date: string
+        }
+        Returns: {
+          confirmations: number
+          menu_id: string
+          was_duplicate: boolean
         }[]
       }
     }

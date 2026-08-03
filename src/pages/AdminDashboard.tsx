@@ -88,10 +88,7 @@ export default function AdminDashboard() {
   useEffect(() => {
     if (!user) return;
     (async () => {
-      const { data: isAdmin, error } = await supabase.rpc("has_role", {
-        _user_id: user.id,
-        _role: "admin",
-      });
+      const { data: isAdmin, error } = await supabase.rpc("is_admin");
       if (error || !isAdmin) {
         toast({
           title: "Acesso Negado 🚫",
