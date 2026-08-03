@@ -27,6 +27,7 @@ import Ru from "./pages/Ru";
 import { CampusMap } from "@/components/Campus/CampusMap";
 import NotFound from "./pages/NotFound";
 import AdminDashboard from "./pages/AdminDashboard";
+import AdminInstitutions from "./pages/AdminInstitutions";
 import Assistant from "./pages/Assistant";
 import ResetPassword from "./pages/ResetPassword";
 
@@ -191,6 +192,7 @@ const App = () => (
                 
                 {/* Rota Protegida Administrativa Corrigida */}
                 <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
+                <Route path="/admin/institutions" element={<AdminRoute><AdminInstitutions /></AdminRoute>} />
                 
                 {/* Fallback de Erro */}
                 <Route path="*" element={<NotFound />} />
@@ -214,4 +216,3 @@ const App = () => (
 );
 
 export default App;
-
