@@ -400,6 +400,13 @@ export default function AdminDashboard() {
               <p className="text-[10px] font-bold uppercase tracking-widest text-primary mt-0.5">Acesso Nível 1 · Admin</p>
             </div>
           </div>
+          <Button
+            onClick={() => navigate("/admin/institutions")}
+            variant="outline"
+            className="rounded-2xl font-black text-xs h-11 px-4 gap-2 ml-auto"
+          >
+            <LayoutDashboard className="h-4 w-4" /> Universidades / Campus / Cursos
+          </Button>
         </div>
       </header>
 
