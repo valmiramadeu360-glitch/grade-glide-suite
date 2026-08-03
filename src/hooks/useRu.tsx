@@ -37,6 +37,12 @@ export interface RuMenu {
   photo_url: string | null;
   is_official: boolean;
   created_at: string;
+  photo_hash?: string | null;
+  confirmations?: number | null;
+  duplicate_of?: string | null;
+  nutrition_source?: string | null;
+  detected_meal?: string | null;
+  detected_date?: string | null;
   signedPhoto?: string | null;
 }
 
@@ -70,6 +76,40 @@ export function distanceMeters(lat1: number, lon1: number, lat2: number, lon2: n
     Math.sin(dLat / 2) ** 2 +
     Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
   return 6371000 * 2 * Math.asin(Math.sqrt(a));
+}
+
+export const MEAL_LABEL: Record<"lunch" | "dinner", string> = { lunch: "Almoço", dinner: "Jantar" };
+
+function minutesOf(value: string | null | undefined) {
+  if (!value) return null;
+  const [h, m] = value.split(":");
+  return Number(h) * 60 + Number(m ?? 0);
+}
+
+/**
+ * Descobre a refeição corrente (almoço ou jantar) a partir dos horários oficiais
+ * do restaurante. Fora das janelas, escolhe a refeição mais próxima do momento.
+ */
+export function currentMeal(restaurant: RuRestaurant | null, at: Date = new Date()): "lunch" | "dinner" {
+  const now = at.getHours() * 60 + at.getMinutes();
+  const lunchStart = minutesOf(restaurant?.lunch_start) ?? 10 * 60 + 30;
+  const lunchEnd = minutesOf(restaurant?.lunch_end) ?? 14 * 60;
+  const dinnerStart = minutesOf(restaurant?.dinner_start) ?? 17 * 60;
+  const dinnerEnd = minutesOf(restaurant?.dinner_end) ?? 20 * 60;
+
+  if (now >= lunchStart && now <= lunchEnd) return "lunch";
+  if (now >= dinnerStart && now <= dinnerEnd) return "dinner";
+  // Entre as refeições: o ponto médio decide qual está mais próxima.
+  return now < (lunchEnd + dinnerStart) / 2 ? "lunch" : "dinner";
+}
+
+/** Impressão digital (SHA-256) da foto — permite identificar envios repetidos. */
+export async function hashFile(file: File): Promise<string> {
+  const buffer = await file.arrayBuffer();
+  const digest = await crypto.subtle.digest("SHA-256", buffer);
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
 }
 
 export function useRu() {
