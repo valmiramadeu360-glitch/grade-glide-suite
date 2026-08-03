@@ -354,8 +354,15 @@ export default function Ru() {
                 <div>
                   <h2 className="text-sm font-bold flex items-center gap-2"><UtensilsCrossed className="h-4 w-4 text-primary" /> Cardápio do dia</h2>
                   <p className="text-[11px] text-muted-foreground mt-0.5">
-                    {todayMenu ? `${todayMenu.meal === "dinner" ? "Jantar" : "Almoço"} • ${todayMenu.service_date}` : "Ainda não publicado hoje"}
+                    {todayMenu
+                      ? `${MEAL_LABEL[todayMenu.meal]} • ${todayMenu.service_date}`
+                      : `${MEAL_LABEL[activeMeal]} de hoje ainda não publicado`}
                   </p>
+                  {todayMenu && (todayMenu.confirmations ?? 1) > 1 && (
+                    <p className="text-[10px] font-bold text-emerald-600 mt-0.5">
+                      ✅ Confirmado por {todayMenu.confirmations} estudantes
+                    </p>
+                  )}
                 </div>
                 <input
                   ref={fileInput}
@@ -432,7 +439,11 @@ export default function Ru() {
                 {menus.slice(1).map((menu) => (
                   <div key={menu.id} className="flex items-center justify-between gap-3 bg-muted/30 rounded-xl p-3 border border-border/30">
                     <div className="min-w-0">
-                      <p className="text-xs font-bold">{menu.meal === "dinner" ? "Jantar" : "Almoço"} • {menu.service_date}</p>
+                      <p className="text-xs font-bold">
+                        {MEAL_LABEL[menu.meal]} • {menu.service_date}
+                        {menu.duplicate_of && <span className="ml-1.5 font-semibold text-muted-foreground">(variação)</span>}
+                        {(menu.confirmations ?? 1) > 1 && <span className="ml-1.5 text-emerald-600">✅ {menu.confirmations}</span>}
+                      </p>
                       <p className="text-[11px] text-muted-foreground truncate">{itemsOf(menu.items).join(", ") || menu.raw_text || "—"}</p>
                     </div>
                     {menu.signedPhoto && (
