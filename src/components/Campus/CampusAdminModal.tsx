@@ -32,7 +32,6 @@ export function CampusAdminModal({ isOpen, onClose, onUpdate }: CampusAdminModal
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   
-  // Estado do formulário de Edição/Criação
   const [editingId, setEditingId] = useState<string | null>(null);
   const [buildingNumber, setBuildingNumber] = useState("");
   const [name, setName] = useState("");
@@ -91,16 +90,16 @@ export function CampusAdminModal({ isOpen, onClose, onUpdate }: CampusAdminModal
     try {
       let photo_url = null;
 
-      // Upload da foto para o Supabase Storage (bucket 'campus' ou 'public') caso exista arquivo novo
+      // Upload da foto para o Supabase Storage (bucket campus-photos) caso exista arquivo novo
       if (photoFile) {
         const fileExt = photoFile.name.split('.').pop();
         const fileName = `${Math.random()}.${fileExt}`;
         const filePath = `buildings/${fileName}`;
 
-        const { error: uploadError } = await supabase.storage.from("public").upload(filePath, photoFile);
+        const { error: uploadError } = await supabase.storage.from("campus-photos").upload(filePath, photoFile);
         if (uploadError) throw uploadError;
 
-        const { data: publicUrlData } = supabase.storage.from("public").getPublicUrl(filePath);
+        const { data: publicUrlData } = supabase.storage.from("campus-photos").getPublicUrl(filePath);
         photo_url = publicUrlData.publicUrl;
       }
 
@@ -162,7 +161,6 @@ export function CampusAdminModal({ isOpen, onClose, onUpdate }: CampusAdminModal
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
           
-          {/* FORMULÁRIO DE CADASTRO / EDIÇÃO */}
           <form onSubmit={handleSave} className="space-y-4 bg-muted/20 p-5 rounded-[24px] border border-border/30">
             <h3 className="text-xs font-black uppercase tracking-widest text-primary">
               {editingId ? "Editar Prédio" : "Adicionar Novo Prédio"}
@@ -218,7 +216,6 @@ export function CampusAdminModal({ isOpen, onClose, onUpdate }: CampusAdminModal
             </div>
           </form>
 
-          {/* LISTA DE PRÉDIOS CADASTRADOS */}
           <div className="space-y-3">
             <h3 className="text-xs font-black uppercase tracking-widest text-muted-foreground">Prédios no Banco ({buildings.length})</h3>
             <div className="max-h-[420px] overflow-y-auto space-y-2 pr-1 no-scrollbar">
@@ -257,4 +254,3 @@ export function CampusAdminModal({ isOpen, onClose, onUpdate }: CampusAdminModal
     </Dialog>
   );
 }
-
