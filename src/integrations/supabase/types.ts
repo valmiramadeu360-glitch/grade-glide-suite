@@ -121,6 +121,36 @@ export type Database = {
           },
         ]
       }
+      atestado_imports: {
+        Row: {
+          applied_at: string | null
+          created_at: string
+          extracted_data: Json
+          file_path: string
+          id: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          applied_at?: string | null
+          created_at?: string
+          extracted_data: Json
+          file_path: string
+          id?: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          applied_at?: string | null
+          created_at?: string
+          extracted_data?: Json
+          file_path?: string
+          id?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       books: {
         Row: {
           author: string | null
@@ -385,40 +415,55 @@ export type Database = {
       }
       communities: {
         Row: {
+          archived_at: string | null
           campus_id: string | null
+          class_section: string | null
           course_id: string | null
           created_at: string
           description: string | null
+          discipline_id: string | null
           id: string
           member_count: number
           name: string
           period_number: number | null
+          semester_label: string | null
+          status: string
           type: Database["public"]["Enums"]["community_type"]
           university_id: string | null
           updated_at: string
         }
         Insert: {
+          archived_at?: string | null
           campus_id?: string | null
+          class_section?: string | null
           course_id?: string | null
           created_at?: string
           description?: string | null
+          discipline_id?: string | null
           id?: string
           member_count?: number
           name: string
           period_number?: number | null
+          semester_label?: string | null
+          status?: string
           type: Database["public"]["Enums"]["community_type"]
           university_id?: string | null
           updated_at?: string
         }
         Update: {
+          archived_at?: string | null
           campus_id?: string | null
+          class_section?: string | null
           course_id?: string | null
           created_at?: string
           description?: string | null
+          discipline_id?: string | null
           id?: string
           member_count?: number
           name?: string
           period_number?: number | null
+          semester_label?: string | null
+          status?: string
           type?: Database["public"]["Enums"]["community_type"]
           university_id?: string | null
           updated_at?: string
@@ -436,6 +481,13 @@ export type Database = {
             columns: ["course_id"]
             isOneToOne: false
             referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "communities_discipline_id_fkey"
+            columns: ["discipline_id"]
+            isOneToOne: false
+            referencedRelation: "institution_disciplines"
             referencedColumns: ["id"]
           },
           {
@@ -608,6 +660,41 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["user_id"]
+          },
+        ]
+      }
+      discipline_enrollments: {
+        Row: {
+          archived_at: string | null
+          discipline_id: string
+          enrolled_at: string
+          id: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          archived_at?: string | null
+          discipline_id: string
+          enrolled_at?: string
+          id?: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          archived_at?: string | null
+          discipline_id?: string
+          enrolled_at?: string
+          id?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "discipline_enrollments_discipline_id_fkey"
+            columns: ["discipline_id"]
+            isOneToOne: false
+            referencedRelation: "institution_disciplines"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -839,6 +926,53 @@ export type Database = {
           id?: string
         }
         Relationships: []
+      }
+      institution_disciplines: {
+        Row: {
+          class_section: string | null
+          code: string | null
+          course_id: string
+          created_at: string
+          dedup_key: string | null
+          id: string
+          name: string
+          professor: string | null
+          semester_label: string
+          shift: string | null
+        }
+        Insert: {
+          class_section?: string | null
+          code?: string | null
+          course_id: string
+          created_at?: string
+          dedup_key?: string | null
+          id?: string
+          name: string
+          professor?: string | null
+          semester_label: string
+          shift?: string | null
+        }
+        Update: {
+          class_section?: string | null
+          code?: string | null
+          course_id?: string
+          created_at?: string
+          dedup_key?: string | null
+          id?: string
+          name?: string
+          professor?: string | null
+          semester_label?: string
+          shift?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "institution_disciplines_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       materials: {
         Row: {
@@ -1373,6 +1507,7 @@ export type Database = {
           campus_id: string | null
           career_goal: string | null
           codename: string | null
+          codename_updated_at: string | null
           course: string | null
           course_id: string | null
           created_at: string
@@ -1411,6 +1546,7 @@ export type Database = {
           campus_id?: string | null
           career_goal?: string | null
           codename?: string | null
+          codename_updated_at?: string | null
           course?: string | null
           course_id?: string | null
           created_at?: string
@@ -1449,6 +1585,7 @@ export type Database = {
           campus_id?: string | null
           career_goal?: string | null
           codename?: string | null
+          codename_updated_at?: string | null
           course?: string | null
           course_id?: string | null
           created_at?: string
@@ -2008,6 +2145,21 @@ export type Database = {
       }
     }
     Functions: {
+      apply_atestado_import: {
+        Args: {
+          _campus_id: string
+          _course_id: string
+          _current_period: number
+          _disciplines: Json
+          _import_id: string
+          _semester_label: string
+          _university_id: string
+        }
+        Returns: {
+          community_id: string
+          community_name: string
+        }[]
+      }
       can_dm_user: {
         Args: { _receiver: string; _sender: string }
         Returns: boolean
@@ -2015,6 +2167,19 @@ export type Database = {
       can_view_user_posts: {
         Args: { _author: string; _viewer: string }
         Returns: boolean
+      }
+      find_or_create_class_community: {
+        Args: {
+          _class_section: string
+          _course_id: string
+          _period_number: number
+          _semester_label: string
+        }
+        Returns: string
+      }
+      find_or_create_discipline_community: {
+        Args: { _discipline_id: string }
+        Returns: string
       }
       get_announcement_poll_totals: {
         Args: { _announcement_id: string }
@@ -2095,7 +2260,13 @@ export type Database = {
         | "ru"
         | "project"
       community_role: "member" | "moderator" | "admin"
-      community_type: "university" | "campus" | "course" | "period"
+      community_type:
+        | "university"
+        | "campus"
+        | "course"
+        | "period"
+        | "class"
+        | "discipline"
       news_channel_scope: "global" | "university" | "campus" | "course"
       report_status: "pending" | "reviewed" | "resolved" | "dismissed"
       ru_meal: "lunch" | "dinner"
@@ -2241,7 +2412,14 @@ export const Constants = {
         "project",
       ],
       community_role: ["member", "moderator", "admin"],
-      community_type: ["university", "campus", "course", "period"],
+      community_type: [
+        "university",
+        "campus",
+        "course",
+        "period",
+        "class",
+        "discipline",
+      ],
       news_channel_scope: ["global", "university", "campus", "course"],
       report_status: ["pending", "reviewed", "resolved", "dismissed"],
       ru_meal: ["lunch", "dinner"],
