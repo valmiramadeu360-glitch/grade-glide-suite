@@ -162,12 +162,7 @@ export function useRu() {
 
       const [statusRes, historyRes, peakRes, menusRes, noticesRes, ratingRes] = await Promise.all([
         loadStatus(ru.id),
-        supabase
-          .from("ru_queue_reports")
-          .select("level, created_at")
-          .eq("restaurant_id", ru.id)
-          .order("created_at", { ascending: false })
-          .limit(40),
+        supabase.rpc("ru_recent_levels", { _restaurant_id: ru.id, _limit: 40 }),
         supabase.rpc("ru_peak_hours", { _restaurant_id: ru.id }),
         supabase
           .from("ru_menus")
