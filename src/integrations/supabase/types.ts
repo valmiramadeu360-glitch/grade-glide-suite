@@ -257,6 +257,7 @@ export type Database = {
       campus_buildings: {
         Row: {
           building_number: number
+          campus_id: string | null
           category: string
           created_at: string
           description: string | null
@@ -267,9 +268,11 @@ export type Database = {
           opening_hours: string | null
           photo_url: string | null
           services: string[] | null
+          updated_at: string
         }
         Insert: {
           building_number: number
+          campus_id?: string | null
           category: string
           created_at?: string
           description?: string | null
@@ -280,9 +283,11 @@ export type Database = {
           opening_hours?: string | null
           photo_url?: string | null
           services?: string[] | null
+          updated_at?: string
         }
         Update: {
           building_number?: number
+          campus_id?: string | null
           category?: string
           created_at?: string
           description?: string | null
@@ -293,8 +298,17 @@ export type Database = {
           opening_hours?: string | null
           photo_url?: string | null
           services?: string[] | null
+          updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "campus_buildings_campus_id_fkey"
+            columns: ["campus_id"]
+            isOneToOne: false
+            referencedRelation: "campuses"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       campuses: {
         Row: {
@@ -2228,6 +2242,10 @@ export type Database = {
         Returns: boolean
       }
       is_admin: { Args: never; Returns: boolean }
+      is_community_member: {
+        Args: { _community_id: string; _user_id: string }
+        Returns: boolean
+      }
       is_following: {
         Args: { _follower: string; _following: string }
         Returns: boolean
@@ -2300,6 +2318,7 @@ export type Database = {
           was_duplicate: boolean
         }[]
       }
+      shares_institution: { Args: { _a: string; _b: string }; Returns: boolean }
     }
     Enums: {
       app_role:
