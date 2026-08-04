@@ -2299,6 +2299,13 @@ export type Database = {
           waiting: number
         }[]
       }
+      ru_recent_levels: {
+        Args: { _limit?: number; _restaurant_id: string }
+        Returns: {
+          created_at: string
+          level: Database["public"]["Enums"]["ru_queue_level"]
+        }[]
+      }
       ru_submit_menu: {
         Args: {
           _detected_date?: string
