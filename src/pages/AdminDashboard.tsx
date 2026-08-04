@@ -77,6 +77,7 @@ export default function AdminDashboard() {
   const [selectedCampusId, setSelectedCampusId] = useState<string>("");
   const [campusBlocks, setCampusBlocks] = useState<any[]>([]);
   const [uploadingMap, setUploadingMap] = useState(false);
+  const [mapSignedUrl, setMapSignedUrl] = useState<string | null>(null);
   const [pendingPin, setPendingPin] = useState<{ x: number; y: number } | null>(null);
   const [blockName, setBlockName] = useState("");
   const [blockCategory, setBlockCategory] = useState("bloco");
@@ -147,6 +148,19 @@ export default function AdminDashboard() {
     setPendingPin(null);
   }, [selectedCampusId]);
 
+  // O bucket campus-media é privado: resolve uma URL assinada para exibir o mapa.
+  useEffect(() => {
+    const raw = selectedCampus?.map_image_url;
+    if (!raw) { setMapSignedUrl(null); return; }
+    let active = true;
+    (async () => {
+      const path = raw.includes("/campus-media/") ? raw.split("/campus-media/")[1].split("?")[0] : raw;
+      const { data } = await supabase.storage.from("campus-media").createSignedUrl(decodeURIComponent(path), 3600);
+      if (active) setMapSignedUrl(data?.signedUrl ?? null);
+    })();
+    return () => { active = false; };
+  }, [selectedCampus?.map_image_url]);
+
   async function loadCampusBlocks(campusId: string) {
     const { data, error } = await supabase.from("campus_blocks").select("*").eq("campus_id", campusId).order("created_at", { ascending: true });
     if (error) { toast({ title: "Erro ao carregar blocos do campus", variant: "destructive" }); return; }
@@ -162,10 +176,9 @@ export default function AdminDashboard() {
       const filePath = `campus-maps/${selectedCampusId}-${Date.now()}.${ext}`;
       const { error: uploadError } = await supabase.storage.from("campus-media").upload(filePath, file, { upsert: true });
       if (uploadError) throw uploadError;
-      const { data } = supabase.storage.from("campus-media").getPublicUrl(filePath);
-      const { error: updateError } = await supabase.from("campuses").update({ map_image_url: data.publicUrl }).eq("id", selectedCampusId);
+      const { error: updateError } = await supabase.from("campuses").update({ map_image_url: filePath }).eq("id", selectedCampusId);
       if (updateError) throw updateError;
-      setCampuses((prev) => prev.map((c) => c.id === selectedCampusId ? { ...c, map_image_url: data.publicUrl } : c));
+      setCampuses((prev) => prev.map((c) => c.id === selectedCampusId ? { ...c, map_image_url: filePath } : c));
       toast({ title: "Mapa do campus atualizado! 🗺️" });
     } catch (e: any) {
       toast({ title: "Erro ao subir o mapa", description: e.message, variant: "destructive" });
@@ -527,7 +540,7 @@ export default function AdminDashboard() {
                             className="relative w-full rounded-[24px] overflow-hidden border border-border/40 shadow-inner cursor-crosshair select-none"
                             title="Clique no mapa para marcar a posição de um novo bloco"
                           >
-                            <img src={selectedCampus.map_image_url} alt="Mapa do campus" className="w-full h-auto block pointer-events-none" draggable={false} />
+                            {mapSignedUrl && <img src={mapSignedUrl} alt="Mapa do campus" className="w-full h-auto block pointer-events-none" draggable={false} />}
                             {campusBlocks.map((b) => (
                               <div key={b.id} style={{ left: `${b.x_percent}%`, top: `${b.y_percent}%` }} className="absolute -translate-x-1/2 -translate-y-full group/pin">
                                 <MapPin className="h-6 w-6 text-primary fill-primary/20 drop-shadow" />
