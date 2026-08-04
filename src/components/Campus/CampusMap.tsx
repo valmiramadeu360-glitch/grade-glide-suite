@@ -1,316 +1,465 @@
-import React, { useState, useEffect } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
+import { Sheet, SheetContent } from "@/components/ui/sheet";
 import { CampusAdminModal } from "./CampusAdminModal";
-import { 
-  MapPin, Search, Navigation, Clock, Building2, PhoneCall, 
-  Info, Loader2, Sparkles, Filter, ChevronRight, X, ExternalLink, Settings 
+import {
+  MapPin, Search, Navigation, Building2, Loader2, ChevronRight,
+  Settings, ZoomIn, ZoomOut, Maximize, X, Image as ImageIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 
-interface Building {
+interface CampusRow {
   id: string;
-  building_number: number;
+  name: string;
+  city: string | null;
+  state: string | null;
+  map_image_url: string | null;
+}
+
+interface Block {
+  id: string;
+  campus_id: string;
   name: string;
   category: string;
   description: string | null;
   photo_url: string | null;
-  latitude: number | null;
-  longitude: number | null;
-  services: string[] | null;
-  opening_hours: string | null;
+  x_percent: number;
+  y_percent: number;
 }
+
+const MIN_ZOOM = 1;
+const MAX_ZOOM = 6;
+const clamp = (v: number, min: number, max: number) => Math.min(max, Math.max(min, v));
 
 export function CampusMap() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [buildings, setBuildings] = useState<Building[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedBuilding, setSelectedBuilding] = useState<Building | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedCategory, setSelectedCategory] = useState<string>("all");
-  const [isListOpenMobile, setIsListOpenMobile] = useState(false);
-  const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
+
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isAdminModalOpen, setIsAdminModalOpen] = useState(false);
 
-  // Verificação dupla de Admin: por e-mail fixo ou por privilégio no banco de dados
+  const [campuses, setCampuses] = useState<CampusRow[]>([]);
+  const [campusId, setCampusId] = useState<string | null>(null);
+  const [mapUrl, setMapUrl] = useState<string | null>(null);
+  const [blocks, setBlocks] = useState<Block[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const [selected, setSelected] = useState<Block | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [category, setCategory] = useState("all");
+  const [detailsOpen, setDetailsOpen] = useState(false);
+
+  // --- viewport (zoom / pan) ---
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [zoom, setZoom] = useState(1);
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const drag = useRef<{ id: number; x: number; y: number } | null>(null);
+  const pinch = useRef<Map<number, { x: number; y: number }>>(new Map());
+  const pinchStart = useRef<{ dist: number; zoom: number } | null>(null);
+
+  const campus = useMemo(() => campuses.find((c) => c.id === campusId) ?? null, [campuses, campusId]);
+
   useEffect(() => {
-    async function checkAdminStatus() {
-      if (!user) {
-        setIsAdmin(false);
-        return;
-      }
-
-      try {
-        const { data, error } = await supabase.rpc("is_admin");
-        if (!error && data) {
-          setIsAdmin(true);
-        } else {
-          setIsAdmin(false);
-        }
-      } catch {
-        setIsAdmin(false);
-      }
-    }
-
-    checkAdminStatus();
+    (async () => {
+      if (!user) { setIsAdmin(false); return; }
+      const { data, error } = await supabase.rpc("is_admin");
+      setIsAdmin(!error && !!data);
+    })();
   }, [user]);
 
-  useEffect(() => {
-    fetchBuildings();
-  }, []);
-
-  async function fetchBuildings() {
+  const loadCampuses = useCallback(async () => {
+    setLoading(true);
     try {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from("campus_buildings")
-        .select("*")
-        .order("building_number", { ascending: true });
+      const [{ data: profile }, { data: list }] = await Promise.all([
+        user
+          ? supabase.from("profiles").select("campus_id").eq("user_id", user.id).maybeSingle()
+          : Promise.resolve({ data: null } as any),
+        supabase.from("campuses").select("id, name, city, state, map_image_url").order("name"),
+      ]);
 
-      if (error) throw error;
-      setBuildings(data || []);
-      if (data && data.length > 0 && !selectedBuilding) {
-        setSelectedBuilding(data[0]);
-      }
-    } catch (error: any) {
-      console.error("Erro ao carregar prédios:", error.message);
+      const rows = (list ?? []) as CampusRow[];
+      setCampuses(rows);
+
+      const preferred =
+        rows.find((c) => c.id === (profile as any)?.campus_id) ??
+        rows.find((c) => !!c.map_image_url) ??
+        rows[0] ??
+        null;
+      setCampusId(preferred?.id ?? null);
     } finally {
       setLoading(false);
     }
+  }, [user]);
+
+  useEffect(() => { loadCampuses(); }, [loadCampuses]);
+
+  const loadBlocks = useCallback(async (id: string) => {
+    const { data } = await supabase
+      .from("campus_blocks")
+      .select("id, campus_id, name, category, description, photo_url, x_percent, y_percent")
+      .eq("campus_id", id)
+      .order("name");
+    const rows = ((data ?? []) as any[]).map((b) => ({
+      ...b,
+      x_percent: Number(b.x_percent),
+      y_percent: Number(b.y_percent),
+    })) as Block[];
+    setBlocks(rows);
+    setSelected(null);
+  }, []);
+
+  useEffect(() => {
+    if (!campusId) return;
+    loadBlocks(campusId);
+    setZoom(1);
+    setOffset({ x: 0, y: 0 });
+  }, [campusId, loadBlocks]);
+
+  // Bucket privado: resolve URL assinada da imagem do mapa
+  useEffect(() => {
+    const raw = campus?.map_image_url;
+    if (!raw) { setMapUrl(null); return; }
+    let active = true;
+    (async () => {
+      const path = raw.includes("/campus-media/") ? raw.split("/campus-media/")[1].split("?")[0] : raw;
+      const { data } = await supabase.storage.from("campus-media").createSignedUrl(decodeURIComponent(path), 3600);
+      if (active) setMapUrl(data?.signedUrl ?? null);
+    })();
+    return () => { active = false; };
+  }, [campus?.map_image_url]);
+
+  const categories = useMemo(
+    () => ["all", ...Array.from(new Set(blocks.map((b) => b.category))).filter(Boolean)],
+    [blocks],
+  );
+
+  const filteredBlocks = useMemo(
+    () =>
+      blocks.filter((b) => {
+        const q = searchQuery.trim().toLowerCase();
+        const matchSearch = !q || b.name.toLowerCase().includes(q) || (b.description ?? "").toLowerCase().includes(q);
+        const matchCategory = category === "all" || b.category === category;
+        return matchSearch && matchCategory;
+      }),
+    [blocks, searchQuery, category],
+  );
+
+  // --- zoom helpers ---
+  const zoomAt = useCallback((nextZoomRaw: number, px: number, py: number) => {
+    setZoom((prevZoom) => {
+      const next = clamp(nextZoomRaw, MIN_ZOOM, MAX_ZOOM);
+      const k = next / prevZoom;
+      setOffset((prev) => ({ x: px - (px - prev.x) * k, y: py - (py - prev.y) * k }));
+      return next;
+    });
+  }, []);
+
+  const wheelRef = useRef<(e: WheelEvent) => void>(() => {});
+  wheelRef.current = (e: WheelEvent) => {
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const dy = e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 100 : 1);
+    zoomAt(zoom * Math.exp(-dy * 0.0018), e.clientX - rect.left, e.clientY - rect.top);
+  };
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => { e.preventDefault(); wheelRef.current(e); };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, []);
+
+  function zoomByButton(factor: number) {
+    const rect = containerRef.current?.getBoundingClientRect();
+    zoomAt(zoom * factor, (rect?.width ?? 0) / 2, (rect?.height ?? 0) / 2);
   }
 
-  const filteredBuildings = buildings.filter((b) => {
-    const matchesSearch = b.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-                          b.building_number.toString().includes(searchQuery);
-    const matchesCategory = selectedCategory === "all" || b.category === selectedCategory;
-    return matchesSearch && matchesCategory;
-  });
+  function resetView() { setZoom(1); setOffset({ x: 0, y: 0 }); }
 
-  function openRoute(lat: number | null, lng: number | null, name: string) {
-    if (!lat || !lng) {
-      toast({ title: "Localização indisponível", description: "As coordenadas GPS deste prédio ainda não foram cadastradas pelo admin.", variant: "destructive" });
+  function onPointerDown(e: React.PointerEvent) {
+    (e.target as Element).setPointerCapture?.(e.pointerId);
+    pinch.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pinch.current.size === 2) {
+      const [a, b] = Array.from(pinch.current.values());
+      pinchStart.current = { dist: Math.hypot(a.x - b.x, a.y - b.y), zoom };
+      drag.current = null;
+    } else {
+      drag.current = { id: e.pointerId, x: e.clientX - offset.x, y: e.clientY - offset.y };
+    }
+  }
+
+  function onPointerMove(e: React.PointerEvent) {
+    if (!pinch.current.has(e.pointerId)) return;
+    pinch.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    if (pinch.current.size === 2 && pinchStart.current) {
+      const [a, b] = Array.from(pinch.current.values());
+      const dist = Math.hypot(a.x - b.x, a.y - b.y);
+      const rect = containerRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const cx = (a.x + b.x) / 2 - rect.left;
+      const cy = (a.y + b.y) / 2 - rect.top;
+      zoomAt(pinchStart.current.zoom * (dist / pinchStart.current.dist), cx, cy);
       return;
     }
-    const url = `https://www.google.com/maps/search/?api=1&query=${lat},${lng}&query_place_id=${encodeURIComponent(name)}`;
-    window.open(url, '_blank');
+
+    if (drag.current && drag.current.id === e.pointerId && zoom > 1) {
+      setOffset({ x: e.clientX - drag.current.x, y: e.clientY - drag.current.y });
+    }
   }
 
+  function onPointerUp(e: React.PointerEvent) {
+    pinch.current.delete(e.pointerId);
+    if (pinch.current.size < 2) pinchStart.current = null;
+    if (drag.current?.id === e.pointerId) drag.current = null;
+  }
+
+  function selectBlock(b: Block) {
+    setSelected(b);
+    setDetailsOpen(true);
+  }
+
+  function openRoute(b: Block) {
+    const query = `${b.name} ${campus?.name ?? ""}`.trim();
+    window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`, "_blank");
+  }
+
+  const details = selected && (
+    <Card className="rounded-[28px] border border-border/40 bg-card shadow-sm overflow-hidden">
+      <div className="relative h-40 sm:h-44 w-full bg-muted/40 overflow-hidden">
+        {selected.photo_url ? (
+          <img src={selected.photo_url} alt={selected.name} className="w-full h-full object-cover" loading="lazy" />
+        ) : (
+          <div className="w-full h-full flex flex-col items-center justify-center text-muted-foreground p-6 text-center bg-primary/5">
+            <Building2 className="h-9 w-9 text-primary/40 mb-2" />
+            <p className="text-xs font-bold text-foreground">Foto em breve</p>
+          </div>
+        )}
+      </div>
+      <CardContent className="p-5 space-y-3">
+        <span className="text-[9px] font-black uppercase tracking-widest text-primary bg-primary/10 px-2.5 py-1 rounded-md">
+          {selected.category}
+        </span>
+        <h2 className="text-lg font-black text-foreground">{selected.name}</h2>
+        {selected.description && (
+          <p className="text-xs text-muted-foreground leading-relaxed font-medium">{selected.description}</p>
+        )}
+        <Button onClick={() => openRoute(selected)} className="w-full h-12 rounded-2xl font-black text-xs gap-2 shadow-lg">
+          <Navigation className="h-4 w-4" /> Como chegar (Google Maps)
+        </Button>
+      </CardContent>
+    </Card>
+  );
+
   return (
-    <div className="max-w-7xl mx-auto space-y-4 animate-in fade-in duration-500 px-4 sm:px-6 pb-24 pt-3">
-      
-      {/* Header Superior da Seção */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-card border border-border/40 p-5 rounded-[28px] shadow-sm">
-        <div>
+    <div className="max-w-7xl mx-auto space-y-4 animate-in fade-in duration-500 px-3 sm:px-6 pb-24 pt-3">
+
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-card border border-border/40 p-4 sm:p-5 rounded-[24px] shadow-sm">
+        <div className="min-w-0">
           <div className="flex items-center gap-2">
             <span className="h-2 w-2 rounded-full bg-primary animate-ping" />
-            <span className="text-[10px] font-black uppercase tracking-widest text-primary">Campus A.C. Simões • UFAL</span>
+            <span className="text-[10px] font-black uppercase tracking-widest text-primary truncate">
+              {campus ? `${campus.name}${campus.city ? ` • ${campus.city}` : ""}` : "Campus"}
+            </span>
           </div>
-          <h1 className="text-xl sm:text-2xl font-black tracking-tight text-foreground mt-1">Mapa Interativo Inteligente</h1>
-          <p className="text-xs text-muted-foreground font-medium">Encontre qualquer bloco, laboratório ou setor em segundos.</p>
+          <h1 className="text-lg sm:text-2xl font-black tracking-tight text-foreground mt-1">Mapa do Campus</h1>
+          <p className="text-[11px] sm:text-xs text-muted-foreground font-medium">
+            Arraste para mover, use os botões ou o gesto de pinça para ampliar.
+          </p>
         </div>
 
-        <div className="flex items-center gap-2">
-          {/* Botão do Admin */}
-          {isAdmin && (
-            <Button 
-              onClick={() => setIsAdminModalOpen(true)}
-              className="rounded-xl font-bold text-xs h-11 px-4 bg-primary text-primary-foreground shadow-md gap-2"
+        <div className="flex items-center gap-2 flex-wrap">
+          {campuses.length > 1 && (
+            <select
+              value={campusId ?? ""}
+              onChange={(e) => setCampusId(e.target.value)}
+              className="h-11 rounded-xl border border-border/60 bg-background px-3 text-xs font-bold text-foreground shadow-sm max-w-[190px]"
             >
-              <Settings className="h-4 w-4 animate-spin-slow" /> Gerenciar Prédios
+              {campuses.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          )}
+          {isAdmin && (
+            <Button onClick={() => setIsAdminModalOpen(true)} className="rounded-xl font-bold text-xs h-11 px-4 gap-2 shadow-md">
+              <Settings className="h-4 w-4" /> Gerenciar
             </Button>
           )}
-
-          <Button 
-            variant="outline" 
-            onClick={() => setIsListOpenMobile(!isListOpenMobile)}
-            className="rounded-xl font-bold text-xs h-11 px-4 border-border/60 bg-background shadow-sm lg:hidden gap-2"
-          >
-            <Filter className="h-4 w-4 text-primary" /> Índice
-          </Button>
         </div>
       </div>
 
-      {/* Grid Principal: Mapa Interativo à Esquerda | Painel de Detalhes à Direita */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        
-        {/* MAPA VISUAL */}
-        <div className="lg:col-span-8 bg-card border border-border/40 rounded-[32px] overflow-hidden shadow-sm relative flex flex-col min-h-[500px] sm:min-h-[650px]">
-          <div className="relative flex-1 overflow-auto bg-muted/25 flex items-center justify-center p-4">
-            <div className="relative max-w-4xl w-full select-none shadow-2xl rounded-2xl overflow-hidden border border-border/30">
-              
-              <img 
-                src="/lovable-uploads/1000161999.jpg" 
-                alt="Mapa do Campus UFAL A.C. Simões" 
-                className="w-full h-auto object-contain block"
-              />
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6 items-start">
 
-              {buildings.map((b) => {
-                const isSelected = selectedBuilding?.id === b.id;
-                return (
-                  <button
-                    key={b.id}
-                    onClick={() => setSelectedBuilding(b)}
-                    title={`${b.building_number} - ${b.name}`}
-                    className={cn(
-                      "absolute -translate-x-1/2 -translate-y-1/2 h-7 w-7 sm:h-8 sm:w-8 rounded-full font-black text-xs flex items-center justify-center shadow-lg transition-all duration-300 transform hover:scale-125 z-10",
-                      isSelected 
-                        ? "bg-primary text-primary-foreground ring-4 ring-primary/30 scale-110" 
-                        : "bg-background/95 text-foreground border-2 border-primary hover:bg-primary hover:text-primary-foreground"
-                    )}
-                    style={{
-                      top: `${30 + (b.building_number % 5) * 12}%`,
-                      left: `${20 + (b.building_number * 7) % 65}%`
-                    }}
-                  >
-                    {b.building_number}
-                  </button>
-                );
-              })}
-
-            </div>
-          </div>
-
-          {/* Legenda inferior de Setores */}
-          <div className="p-4 bg-muted/30 border-t border-border/30 flex items-center gap-4 overflow-x-auto no-scrollbar shrink-0">
-            <span className="text-[10px] font-black uppercase tracking-wider text-muted-foreground shrink-0">Filtros Rápidos:</span>
-            {["all", "Administração", "Serviços de Apoio", "Ciências Biomédicas", "Ciências Humanas / Sociais Aplicadas", "Ciências Exatas, da Terra e Engenharias"].map((cat) => (
-              <button
-                key={cat}
-                onClick={() => setSelectedCategory(cat)}
-                className={cn(
-                  "px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-wider whitespace-nowrap transition-all",
-                  selectedCategory === cat ? "bg-primary text-primary-foreground shadow-sm" : "bg-background/60 text-muted-foreground hover:bg-muted"
-                )}
+        {/* MAPA */}
+        <div className="lg:col-span-8 bg-card border border-border/40 rounded-[24px] overflow-hidden shadow-sm">
+          <div
+            ref={containerRef}
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerUp}
+            onPointerCancel={onPointerUp}
+            className={cn(
+              "relative w-full overflow-hidden bg-muted/25 touch-none select-none",
+              "h-[52vh] min-h-[300px] sm:h-[60vh] lg:h-[640px]",
+              zoom > 1 ? "cursor-grab active:cursor-grabbing" : "cursor-default",
+            )}
+          >
+            {loading ? (
+              <div className="absolute inset-0 flex items-center justify-center">
+                <Loader2 className="h-6 w-6 animate-spin text-primary" />
+              </div>
+            ) : mapUrl ? (
+              <div
+                className="absolute inset-0 origin-top-left will-change-transform"
+                style={{ transform: `translate(${offset.x}px, ${offset.y}px) scale(${zoom})`, transformOrigin: "0 0" }}
               >
-                {cat === "all" ? "Todos os Setores" : cat}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* PAINEL LATERAL DE DETALHES DO PRÉDIO */}
-        <div className="lg:col-span-4 space-y-4">
-          
-          <div className="bg-card border border-border/40 p-4 rounded-[24px] shadow-sm space-y-3">
-            <div className="relative">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input 
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Pesquisar prédio por nome ou número..."
-                className="pl-10 h-11 rounded-xl bg-background border-border/40 text-xs font-medium shadow-inner focus-visible:ring-primary"
-              />
-            </div>
-          </div>
-
-          {selectedBuilding ? (
-            <Card className="rounded-[32px] border border-border/40 bg-card shadow-sm overflow-hidden animate-in fade-in duration-300">
-              <div className="relative h-48 w-full bg-muted/40 overflow-hidden">
-                {selectedBuilding.photo_url ? (
-                  <img src={selectedBuilding.photo_url} alt={selectedBuilding.name} className="w-full h-full object-cover" />
-                ) : (
-                  <div className="w-full h-full flex flex-col items-center justify-center text-muted-foreground p-6 text-center bg-primary/5">
-                    <Building2 className="h-10 w-10 text-primary/40 mb-2" />
-                    <p className="text-xs font-bold text-foreground">Foto Oficial em Breve</p>
-                    <p className="text-[10px] text-muted-foreground mt-0.5">O administrador cadastrará a fachada real deste local.</p>
-                  </div>
-                )}
-                <div className="absolute top-3 left-3 bg-primary text-primary-foreground font-black text-xs px-3 py-1 rounded-full shadow-md">
-                  Nº {selectedBuilding.building_number}
+                <div className="relative w-full h-full">
+                  <img
+                    src={mapUrl}
+                    alt={`Mapa do ${campus?.name ?? "campus"}`}
+                    className="w-full h-full object-contain pointer-events-none"
+                    draggable={false}
+                  />
+                  {filteredBlocks.map((b) => {
+                    const isSelected = selected?.id === b.id;
+                    return (
+                      <button
+                        key={b.id}
+                        onClick={(e) => { e.stopPropagation(); selectBlock(b); }}
+                        title={b.name}
+                        aria-label={b.name}
+                        className={cn(
+                          "absolute -translate-x-1/2 -translate-y-1/2 rounded-full shadow-lg transition-colors flex items-center justify-center border-2 z-10",
+                          isSelected
+                            ? "bg-primary text-primary-foreground border-primary ring-4 ring-primary/25"
+                            : "bg-background/95 text-primary border-primary hover:bg-primary hover:text-primary-foreground",
+                        )}
+                        style={{
+                          top: `${b.y_percent}%`,
+                          left: `${b.x_percent}%`,
+                          height: `${28 / zoom}px`,
+                          width: `${28 / zoom}px`,
+                        }}
+                      >
+                        <MapPin style={{ height: `${14 / zoom}px`, width: `${14 / zoom}px` }} />
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
+            ) : (
+              <div className="absolute inset-0 flex flex-col items-center justify-center text-center p-6 gap-2">
+                <ImageIcon className="h-9 w-9 text-muted-foreground/40" />
+                <p className="text-sm font-bold text-foreground">Mapa ainda não publicado</p>
+                <p className="text-[11px] text-muted-foreground max-w-xs">
+                  O administrador do campus precisa enviar a imagem do mapa no painel administrativo.
+                </p>
+              </div>
+            )}
 
-              <CardContent className="p-5 space-y-4">
-                <div>
-                  <span className="text-[9px] font-black uppercase tracking-widest text-primary bg-primary/10 px-2.5 py-1 rounded-md">
-                    {selectedBuilding.category}
-                  </span>
-                  <h2 className="text-lg font-black text-foreground mt-2">{selectedBuilding.name}</h2>
-                </div>
-
-                {selectedBuilding.description && (
-                  <p className="text-xs text-muted-foreground leading-relaxed font-medium">
-                    {selectedBuilding.description}
-                  </p>
-                )}
-
-                {selectedBuilding.services && selectedBuilding.services.length > 0 && (
-                  <div className="space-y-1.5 pt-1 border-t border-border/30">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Setores & Serviços:</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {selectedBuilding.services.map((srv, idx) => (
-                        <span key={idx} className="text-[10px] font-bold bg-muted/50 text-foreground px-2.5 py-1 rounded-lg border border-border/30">
-                          • {srv}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {selectedBuilding.opening_hours && (
-                  <div className="flex items-center gap-2.5 text-xs font-medium text-muted-foreground bg-muted/30 p-3 rounded-2xl border border-border/30">
-                    <Clock className="h-4 w-4 text-primary shrink-0" />
-                    <span>{selectedBuilding.opening_hours}</span>
-                  </div>
-                )}
-
-                <Button 
-                  onClick={() => openRoute(selectedBuilding.latitude, selectedBuilding.longitude, selectedBuilding.name)}
-                  className="w-full h-12 rounded-2xl font-black text-xs gap-2 shadow-lg transition-transform hover:scale-[1.02]"
-                >
-                  <Navigation className="h-4 w-4" /> Como Chegar (Google Maps)
+            {/* Controles de zoom */}
+            {mapUrl && (
+              <div className="absolute right-3 bottom-3 flex flex-col gap-1.5 z-20">
+                <Button size="icon" variant="secondary" onClick={() => zoomByButton(1.4)} className="h-10 w-10 rounded-xl shadow-md" aria-label="Ampliar">
+                  <ZoomIn className="h-4 w-4" />
                 </Button>
-              </CardContent>
-            </Card>
-          ) : (
-            <Card className="rounded-[32px] border-dashed border-border/50 bg-muted/10 p-8 text-center">
-              <MapPin className="h-8 w-8 text-muted-foreground/40 mx-auto mb-2" />
-              <p className="text-xs font-bold text-foreground">Nenhum local selecionado</p>
-              <p className="text-[10px] text-muted-foreground mt-1">Toque em um número no mapa ou busque na lista para ver os detalhes.</p>
-            </Card>
-          )}
+                <Button size="icon" variant="secondary" onClick={() => zoomByButton(1 / 1.4)} className="h-10 w-10 rounded-xl shadow-md" aria-label="Reduzir">
+                  <ZoomOut className="h-4 w-4" />
+                </Button>
+                <Button size="icon" variant="secondary" onClick={resetView} className="h-10 w-10 rounded-xl shadow-md" aria-label="Redefinir zoom">
+                  <Maximize className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
+          </div>
 
-          <div className="bg-card border border-border/40 p-4 rounded-[28px] shadow-sm space-y-3">
-            <h3 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Edifícios Cadastrados ({filteredBuildings.length})</h3>
-            <div className="max-h-60 overflow-y-auto space-y-1.5 pr-1 no-scrollbar">
-              {filteredBuildings.map((b) => (
-                <div 
-                  key={b.id}
-                  onClick={() => setSelectedBuilding(b)}
+          {/* Filtros por categoria */}
+          {categories.length > 1 && (
+            <div className="p-3 bg-muted/30 border-t border-border/30 flex items-center gap-2 overflow-x-auto no-scrollbar">
+              {categories.map((cat) => (
+                <button
+                  key={cat}
+                  onClick={() => setCategory(cat)}
                   className={cn(
-                    "p-2.5 rounded-xl text-xs font-bold flex items-center justify-between cursor-pointer transition-all",
-                    selectedBuilding?.id === b.id ? "bg-primary/10 text-primary border border-primary/20" : "hover:bg-muted/50 text-foreground"
+                    "px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase tracking-wider whitespace-nowrap transition-all",
+                    category === cat ? "bg-primary text-primary-foreground shadow-sm" : "bg-background/60 text-muted-foreground hover:bg-muted",
                   )}
                 >
-                  <div className="flex items-center gap-2.5 truncate">
-                    <span className="h-6 w-6 rounded-lg bg-muted text-foreground font-black text-[10px] flex items-center justify-center shrink-0">
-                      {b.building_number}
+                  {cat === "all" ? "Todos" : cat}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* LISTA / DETALHES */}
+        <div className="lg:col-span-4 space-y-4">
+          <div className="bg-card border border-border/40 p-3 rounded-[20px] shadow-sm">
+            <div className="relative">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Buscar bloco, setor ou serviço..."
+                className="pl-10 h-11 rounded-xl bg-background border-border/40 text-xs font-medium"
+              />
+            </div>
+          </div>
+
+          <div className="hidden lg:block">{details}</div>
+
+          <div className="bg-card border border-border/40 p-3 rounded-[20px] shadow-sm space-y-2">
+            <h3 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground px-1">
+              Locais mapeados ({filteredBlocks.length})
+            </h3>
+            <div className="max-h-[38vh] lg:max-h-72 overflow-y-auto space-y-1.5 pr-1 no-scrollbar">
+              {filteredBlocks.length === 0 && (
+                <p className="text-[11px] text-muted-foreground px-1 py-3">Nenhum local encontrado.</p>
+              )}
+              {filteredBlocks.map((b) => (
+                <button
+                  key={b.id}
+                  onClick={() => selectBlock(b)}
+                  className={cn(
+                    "w-full p-2.5 rounded-xl text-xs font-bold flex items-center justify-between transition-all text-left",
+                    selected?.id === b.id ? "bg-primary/10 text-primary border border-primary/20" : "hover:bg-muted/50 text-foreground",
+                  )}
+                >
+                  <span className="flex items-center gap-2.5 truncate">
+                    <span className="h-6 w-6 rounded-lg bg-muted text-foreground flex items-center justify-center shrink-0">
+                      <MapPin className="h-3 w-3" />
                     </span>
                     <span className="truncate">{b.name}</span>
-                  </div>
+                  </span>
                   <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                </div>
+                </button>
               ))}
             </div>
           </div>
-
         </div>
-
       </div>
 
-      {/* Modal do Painel Administrativo */}
-      <CampusAdminModal 
-        isOpen={isAdminModalOpen} 
-        onClose={() => setIsAdminModalOpen(false)} 
-        onUpdate={fetchBuildings} 
-      />
+      {/* Detalhes em telas pequenas */}
+      <Sheet open={detailsOpen && !!selected} onOpenChange={setDetailsOpen}>
+        <SheetContent side="bottom" className="lg:hidden rounded-t-[28px] p-4 pb-8 max-h-[85vh] overflow-y-auto">
+          {details}
+        </SheetContent>
+      </Sheet>
+
+      {isAdmin && (
+        <CampusAdminModal
+          isOpen={isAdminModalOpen}
+          onClose={() => setIsAdminModalOpen(false)}
+          onUpdate={() => { loadCampuses(); if (campusId) loadBlocks(campusId); }}
+        />
+      )}
     </div>
   );
 }
-
