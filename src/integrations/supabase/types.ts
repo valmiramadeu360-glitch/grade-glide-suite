@@ -2242,6 +2242,10 @@ export type Database = {
         Returns: boolean
       }
       is_admin: { Args: never; Returns: boolean }
+      is_community_member: {
+        Args: { _community_id: string; _user_id: string }
+        Returns: boolean
+      }
       is_following: {
         Args: { _follower: string; _following: string }
         Returns: boolean
@@ -2314,6 +2318,7 @@ export type Database = {
           was_duplicate: boolean
         }[]
       }
+      shares_institution: { Args: { _a: string; _b: string }; Returns: boolean }
     }
     Enums: {
       app_role:
