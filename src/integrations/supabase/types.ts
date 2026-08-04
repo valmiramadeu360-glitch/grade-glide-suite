@@ -257,6 +257,7 @@ export type Database = {
       campus_buildings: {
         Row: {
           building_number: number
+          campus_id: string | null
           category: string
           created_at: string
           description: string | null
@@ -267,9 +268,11 @@ export type Database = {
           opening_hours: string | null
           photo_url: string | null
           services: string[] | null
+          updated_at: string
         }
         Insert: {
           building_number: number
+          campus_id?: string | null
           category: string
           created_at?: string
           description?: string | null
@@ -280,9 +283,11 @@ export type Database = {
           opening_hours?: string | null
           photo_url?: string | null
           services?: string[] | null
+          updated_at?: string
         }
         Update: {
           building_number?: number
+          campus_id?: string | null
           category?: string
           created_at?: string
           description?: string | null
@@ -293,8 +298,17 @@ export type Database = {
           opening_hours?: string | null
           photo_url?: string | null
           services?: string[] | null
+          updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "campus_buildings_campus_id_fkey"
+            columns: ["campus_id"]
+            isOneToOne: false
+            referencedRelation: "campuses"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       campuses: {
         Row: {
