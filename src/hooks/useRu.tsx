@@ -234,7 +234,11 @@ export function useRu() {
   return { restaurant, status, history, peak, menus, notices, ratingSummary, loading, reload: loadAll, reloadStatus: loadStatus };
 }
 
-export function requestPosition(): Promise<GeolocationPosition> {
+export async function requestPosition(): Promise<{ coords: { latitude: number; longitude: number; accuracy: number } }> {
+  // No app nativo usamos o plugin do Capacitor (permissão de sistema real).
+  const { isNative, getNativePosition } = await import("@/lib/native");
+  if (isNative()) return getNativePosition();
+
   return new Promise((resolve, reject) => {
     if (!("geolocation" in navigator)) {
       reject(new Error("Seu dispositivo não suporta geolocalização."));

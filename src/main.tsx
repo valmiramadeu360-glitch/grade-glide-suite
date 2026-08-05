@@ -2,6 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
+import { initNative } from "./lib/native";
 
 // O "!" garante ao TypeScript que o elemento 'root' realmente existe no HTML
 const rootElement = document.getElementById("root");
@@ -15,4 +16,7 @@ createRoot(rootElement).render(
     <App />
   </StrictMode>
 );
+
+// No navegador isso é um no-op; no app nativo ajusta status bar e esconde o splash.
+void initNative();
 
