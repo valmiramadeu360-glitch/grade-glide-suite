@@ -856,6 +856,25 @@ export default function Connect() {
       {/* RENDERIZAÇÃO DO FEED — cobre as 6 abas de posts (Para Você, Em Alta,
           Universidade, Curso, Comunidades, Marketplace). "news" tem seu próprio
           bloco abaixo, pois usa a tabela news_posts, não posts. */}
+      {/* Atalho para a página dedicada de cada comunidade (9 abas internas) */}
+      {activeTab === "communities" && communities.length > 0 && (
+        <div className="mt-4 space-y-2">
+          {communities.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              onClick={() => navigate(`/community/${c.id}`)}
+              className="w-full text-left p-4 rounded-3xl bg-card border border-border/40 shadow-sm hover:bg-muted/60 transition-colors"
+            >
+              <p className="text-sm font-bold truncate">{c.name}</p>
+              <p className="text-[11px] font-medium text-muted-foreground mt-0.5 uppercase tracking-wider">
+                {c.type} · {c.member_count} integrantes
+              </p>
+            </button>
+          ))}
+        </div>
+      )}
+
       {activeTab !== "news" && (
         loading ? (
           <div className="flex justify-center py-20"><Loader2 className="h-10 w-10 animate-spin text-primary" /></div>
