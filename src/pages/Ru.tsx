@@ -372,7 +372,25 @@ export default function Ru() {
                   className="hidden"
                   onChange={(e) => e.target.files?.[0] && handleMenuPhoto(e.target.files[0])}
                 />
-                <Button size="sm" disabled={uploading} onClick={() => fileInput.current?.click()} className="rounded-xl text-[11px] font-bold">
+                <Button
+                  size="sm"
+                  disabled={uploading}
+                  onClick={async () => {
+                    // App nativo: câmera do sistema. Web/PWA: input de arquivo.
+                    try {
+                      const { takeNativePhoto } = await import("@/lib/native");
+                      const photo = await takeNativePhoto("cardapio-ru.jpg");
+                      if (photo) {
+                        await handleMenuPhoto(photo);
+                        return;
+                      }
+                    } catch (err) {
+                      console.warn("RU: câmera nativa indisponível", err);
+                    }
+                    fileInput.current?.click();
+                  }}
+                  className="rounded-xl text-[11px] font-bold"
+                >
                   {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Camera className="h-4 w-4 mr-1.5" /> Fotografar</>}
                 </Button>
               </div>
