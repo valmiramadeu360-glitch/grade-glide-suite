@@ -30,6 +30,7 @@ import AdminDashboard from "./pages/AdminDashboard";
 import AdminInstitutions from "./pages/AdminInstitutions";
 import Assistant from "./pages/Assistant";
 import ResetPassword from "./pages/ResetPassword";
+import Community from "./pages/Community";
 
 const queryClient = new QueryClient({
   defaultOptions: {
