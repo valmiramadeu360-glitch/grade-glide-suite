@@ -178,6 +178,7 @@ const App = () => (
                 <Route path="/disciplines" element={<ProtectedRoute><Disciplines /></ProtectedRoute>} />
                 <Route path="/disciplines/:id" element={<ProtectedRoute><DisciplineDetail /></ProtectedRoute>} />
                 <Route path="/connect" element={<ProtectedRoute><Connect /></ProtectedRoute>} />
+                <Route path="/community/:id" element={<ProtectedRoute><Community /></ProtectedRoute>} />
                 <Route path="/news" element={<Navigate to="/connect?tab=news" replace />} />
                 <Route path="/messages" element={<ProtectedRoute><Messages /></ProtectedRoute>} />
                 <Route path="/campus" element={<ProtectedRoute><Campus /></ProtectedRoute>} />
