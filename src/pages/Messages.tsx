@@ -69,6 +69,7 @@ export default function Messages() {
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<number | null>(null);
   const cancelledRef = useRef(false);
+  const secondsRef = useRef(0);
 
   const { communities, loading: loadingCommunities } = useCommunities();
 
@@ -260,7 +261,7 @@ export default function Messages() {
       recorder.onstop = async () => {
         stream.getTracks().forEach(t => t.stop());
         stopTimer();
-        const seconds = recordSeconds;
+        const seconds = secondsRef.current;
         setRecording(false);
         setRecordSeconds(0);
         if (cancelledRef.current) return;
@@ -273,7 +274,11 @@ export default function Messages() {
       recorderRef.current = recorder;
       setRecording(true);
       setRecordSeconds(0);
-      timerRef.current = window.setInterval(() => setRecordSeconds(s => s + 1), 1000);
+      secondsRef.current = 0;
+      timerRef.current = window.setInterval(() => {
+        secondsRef.current += 1;
+        setRecordSeconds(secondsRef.current);
+      }, 1000);
     } catch {
       toast({ title: "Permissão negada", description: "Autorize o acesso ao microfone para enviar notas de voz.", variant: "destructive" });
     }
@@ -584,12 +589,36 @@ export default function Messages() {
 
       {/* Aba de Comunidades (Estrutura pronta para integrar as mensagens de grupo depois) */}
       {activeTab === "communities" && (
-        <div className="flex flex-col items-center justify-center py-20 gap-4 bg-muted/10 rounded-[32px] border-2 border-dashed border-border/40 shadow-sm animate-in fade-in">
-          <div className="h-16 w-16 bg-card rounded-full flex items-center justify-center shadow-sm"><Users className="h-8 w-8 text-muted-foreground/50" /></div>
-          <div className="text-center px-6">
-            <p className="text-lg font-black text-foreground">As comunidades chegarão em breve.</p>
-            <p className="text-sm font-medium text-muted-foreground mt-1 max-w-sm">Este será o espaço para você interagir em grupos da sua turma, disciplinas e atléticas.</p>
-          </div>
+        <div className="space-y-2 animate-in fade-in">
+          {loadingCommunities ? (
+            <div className="flex justify-center py-16"><Loader2 className="h-7 w-7 animate-spin text-primary" /></div>
+          ) : communities.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20 gap-4 bg-muted/10 rounded-[32px] border-2 border-dashed border-border/40 shadow-sm">
+              <div className="h-16 w-16 bg-card rounded-full flex items-center justify-center shadow-sm"><Users className="h-8 w-8 text-muted-foreground/50" /></div>
+              <div className="text-center px-6">
+                <p className="text-base font-black text-foreground">Nenhuma comunidade ainda.</p>
+                <p className="text-sm font-medium text-muted-foreground mt-1 max-w-sm">Complete seu perfil acadêmico para entrar automaticamente nos grupos da sua universidade, campus, curso e período.</p>
+              </div>
+            </div>
+          ) : (
+            communities.map(c => (
+              <Link key={c.id} to={`/community/${c.id}`} className="block">
+                <Card className="rounded-[28px] border-0 shadow-sm bg-card hover:shadow-md transition-all group">
+                  <CardContent className="p-4 sm:p-5 flex items-center gap-4">
+                    <div className="h-14 w-14 rounded-2xl bg-primary/10 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                      <Users className="h-6 w-6 text-primary" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-base font-bold text-foreground truncate">{c.name}</p>
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mt-0.5 truncate">
+                        {c.member_count} integrantes · {c.description || "Comunidade acadêmica"}
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              </Link>
+            ))
+          )}
         </div>
       )}
     </div>
