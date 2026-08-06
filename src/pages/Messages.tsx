@@ -8,7 +8,7 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  MessageSquare, Send, Loader2, ArrowLeft, Search, MoreVertical, Users, Phone, Paperclip
+  MessageSquare, Send, Loader2, ArrowLeft, Search, MoreVertical, Users, Phone, Paperclip, Mic, Square, Trash2
 } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -16,6 +16,9 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { VoiceNote } from "@/components/chat/VoiceNote";
+import { useCommunities } from "@/hooks/useCommunities";
+import { Link } from "react-router-dom";
 
 interface Conversation {
   user_id: string;
@@ -34,6 +37,8 @@ interface Message {
   content: string;
   created_at: string;
   read_at: string | null;
+  audio_url?: string | null;
+  audio_duration?: number | null;
 }
 
 export default function Messages() {
@@ -55,6 +60,17 @@ export default function Messages() {
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [selectedProfile, setSelectedProfile] = useState<{ full_name: string | null; avatar_url: string | null; course: string | null } | null>(null);
+
+  // Nota de voz
+  const [recording, setRecording] = useState(false);
+  const [recordSeconds, setRecordSeconds] = useState(0);
+  const [sendingAudio, setSendingAudio] = useState(false);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const timerRef = useRef<number | null>(null);
+  const cancelledRef = useRef(false);
+
+  const { communities, loading: loadingCommunities } = useCommunities();
 
   useEffect(() => {
     if (user) loadConversations();
@@ -222,6 +238,82 @@ export default function Messages() {
     setSearching(false);
   }
 
+  function stopTimer() {
+    if (timerRef.current) {
+      window.clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+  }
+
+  async function startRecording() {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      toast({ title: "Microfone indisponível", description: "Seu dispositivo não permite gravação de áudio.", variant: "destructive" });
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      chunksRef.current = [];
+      cancelledRef.current = false;
+
+      recorder.ondataavailable = e => { if (e.data.size > 0) chunksRef.current.push(e.data); };
+      recorder.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        stopTimer();
+        const seconds = recordSeconds;
+        setRecording(false);
+        setRecordSeconds(0);
+        if (cancelledRef.current) return;
+        const blob = new Blob(chunksRef.current, { type: recorder.mimeType || "audio/webm" });
+        if (blob.size < 1000) return;
+        await uploadVoiceNote(blob, seconds);
+      };
+
+      recorder.start();
+      recorderRef.current = recorder;
+      setRecording(true);
+      setRecordSeconds(0);
+      timerRef.current = window.setInterval(() => setRecordSeconds(s => s + 1), 1000);
+    } catch {
+      toast({ title: "Permissão negada", description: "Autorize o acesso ao microfone para enviar notas de voz.", variant: "destructive" });
+    }
+  }
+
+  function stopRecording(cancel = false) {
+    cancelledRef.current = cancel;
+    recorderRef.current?.stop();
+    recorderRef.current = null;
+  }
+
+  async function uploadVoiceNote(blob: Blob, seconds: number) {
+    if (!user || !selectedUserId) return;
+    setSendingAudio(true);
+    try {
+      const path = `${user.id}/${crypto.randomUUID()}.webm`;
+      const { error: uploadError } = await supabase.storage
+        .from("chat-audio")
+        .upload(path, blob, { contentType: blob.type || "audio/webm" });
+      if (uploadError) throw uploadError;
+
+      const { error } = await supabase.from("direct_messages").insert({
+        sender_id: user.id,
+        receiver_id: selectedUserId,
+        content: "🎤 Nota de voz",
+        audio_url: path,
+        audio_duration: seconds,
+      });
+      if (error) throw error;
+    } catch {
+      toast({ title: "Falha ao enviar", description: "A nota de voz não foi enviada.", variant: "destructive" });
+    } finally {
+      setSendingAudio(false);
+    }
+  }
+
+  function formatRecordTime(s: number) {
+    return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+  }
+
   if (loading) {
     return (
       <div className="flex h-[80vh] items-center justify-center">
@@ -291,7 +383,11 @@ export default function Messages() {
                         ? "bg-primary text-primary-foreground rounded-[24px] rounded-br-[8px]" 
                         : "bg-card border border-border/40 text-foreground rounded-[24px] rounded-bl-[8px]"
                     )}>
-                      <p className="whitespace-pre-wrap break-words">{msg.content}</p>
+                      {msg.audio_url ? (
+                        <VoiceNote path={msg.audio_url} duration={msg.audio_duration} mine={isMe} />
+                      ) : (
+                        <p className="whitespace-pre-wrap break-words">{msg.content}</p>
+                      )}
                     </div>
                     {showTime && (
                       <span className="text-[9px] font-bold text-muted-foreground/60 mt-1 mx-2 uppercase tracking-widest">
@@ -308,6 +404,20 @@ export default function Messages() {
 
         {/* Input Area Premium */}
         <div className="p-3 sm:p-5 bg-card/90 backdrop-blur-2xl border-t border-border/50 shrink-0">
+          {recording ? (
+            <div className="flex items-center gap-3 bg-destructive/10 p-2 pl-5 rounded-[28px] border border-destructive/30 animate-in fade-in">
+              <span className="h-2.5 w-2.5 rounded-full bg-destructive animate-pulse shrink-0" />
+              <p className="flex-1 text-sm font-black text-destructive tabular-nums">
+                Gravando… {formatRecordTime(recordSeconds)}
+              </p>
+              <Button variant="ghost" size="icon" className="h-11 w-11 rounded-full text-muted-foreground hover:text-destructive" onClick={() => stopRecording(true)} title="Descartar">
+                <Trash2 className="h-5 w-5" />
+              </Button>
+              <Button size="icon" className="h-12 w-12 rounded-full bg-primary text-primary-foreground shadow-md" onClick={() => stopRecording(false)} title="Enviar nota de voz">
+                <Send className="h-5 w-5 ml-0.5" />
+              </Button>
+            </div>
+          ) : (
           <div className="flex items-end gap-2 bg-muted/40 p-1.5 rounded-[28px] border border-border/50 focus-within:border-primary/40 focus-within:bg-background transition-all shadow-sm">
             <Button variant="ghost" size="icon" className="h-11 w-11 rounded-full shrink-0 mb-0.5 text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors" title="Anexar arquivo">
               <Paperclip className="h-5 w-5" />
@@ -319,15 +429,27 @@ export default function Messages() {
               className="min-h-[44px] max-h-[120px] bg-transparent border-none shadow-none focus-visible:ring-0 text-base resize-none py-3 px-2 font-medium"
               onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
             />
+            {newMessage.trim() ? (
             <Button 
               onClick={handleSend} 
-              disabled={!newMessage.trim()} 
               size="icon" 
-              className={cn("h-12 w-12 rounded-full shrink-0 mb-0.5 mr-0.5 transition-all duration-300 shadow-md", newMessage.trim() ? "bg-primary text-primary-foreground hover:scale-105" : "bg-muted text-muted-foreground opacity-50")}
+              className="h-12 w-12 rounded-full shrink-0 mb-0.5 mr-0.5 transition-all duration-300 shadow-md bg-primary text-primary-foreground hover:scale-105"
             >
               <Send className="h-5 w-5 ml-0.5" />
             </Button>
+            ) : (
+            <Button
+              onClick={startRecording}
+              disabled={sendingAudio}
+              size="icon"
+              title="Gravar nota de voz"
+              className="h-12 w-12 rounded-full shrink-0 mb-0.5 mr-0.5 transition-all duration-300 shadow-md bg-primary/10 text-primary hover:bg-primary/20"
+            >
+              {sendingAudio ? <Loader2 className="h-5 w-5 animate-spin" /> : <Mic className="h-5 w-5" />}
+            </Button>
+            )}
           </div>
+          )}
         </div>
       </div>
     );
