@@ -652,6 +652,8 @@ export type Database = {
       }
       direct_messages: {
         Row: {
+          audio_duration: number | null
+          audio_url: string | null
           content: string
           created_at: string
           id: string
@@ -660,7 +662,9 @@ export type Database = {
           sender_id: string
         }
         Insert: {
-          content: string
+          audio_duration?: number | null
+          audio_url?: string | null
+          content?: string
           created_at?: string
           id?: string
           read_at?: string | null
@@ -668,6 +672,8 @@ export type Database = {
           sender_id: string
         }
         Update: {
+          audio_duration?: number | null
+          audio_url?: string | null
           content?: string
           created_at?: string
           id?: string
