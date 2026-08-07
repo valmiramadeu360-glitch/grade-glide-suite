@@ -23,9 +23,9 @@ export default function Campus() {
   // Lista de serviços com o Mapa Interativo direcionando corretamente para a rota do mapa interativo
   const campusServices = [
     { title: "Mapa Interativo", icon: Map, desc: "Explore blocos e salas da UFAL", color: "text-blue-500", bg: "bg-blue-500/10", path: "/campus/map" },
-    { title: "Transporte", icon: Bus, desc: "Horários e rotas do circular", color: "text-amber-500", bg: "bg-amber-500/10", path: "#" },
+    { title: "Transporte", icon: Bus, desc: "Horários e rotas do circular", color: "text-amber-500", bg: "bg-amber-500/10", path: "/campus/transport" },
     { title: "Laboratórios", icon: FlaskConical, desc: "Reserva de equipamentos", color: "text-emerald-500", bg: "bg-emerald-500/10", path: "#" },
-    { title: "Editais", icon: FileText, desc: "Bolsas e monitorias", color: "text-purple-500", bg: "bg-purple-500/10", path: "#" },
+    { title: "Editais", icon: FileText, desc: "Bolsas e monitorias", color: "text-purple-500", bg: "bg-purple-500/10", path: "/campus/scholarships" },
     { title: "Esportes", icon: Trophy, desc: "Atléticas e quadras", color: "text-rose-500", bg: "bg-rose-500/10", path: "#" },
     { title: "Coordenações", icon: Users, desc: "Contatos e horários", color: "text-indigo-500", bg: "bg-indigo-500/10", path: "#" },
   ];
@@ -102,7 +102,7 @@ export default function Campus() {
           </Card>
 
           {/* PAINEL DA BIBLIOTECA */}
-          <Card className="rounded-[32px] border-0 shadow-sm bg-card overflow-hidden group cursor-pointer hover:shadow-md transition-all">
+          <Card onClick={() => navigate("/campus/library")} className="rounded-[32px] border-0 shadow-sm bg-card overflow-hidden group cursor-pointer hover:shadow-md transition-all">
             <div className="h-2 w-full bg-gradient-to-r from-blue-400 to-indigo-500" />
             <CardContent className="p-6">
               <div className="flex items-start justify-between mb-4">
@@ -127,8 +127,12 @@ export default function Campus() {
                     {libraryStatus.availableRooms} Livres
                   </Badge>
                 </div>
-                <Button variant="outline" className="h-[52px] rounded-[20px] font-bold text-xs sm:w-auto w-full bg-background border-border/50 shadow-sm">
-                  <AlertCircle className="h-4 w-4 mr-2" /> Meu Acervo
+                <Button
+                  variant="outline"
+                  onClick={(e) => { e.stopPropagation(); navigate("/campus/library"); }}
+                  className="h-[52px] rounded-[20px] font-bold text-xs sm:w-auto w-full bg-background border-border/50 shadow-sm"
+                >
+                  <AlertCircle className="h-4 w-4 mr-2" /> Ver Salas
                 </Button>
               </div>
             </CardContent>

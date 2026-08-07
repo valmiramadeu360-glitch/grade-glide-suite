@@ -25,6 +25,9 @@ import Messages from "./pages/Messages";
 import Campus from "./pages/Campus";
 import Ru from "./pages/Ru";
 import { CampusMap } from "@/components/Campus/CampusMap";
+import CampusLibrary from "./pages/campus/Library";
+import CampusTransport from "./pages/campus/Transport";
+import CampusScholarships from "./pages/campus/Scholarships";
 import NotFound from "./pages/NotFound";
 import AdminDashboard from "./pages/AdminDashboard";
 import AdminInstitutions from "./pages/AdminInstitutions";
@@ -184,6 +187,9 @@ const App = () => (
                 <Route path="/campus" element={<ProtectedRoute><Campus /></ProtectedRoute>} />
                 <Route path="/campus/ru" element={<ProtectedRoute><Ru /></ProtectedRoute>} />
                 <Route path="/campus/map" element={<ProtectedRoute><CampusMap /></ProtectedRoute>} />
+                <Route path="/campus/library" element={<ProtectedRoute><CampusLibrary /></ProtectedRoute>} />
+                <Route path="/campus/transport" element={<ProtectedRoute><CampusTransport /></ProtectedRoute>} />
+                <Route path="/campus/scholarships" element={<ProtectedRoute><CampusScholarships /></ProtectedRoute>} />
                 <Route path="/extra-courses" element={<Navigate to="/disciplines?tab=extra" replace />} />
                 <Route path="/reminders" element={<ProtectedRoute><Reminders /></ProtectedRoute>} />
                 <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />

@@ -1026,6 +1026,94 @@ export type Database = {
           },
         ]
       }
+      library_room_reports: {
+        Row: {
+          created_at: string
+          id: string
+          note: string | null
+          room_id: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          note?: string | null
+          room_id: string
+          status: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          note?: string | null
+          room_id?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "library_room_reports_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "library_rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      library_rooms: {
+        Row: {
+          campus_id: string | null
+          capacity: number
+          created_at: string
+          description: string | null
+          floor: string | null
+          has_power: boolean
+          has_whiteboard: boolean
+          id: string
+          is_active: boolean
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          campus_id?: string | null
+          capacity?: number
+          created_at?: string
+          description?: string | null
+          floor?: string | null
+          has_power?: boolean
+          has_whiteboard?: boolean
+          id?: string
+          is_active?: boolean
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          campus_id?: string | null
+          capacity?: number
+          created_at?: string
+          description?: string | null
+          floor?: string | null
+          has_power?: boolean
+          has_whiteboard?: boolean
+          id?: string
+          is_active?: boolean
+          name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "library_rooms_campus_id_fkey"
+            columns: ["campus_id"]
+            isOneToOne: false
+            referencedRelation: "campuses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       materials: {
         Row: {
           created_at: string
@@ -2075,6 +2163,110 @@ export type Database = {
           },
         ]
       }
+      scholarship_calls: {
+        Row: {
+          campus_id: string | null
+          courses: string[]
+          created_at: string
+          created_by: string | null
+          deadline: string | null
+          description: string | null
+          id: string
+          is_active: boolean
+          kind: string
+          official_url: string | null
+          organization: string | null
+          stipend: number | null
+          title: string
+          university_id: string | null
+          updated_at: string
+          workload_hours: number | null
+        }
+        Insert: {
+          campus_id?: string | null
+          courses?: string[]
+          created_at?: string
+          created_by?: string | null
+          deadline?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          kind?: string
+          official_url?: string | null
+          organization?: string | null
+          stipend?: number | null
+          title: string
+          university_id?: string | null
+          updated_at?: string
+          workload_hours?: number | null
+        }
+        Update: {
+          campus_id?: string | null
+          courses?: string[]
+          created_at?: string
+          created_by?: string | null
+          deadline?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          kind?: string
+          official_url?: string | null
+          organization?: string | null
+          stipend?: number | null
+          title?: string
+          university_id?: string | null
+          updated_at?: string
+          workload_hours?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scholarship_calls_campus_id_fkey"
+            columns: ["campus_id"]
+            isOneToOne: false
+            referencedRelation: "campuses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scholarship_calls_university_id_fkey"
+            columns: ["university_id"]
+            isOneToOne: false
+            referencedRelation: "universities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      scholarship_saves: {
+        Row: {
+          call_id: string
+          created_at: string
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          call_id: string
+          created_at?: string
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          call_id?: string
+          created_at?: string
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scholarship_saves_call_id_fkey"
+            columns: ["call_id"]
+            isOneToOne: false
+            referencedRelation: "scholarship_calls"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       subjects: {
         Row: {
           code: string | null
@@ -2115,6 +2307,168 @@ export type Database = {
             columns: ["course_id"]
             isOneToOne: false
             referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      transport_departures: {
+        Row: {
+          created_at: string
+          departure_time: string
+          id: string
+          route_id: string
+          stop_id: string | null
+          updated_at: string
+          weekdays: number[]
+        }
+        Insert: {
+          created_at?: string
+          departure_time: string
+          id?: string
+          route_id: string
+          stop_id?: string | null
+          updated_at?: string
+          weekdays?: number[]
+        }
+        Update: {
+          created_at?: string
+          departure_time?: string
+          id?: string
+          route_id?: string
+          stop_id?: string | null
+          updated_at?: string
+          weekdays?: number[]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transport_departures_route_id_fkey"
+            columns: ["route_id"]
+            isOneToOne: false
+            referencedRelation: "transport_routes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transport_departures_stop_id_fkey"
+            columns: ["stop_id"]
+            isOneToOne: false
+            referencedRelation: "transport_stops"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      transport_reports: {
+        Row: {
+          created_at: string
+          delay_minutes: number | null
+          id: string
+          note: string | null
+          route_id: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          delay_minutes?: number | null
+          id?: string
+          note?: string | null
+          route_id: string
+          status: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          delay_minutes?: number | null
+          id?: string
+          note?: string | null
+          route_id?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transport_reports_route_id_fkey"
+            columns: ["route_id"]
+            isOneToOne: false
+            referencedRelation: "transport_routes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      transport_routes: {
+        Row: {
+          campus_id: string | null
+          color: string
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          campus_id?: string | null
+          color?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          campus_id?: string | null
+          color?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transport_routes_campus_id_fkey"
+            columns: ["campus_id"]
+            isOneToOne: false
+            referencedRelation: "campuses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      transport_stops: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          position: number
+          route_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          position?: number
+          route_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          position?: number
+          route_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transport_stops_route_id_fkey"
+            columns: ["route_id"]
+            isOneToOne: false
+            referencedRelation: "transport_routes"
             referencedColumns: ["id"]
           },
         ]
