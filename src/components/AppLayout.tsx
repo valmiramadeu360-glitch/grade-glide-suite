@@ -12,6 +12,7 @@ import { User, Bell, MessageSquare, Inbox, Home, Globe, Plus, Library, Sparkles,
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { BottomNavigation } from "@/components/BottomNavigation";
 
 export function AppLayout({ children }: { children: ReactNode }) {
   const { mode, primaryColor } = useTheme();
@@ -77,7 +78,6 @@ export function AppLayout({ children }: { children: ReactNode }) {
       case 'post': navigate('/connect'); break;
       case 'market': navigate('/connect?tab=market'); break;
       case 'question': navigate('/connect'); break;
-      // Adicione futuras rotas aqui
       default: navigate('/connect');
     }
   };
@@ -159,45 +159,8 @@ export function AppLayout({ children }: { children: ReactNode }) {
           <span className="absolute -top-1 -right-1 h-3 w-3 bg-emerald-400 border-2 border-background rounded-full"></span>
         </button>
 
-        {/* BARRA DE NAVEGAÇÃO INFERIOR MOBILE - NOVA ARQUITETURA */}
-        <div className="sm:hidden fixed bottom-0 left-0 right-0 z-50 px-4 pb-4 pt-2 bg-gradient-to-t from-background via-background to-transparent pointer-events-none">
-          <div className="flex items-center justify-around bg-background/80 backdrop-blur-2xl border border-border/30 rounded-full py-2 px-3 shadow-[0_8px_30px_rgb(0,0,0,0.12)] pointer-events-auto">
-            
-            <button onClick={() => navigate("/")} className={cn("flex flex-col items-center justify-center w-12 h-12 rounded-full transition-all active:scale-90", isActive("/") ? "text-primary" : "text-muted-foreground")}>
-              <Home className={cn("h-5 w-5 mb-1", isActive("/") && "fill-primary/20")} />
-              <span className="text-[9px] font-medium">Home</span>
-            </button>
-
-            <button onClick={() => navigate("/connect")} className={cn("flex flex-col items-center justify-center w-12 h-12 rounded-full transition-all active:scale-90", isActive("/connect") ? "text-primary" : "text-muted-foreground")}>
-              <Globe className={cn("h-5 w-5 mb-1", isActive("/connect") && "fill-primary/20")} />
-              <span className="text-[9px] font-medium">Connect</span>
-            </button>
-
-            {/* BOTÃO CENTRAL DE AÇÃO (+) */}
-            <div className="relative -top-5">
-              <button 
-                onClick={() => setIsCreationMenuOpen(true)} 
-                className="flex items-center justify-center w-14 h-14 rounded-full bg-primary text-primary-foreground shadow-lg hover:shadow-primary/30 transition-all active:scale-95 border-4 border-background"
-              >
-                <Plus className="h-6 w-6" />
-              </button>
-            </div>
-
-            <button onClick={() => navigate("/campus")} className={cn("relative flex flex-col items-center justify-center w-12 h-12 rounded-full transition-all active:scale-90", isActive("/campus") ? "text-primary" : "text-muted-foreground")}>
-              <Building2 className={cn("h-5 w-5 mb-1", isActive("/campus") && "fill-primary/20")} />
-              <span className="text-[9px] font-medium">Campus</span>
-            </button>
-
-            <button onClick={() => navigate("/profile")} className="flex flex-col items-center justify-center w-12 h-12 rounded-full transition-all active:scale-90">
-              <Avatar className={cn("h-7 w-7 mb-0.5 border-2 shadow-sm", isActive("/profile") ? "border-primary" : "border-transparent")}>
-                <AvatarImage src={avatarUrl} className="object-cover" />
-                <AvatarFallback className="bg-primary/10 text-primary"><User className="h-4 w-4" /></AvatarFallback>
-              </Avatar>
-              <span className={cn("text-[9px] font-medium", isActive("/profile") ? "text-primary" : "text-muted-foreground")}>Perfil</span>
-            </button>
-
-          </div>
-        </div>
+        {/* BARRA DE NAVEGAÇÃO INFERIOR MOBILE - SUBSTITUÍDA PELA NOVA BOTTOM NAVIGATION */}
+        <BottomNavigation />
 
         {/* MODAL DO MENU INTELIGENTE DE CRIAÇÃO (Botão Central) */}
         <Dialog open={isCreationMenuOpen} onOpenChange={setIsCreationMenuOpen}>
