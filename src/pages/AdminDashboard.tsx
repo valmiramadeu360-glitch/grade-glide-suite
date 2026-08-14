@@ -18,50 +18,46 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 
 import {
-  ShieldCheck,
-  Users,
-  MessageSquare,
-  AlertTriangle,
-  Loader2,
-  ArrowLeft,
-  CheckCircle2,
-  Trash2,
-  Ban,
-  Megaphone,
-  Send,
-  Search,
-  Sparkles,
-  Plus,
-  Power,
-  X,
-  Crown,
-  LayoutDashboard,
-  MapPin,
-  ImagePlus,
-  Building2
+  ShieldCheck, Users, MessageSquare, AlertTriangle, Loader2, ArrowLeft, CheckCircle2,
+  Trash2, Ban, Megaphone, Send, Search, Sparkles, Plus, Power, X, Crown, LayoutDashboard,
+  MapPin, ImagePlus, Building2, BadgeCheck, GraduationCap, Briefcase, FileText, UtensilsCrossed,
+  FlaskConical, ClipboardList, Archive, ArchiveRestore, UserMinus, ChevronDown, ChevronRight, Flag
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-export default function AdminDashboard() {
+// Selos institucionais do Connect
+const BADGE_ROLES: Record<string, { label: string; icon: any }> = {
+  student_verified: { label: "Estudante Verificado", icon: BadgeCheck },
+  professor: { label: "Professor", icon: GraduationCap },
+  university_official: { label: "Universidade Oficial", icon: Building2 },
+  company: { label: "Empresa", icon: Briefcase },
+  library: { label: "Biblioteca", icon: FileText },
+  ru: { label: "Restaurante Universitário", icon: UtensilsCrossed },
+  project: { label: "Projeto/Centro Acadêmico", icon: FlaskConical },
+};
 
+const REPORT_TARGET_LABEL: Record<string, string> = { comment: "Comentário", user: "Usuário", message: "Mensagem" };
+
+export default function AdminDashboard() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
 
   const [loading, setLoading] = useState(true);
 
+  // Dados Gerais
   const [usersCount, setUsersCount] = useState(0);
   const [feedbacks, setFeedbacks] = useState<any[]>([]);
   const [reports, setReports] = useState<any[]>([]);
   const [usersList, setUsersList] = useState<any[]>([]);
+  const [searchUser, setSearchUser] = useState("");
 
+  // Megafone
   const [promoTitle, setPromoTitle] = useState("");
   const [promoMessage, setPromoMessage] = useState("");
   const [sendingPromo, setSendingPromo] = useState(false);
 
-  const [searchUser, setSearchUser] = useState("");
-
-  // Anúncios do dashboard
+  // Banners
   const [announcements, setAnnouncements] = useState<any[]>([]);
   const [adminIds, setAdminIds] = useState<Set<string>>(new Set());
   const [annTitle, setAnnTitle] = useState("");
@@ -72,7 +68,7 @@ export default function AdminDashboard() {
   const [annOptions, setAnnOptions] = useState<string[]>(["", ""]);
   const [savingAnn, setSavingAnn] = useState(false);
 
-  // Mapa do Campus — foto + blocos (RU, biblioteca, institutos, etc.)
+  // Mapa do Campus
   const [campuses, setCampuses] = useState<any[]>([]);
   const [selectedCampusId, setSelectedCampusId] = useState<string>("");
   const [campusBlocks, setCampusBlocks] = useState<any[]>([]);
@@ -84,7 +80,36 @@ export default function AdminDashboard() {
   const [blockDescription, setBlockDescription] = useState("");
   const [savingBlock, setSavingBlock] = useState(false);
 
+  // Selos de Verificação Institucional
+  const [badgeMap, setBadgeMap] = useState<Map<string, string[]>>(new Map());
+  const [badgeSearch, setBadgeSearch] = useState("");
+  const [badgeRoleToGrant, setBadgeRoleToGrant] = useState<string>("student_verified");
+
+  // Denúncias Ampliadas e Auditoria
+  const [contentReports, setContentReports] = useState<any[]>([]);
+  const [auditLog, setAuditLog] = useState<any[]>([]);
+  const [adminNames, setAdminNames] = useState<Record<string, string>>({});
+
+  // Moderação de Comunidades
+  const [communitiesList, setCommunitiesList] = useState<any[]>([]);
+  const [expandedCommunityId, setExpandedCommunityId] = useState<string | null>(null);
+  const [communityMembers, setCommunityMembers] = useState<Record<string, any[]>>({});
+
   const selectedCampus = campuses.find((c) => c.id === selectedCampusId) || null;
+
+  // Função de Auditoria
+  async function audit(action: string, targetType?: string, targetId?: string, details?: Record<string, any>) {
+    try {
+      await supabase.rpc("log_admin_action", {
+        _action: action,
+        _target_type: targetType ?? null,
+        _target_id: targetId ?? null,
+        _details: details ?? null,
+      } as any);
+    } catch (e) {
+      console.error("Falha ao registrar log de auditoria:", e);
+    }
+  }
 
   useEffect(() => {
     if (!user) return;
@@ -110,23 +135,31 @@ export default function AdminDashboard() {
       if (countError) throw countError;
       setUsersCount(count || 0);
 
-      const { data: feedData, error: feedError } = await supabase.from("feedbacks").select("*").order("created_at", { ascending: false });
-      if (feedError) throw feedError;
+      const { data: feedData } = await supabase.from("feedbacks").select("*").order("created_at", { ascending: false });
       setFeedbacks(feedData || []);
 
-      const { data: repData, error: repError } = await supabase.from("post_reports").select("*, posts(*)").eq("status", "pending");
-      if (repError) throw repError;
+      const { data: repData } = await supabase.from("post_reports").select("*, posts(*)").eq("status", "pending");
       setReports(repData || []);
 
-      const { data: profilesData, error: usersError } = await supabase.from("profiles").select("*").order("full_name", { ascending: true });
-      if (usersError) throw usersError;
+      const { data: profilesData } = await supabase.from("profiles").select("*").order("full_name", { ascending: true });
       setUsersList(profilesData || []);
 
       const { data: annData } = await supabase.from("admin_announcements").select("*").order("created_at", { ascending: false });
       setAnnouncements(annData || []);
 
-      const { data: rolesData } = await supabase.from("user_roles").select("user_id").eq("role", "admin");
-      setAdminIds(new Set((rolesData || []).map((r: any) => r.user_id)));
+      const { data: rolesData } = await supabase.from("user_roles").select("user_id,role");
+      const admins = new Set<string>();
+      const badges = new Map<string, string[]>();
+      (rolesData || []).forEach((r: any) => {
+        if (r.role === "admin") admins.add(r.user_id);
+        if (BADGE_ROLES[r.role]) {
+          const list = badges.get(r.user_id) ?? [];
+          list.push(r.role);
+          badges.set(r.user_id, list);
+        }
+      });
+      setAdminIds(admins);
+      setBadgeMap(badges);
 
       const { data: campusesData } = await supabase.from("campuses").select("*").order("name", { ascending: true });
       setCampuses(campusesData || []);
@@ -134,21 +167,25 @@ export default function AdminDashboard() {
         setSelectedCampusId(campusesData[0].id);
       }
 
+      await loadContentReports();
+      await loadAuditLog();
+      await loadCommunities();
+
     } catch (error) {
       console.error("Erro Adm:", error);
-      toast({ title: "Erro ao carregar painel", description: "Não foi possível buscar os dados.", variant: "destructive" });
+      toast({ title: "Erro ao carregar painel", variant: "destructive" });
     } finally {
       setLoading(false);
     }
   }
 
+  // Mapa do Campus (Lógica URL assinada mantida do seu código)
   useEffect(() => {
     if (!selectedCampusId) return;
     loadCampusBlocks(selectedCampusId);
     setPendingPin(null);
   }, [selectedCampusId]);
 
-  // O bucket campus-media é privado: resolve uma URL assinada para exibir o mapa.
   useEffect(() => {
     const raw = selectedCampus?.map_image_url;
     if (!raw) { setMapSignedUrl(null); return; }
@@ -162,32 +199,134 @@ export default function AdminDashboard() {
   }, [selectedCampus?.map_image_url]);
 
   async function loadCampusBlocks(campusId: string) {
-    const { data, error } = await supabase.from("campus_blocks").select("*").eq("campus_id", campusId).order("created_at", { ascending: true });
-    if (error) { toast({ title: "Erro ao carregar blocos do campus", variant: "destructive" }); return; }
+    const { data } = await supabase.from("campus_blocks").select("*").eq("campus_id", campusId).order("created_at", { ascending: true });
     setCampusBlocks(data || []);
   }
 
-  // Sobe a foto do mapa do campus (planta/imagem aérea) e grava em campuses.map_image_url
+  // Denúncias Ampliadas
+  async function loadContentReports() {
+    const { data, error } = await supabase.from("content_reports").select("*").eq("status", "pending").order("created_at", { ascending: false });
+    if (error) return;
+    const list = data || [];
+    const commentIds = list.filter((r) => r.target_type === "comment").map((r) => r.target_id);
+    const userIds = list.filter((r) => r.target_type === "user").map((r) => r.target_id);
+    const messageIds = list.filter((r) => r.target_type === "message").map((r) => r.target_id);
+
+    const [comments, users, messages] = await Promise.all([
+      commentIds.length ? supabase.from("post_comments").select("id,content,user_id").in("id", commentIds) : Promise.resolve({ data: [] as any[] }),
+      userIds.length ? supabase.from("profiles").select("user_id,full_name").in("user_id", userIds) : Promise.resolve({ data: [] as any[] }),
+      messageIds.length ? supabase.from("direct_messages").select("id,content,sender_id").in("id", messageIds) : Promise.resolve({ data: [] as any[] }),
+    ]);
+
+    const commentMap = new Map((comments.data ?? []).map((c: any) => [c.id, c]));
+    const userMap = new Map((users.data ?? []).map((u: any) => [u.user_id, u]));
+    const messageMap = new Map((messages.data ?? []).map((m: any) => [m.id, m]));
+
+    setContentReports(list.map((r) => ({
+      ...r,
+      _preview:
+        r.target_type === "comment" ? commentMap.get(r.target_id)?.content
+        : r.target_type === "user" ? userMap.get(r.target_id)?.full_name
+        : r.target_type === "message" ? messageMap.get(r.target_id)?.content
+        : null,
+    })));
+  }
+
+  async function resolveContentReport(id: string, resolution: "resolved" | "dismissed") {
+    try {
+      await supabase.from("content_reports").update({ status: resolution }).eq("id", id);
+      setContentReports((prev) => prev.filter((r) => r.id !== id));
+      await audit(resolution === "resolved" ? "content_report_resolved" : "content_report_dismissed", "content_report", id);
+      toast({ title: resolution === "resolved" ? "Denúncia marcada como resolvida" : "Denúncia ignorada" });
+    } catch { toast({ title: "Erro ao atualizar denúncia", variant: "destructive" }); }
+  }
+
+  // Log de Auditoria
+  async function loadAuditLog() {
+    const { data } = await supabase.from("admin_audit_log").select("*").order("created_at", { ascending: false }).limit(100);
+    setAuditLog(data || []);
+    const ids = Array.from(new Set((data || []).map((l: any) => l.admin_id)));
+    if (ids.length) {
+      const { data: profs } = await supabase.from("profiles").select("user_id,full_name").in("user_id", ids);
+      const map: Record<string, string> = {};
+      (profs || []).forEach((p: any) => { map[p.user_id] = p.full_name || "Admin"; });
+      setAdminNames(map);
+    }
+  }
+
+  // Selos
+  async function grantBadge(userId: string, role: string) {
+    try {
+      const { error } = await supabase.from("user_roles").insert({ user_id: userId, role: role as any });
+      if (error) throw error;
+      setBadgeMap((prev) => { const next = new Map(prev); next.set(userId, [...(next.get(userId) ?? []), role]); return next; });
+      await audit("badge_granted", "user", userId, { role });
+      toast({ title: `Selo "${BADGE_ROLES[role]?.label}" concedido! ✅` });
+    } catch (e: any) { toast({ title: "Erro ao conceder selo", variant: "destructive" }); }
+  }
+
+  async function revokeBadge(userId: string, role: string) {
+    try {
+      const { error } = await supabase.from("user_roles").delete().eq("user_id", userId).eq("role", role as any);
+      if (error) throw error;
+      setBadgeMap((prev) => { const next = new Map(prev); next.set(userId, (next.get(userId) ?? []).filter((r) => r !== role)); return next; });
+      await audit("badge_revoked", "user", userId, { role });
+      toast({ title: "Selo removido." });
+    } catch (e: any) { toast({ title: "Erro ao remover selo", variant: "destructive" }); }
+  }
+
+  // Comunidades
+  async function loadCommunities() {
+    const { data } = await supabase.from("communities").select("*").order("member_count", { ascending: false });
+    setCommunitiesList(data || []);
+  }
+
+  async function toggleCommunityExpand(communityId: string) {
+    if (expandedCommunityId === communityId) { setExpandedCommunityId(null); return; }
+    setExpandedCommunityId(communityId);
+    if (!communityMembers[communityId]) {
+      const { data } = await supabase.from("community_members").select("id,user_id,role,profiles(full_name,avatar_url)").eq("community_id", communityId);
+      setCommunityMembers((prev) => ({ ...prev, [communityId]: data || [] }));
+    }
+  }
+
+  async function toggleCommunityStatus(communityId: string, currentStatus: string) {
+    const next = currentStatus === "archived" ? "active" : "archived";
+    try {
+      await supabase.from("communities").update({ status: next }).eq("id", communityId);
+      setCommunitiesList((prev) => prev.map((c) => c.id === communityId ? { ...c, status: next } : c));
+      await audit(next === "archived" ? "community_archived" : "community_unarchived", "community", communityId);
+      toast({ title: next === "archived" ? "Comunidade arquivada." : "Comunidade reativada." });
+    } catch (e: any) { toast({ title: "Erro ao atualizar", variant: "destructive" }); }
+  }
+
+  async function removeCommunityMember(communityId: string, membershipId: string, memberUserId: string) {
+    if (!window.confirm("Remover este integrante da comunidade?")) return;
+    try {
+      await supabase.from("community_members").delete().eq("id", membershipId);
+      setCommunityMembers((prev) => ({ ...prev, [communityId]: (prev[communityId] || []).filter((m) => m.id !== membershipId) }));
+      setCommunitiesList((prev) => prev.map((c) => c.id === communityId ? { ...c, member_count: Math.max(0, (c.member_count || 1) - 1) } : c));
+      await audit("community_member_removed", "community", communityId, { removed_user_id: memberUserId });
+      toast({ title: "Integrante removido." });
+    } catch (e: any) { toast({ title: "Erro ao remover", variant: "destructive" }); }
+  }
+
+  // Ações do Mapa
   async function handleMapUpload(file: File) {
     if (!selectedCampusId) return;
     setUploadingMap(true);
     try {
       const ext = file.name.split(".").pop();
       const filePath = `campus-maps/${selectedCampusId}-${Date.now()}.${ext}`;
-      const { error: uploadError } = await supabase.storage.from("campus-media").upload(filePath, file, { upsert: true });
-      if (uploadError) throw uploadError;
-      const { error: updateError } = await supabase.from("campuses").update({ map_image_url: filePath }).eq("id", selectedCampusId);
-      if (updateError) throw updateError;
+      await supabase.storage.from("campus-media").upload(filePath, file, { upsert: true });
+      await supabase.from("campuses").update({ map_image_url: filePath }).eq("id", selectedCampusId);
       setCampuses((prev) => prev.map((c) => c.id === selectedCampusId ? { ...c, map_image_url: filePath } : c));
+      await audit("campus_map_updated", "campus", selectedCampusId);
       toast({ title: "Mapa do campus atualizado! 🗺️" });
-    } catch (e: any) {
-      toast({ title: "Erro ao subir o mapa", description: e.message, variant: "destructive" });
-    } finally {
-      setUploadingMap(false);
-    }
+    } catch { toast({ title: "Erro ao subir o mapa", variant: "destructive" }); } 
+    finally { setUploadingMap(false); }
   }
 
-  // Clique na imagem do mapa define a posição (em %) do próximo bloco a cadastrar
   function handleMapClick(e: React.MouseEvent<HTMLDivElement>) {
     const rect = e.currentTarget.getBoundingClientRect();
     const x = ((e.clientX - rect.left) / rect.width) * 100;
@@ -197,30 +336,21 @@ export default function AdminDashboard() {
   }
 
   async function handleCreateBlock() {
-    if (!selectedCampusId || !pendingPin || !blockName.trim()) {
-      toast({ title: "Dê um nome ao bloco antes de salvar", variant: "destructive" });
-      return;
-    }
+    if (!selectedCampusId || !pendingPin || !blockName.trim()) return;
     setSavingBlock(true);
     try {
       const { data, error } = await supabase.from("campus_blocks").insert({
-        campus_id: selectedCampusId,
-        name: blockName.trim(),
-        category: blockCategory,
-        description: blockDescription.trim() || null,
-        x_percent: pendingPin.x,
-        y_percent: pendingPin.y,
+        campus_id: selectedCampusId, name: blockName.trim(), category: blockCategory,
+        description: blockDescription.trim() || null, x_percent: pendingPin.x, y_percent: pendingPin.y,
         created_by: user?.id,
       }).select().single();
       if (error) throw error;
       setCampusBlocks((prev) => [...prev, data]);
       setPendingPin(null); setBlockName(""); setBlockDescription("");
+      await audit("campus_block_created", "campus_block", data.id, { name: blockName.trim() });
       toast({ title: "Bloco cadastrado no mapa!" });
-    } catch (e: any) {
-      toast({ title: "Erro ao cadastrar bloco", description: e.message, variant: "destructive" });
-    } finally {
-      setSavingBlock(false);
-    }
+    } catch { toast({ title: "Erro ao cadastrar bloco", variant: "destructive" }); } 
+    finally { setSavingBlock(false); }
   }
 
   async function handleDeleteBlock(id: string) {
@@ -228,30 +358,28 @@ export default function AdminDashboard() {
     try {
       await supabase.from("campus_blocks").delete().eq("id", id);
       setCampusBlocks((prev) => prev.filter((b) => b.id !== id));
+      await audit("campus_block_deleted", "campus_block", id);
     } catch { toast({ title: "Erro ao remover bloco", variant: "destructive" }); }
   }
 
+  // Demais Ações (Posts, Bans, etc)
   async function handleDeletePost(reportId: string, postId: string) {
-    if (!window.confirm("Isso apagará a publicação da rede permanentemente. Confirmar?")) return;
+    if (!window.confirm("Isso apagará a publicação permanentemente. Confirmar?")) return;
     try {
-      const { error } = await supabase.from("posts").delete().eq("id", postId);
-      if (error) throw error;
+      await supabase.from("posts").delete().eq("id", postId);
       await supabase.from("post_reports").update({ status: "resolved" }).eq("id", reportId);
       setReports(reports.filter(r => r.id !== reportId));
-      toast({ title: "Publicação Excluída", description: "A rede foi higienizada." });
-    } catch (error) {
-      toast({ title: "Erro", description: "Não foi possível deletar o post.", variant: "destructive" });
-    }
+      await audit("post_deleted", "post", postId, { via_report: reportId });
+      toast({ title: "Publicação Excluída" });
+    } catch { toast({ title: "Erro ao deletar", variant: "destructive" }); }
   }
 
   async function handleIgnoreReport(reportId: string) {
     try {
       await supabase.from("post_reports").update({ status: "dismissed" }).eq("id", reportId);
       setReports(reports.filter(r => r.id !== reportId));
-      toast({ title: "Denúncia Ignorada" });
-    } catch {
-      toast({ title: "Erro ao ignorar denúncia", variant: "destructive" });
-    }
+      await audit("post_report_dismissed", "post_report", reportId);
+    } catch { toast({ title: "Erro", variant: "destructive" }); }
   }
 
   async function deleteFeedback(id: string) {
@@ -259,57 +387,39 @@ export default function AdminDashboard() {
       await supabase.from("feedbacks").delete().eq("id", id);
       setFeedbacks(feedbacks.filter(f => f.id !== id));
       toast({ title: "Feedback arquivado com sucesso." });
-    } catch {
-      toast({ title: "Erro ao remover feedback", variant: "destructive" });
-    }
+    } catch { toast({ title: "Erro ao remover", variant: "destructive" }); }
   }
 
   async function handleBanUser(userId: string, currentStatus: boolean) {
-    if (userId === user?.id) {
-      toast({ title: "Ação bloqueada", description: "Você não pode banir sua própria conta.", variant: "destructive" });
-      return;
-    }
+    if (userId === user?.id) { toast({ title: "Ação bloqueada", variant: "destructive" }); return; }
     const action = currentStatus ? "Desbanir" : "Banir";
-    if (!window.confirm(`Deseja realmente ${action} este usuário da plataforma?`)) return;
+    if (!window.confirm(`Deseja realmente ${action} este usuário?`)) return;
     try {
       await supabase.from("profiles").update({ is_banned: !currentStatus }).eq("user_id", userId);
       setUsersList(usersList.map(u => u.user_id === userId ? { ...u, is_banned: !currentStatus } : u));
+      await audit(currentStatus ? "user_unbanned" : "user_banned", "user", userId);
       toast({ title: currentStatus ? "Acesso Restaurado" : "Usuário Banido", variant: currentStatus ? "default" : "destructive" });
-    } catch {
-      toast({ title: "Erro ao atualizar usuário", variant: "destructive" });
-    }
+    } catch { toast({ title: "Erro ao atualizar usuário", variant: "destructive" }); }
   }
 
   async function sendGlobalNotification() {
     if (!promoTitle.trim() || !promoMessage.trim()) return;
     setSendingPromo(true);
     try {
-      const { data: users, error } = await supabase.from("profiles").select("user_id");
-      if (error) throw error;
+      const { data: users } = await supabase.from("profiles").select("user_id");
       if (!users || users.length === 0) throw new Error("Nenhum usuário encontrado");
-
       const notifications = users.map(u => ({
-        user_id: u.user_id,
-        title: `📢 AVISO OFICIAL: ${promoTitle}`,
-        content: promoMessage,
-        type: "system",
-        is_read: false
+        user_id: u.user_id, title: `📢 AVISO OFICIAL: ${promoTitle}`, content: promoMessage, type: "system", is_read: false
       }));
-
       const chunkSize = 100;
       for (let i = 0; i < notifications.length; i += chunkSize) {
-        const chunk = notifications.slice(i, i + chunkSize);
-        const { error } = await supabase.from("notifications").insert(chunk);
-        if (error) throw error;
+        await supabase.from("notifications").insert(notifications.slice(i, i + chunkSize));
       }
-      toast({ title: "Megafone Disparado 🚀", description: "Aviso enviado para toda a rede." });
-      setPromoTitle("");
-      setPromoMessage("");
-    } catch (e: any) {
-      toast({ title: "Erro ao enviar", description: e.message, variant: "destructive" });
-    } finally {
-      setSendingPromo(false);
-    }
+      await audit("global_broadcast_sent", undefined, undefined, { title: promoTitle, recipients: users.length });
+      toast({ title: "Megafone Disparado 🚀" });
+      setPromoTitle(""); setPromoMessage("");
+    } catch { toast({ title: "Erro ao enviar", variant: "destructive" }); } 
+    finally { setSendingPromo(false); }
   }
 
   async function createAnnouncement() {
@@ -320,23 +430,13 @@ export default function AdminDashboard() {
       if (formattedUrl && !formattedUrl.startsWith("http://") && !formattedUrl.startsWith("https://")) {
         formattedUrl = `https://${formattedUrl}`;
       }
-
       const payload: any = {
-        title: annTitle.trim(), 
-        body: annBody.trim() || null, 
-        type: annType, 
-        cta_label: annCtaLabel.trim() || null, 
-        cta_url: formattedUrl || null, 
-        created_by: user?.id, 
-        active: true,
+        title: annTitle.trim(), body: annBody.trim() || null, type: annType,
+        cta_label: annCtaLabel.trim() || null, cta_url: formattedUrl || null, created_by: user?.id, active: true,
       };
-
       if (annType === "poll") {
         const opts = annOptions.map((o) => o.trim()).filter(Boolean);
-        if (opts.length < 2) {
-          toast({ title: "Enquete precisa de ao menos 2 opções", variant: "destructive" });
-          setSavingAnn(false); return;
-        }
+        if (opts.length < 2) { toast({ title: "Enquete precisa de 2 opções", variant: "destructive" }); setSavingAnn(false); return; }
         payload.poll_options = opts;
       }
       const { data, error } = await supabase.from("admin_announcements").insert(payload).select().single();
@@ -344,9 +444,8 @@ export default function AdminDashboard() {
       setAnnouncements([data, ...announcements]);
       setAnnTitle(""); setAnnBody(""); setAnnCtaLabel(""); setAnnCtaUrl(""); setAnnOptions(["", ""]);
       toast({ title: "Publicado no Dashboard ✨" });
-    } catch (e: any) {
-      toast({ title: "Erro ao publicar", description: e.message, variant: "destructive" });
-    } finally { setSavingAnn(false); }
+    } catch { toast({ title: "Erro ao publicar", variant: "destructive" }); } 
+    finally { setSavingAnn(false); }
   }
 
   async function toggleAnnouncement(id: string, current: boolean) {
@@ -362,29 +461,30 @@ export default function AdminDashboard() {
       await supabase.from("admin_announcements").delete().eq("id", id);
       setAnnouncements(announcements.filter((a) => a.id !== id));
       toast({ title: "Anúncio removido." });
-    } catch { toast({ title: "Erro ao remover", variant: "destructive" }); }
+    } catch { toast({ title: "Erro", variant: "destructive" }); }
   }
 
   async function toggleAdmin(userId: string, isAdmin: boolean) {
-    if (userId === user?.id && isAdmin) {
-      toast({ title: "Ação bloqueada", description: "Você não pode remover seu próprio acesso admin.", variant: "destructive" });
-      return;
-    }
-    if (!window.confirm(isAdmin ? "Remover acesso de administrador?" : "Conceder acesso de administrador a este usuário? Isso dará a ele controle total do painel.")) return;
+    if (userId === user?.id && isAdmin) { toast({ title: "Ação bloqueada", variant: "destructive" }); return; }
+    if (!window.confirm(isAdmin ? "Remover acesso de administrador?" : "Conceder acesso de administrador?")) return;
     try {
       if (isAdmin) {
         await supabase.from("user_roles").delete().eq("user_id", userId).eq("role", "admin");
         const next = new Set(adminIds); next.delete(userId); setAdminIds(next);
-        toast({ title: "Privilégios de Admin removidos." });
+        await audit("admin_access_revoked", "user", userId);
+        toast({ title: "Privilégios removidos." });
       } else {
         await supabase.from("user_roles").insert({ user_id: userId, role: "admin" as any });
         const next = new Set(adminIds); next.add(userId); setAdminIds(next);
+        await audit("admin_access_granted", "user", userId);
         toast({ title: "Usuário promovido a Admin 👑" });
       }
-    } catch (e: any) { toast({ title: "Erro ao atualizar permissão", description: e.message, variant: "destructive" }); }
+    } catch { toast({ title: "Erro", variant: "destructive" }); }
   }
 
   const filteredUsers = usersList.filter((u) => !searchUser.trim() ? true : (u.full_name || "").toLowerCase().includes(searchUser.toLowerCase()));
+  const filteredBadgeUsers = usersList.filter((u) => !badgeSearch.trim() ? true : (u.full_name || "").toLowerCase().includes(badgeSearch.toLowerCase()));
+  const totalPendingReports = reports.length + contentReports.length;
 
   if (loading) {
     return (
@@ -440,7 +540,7 @@ export default function AdminDashboard() {
         <Card className="rounded-[24px] border-0 bg-card shadow-sm hover:shadow-md transition-shadow">
           <CardContent className="p-5 flex items-center gap-4">
             <div className="h-14 w-14 rounded-2xl bg-destructive/10 text-destructive flex items-center justify-center shrink-0"><AlertTriangle className="h-6 w-6" /></div>
-            <div><p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1">Denúncias Ativas</p><p className="text-3xl font-black leading-none">{reports.length}</p></div>
+            <div><p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1">Denúncias Ativas</p><p className="text-3xl font-black leading-none">{totalPendingReports}</p></div>
           </CardContent>
         </Card>
       </div>
@@ -450,9 +550,12 @@ export default function AdminDashboard() {
         <ScrollArea className="w-full mb-6">
           <TabsList className="w-full justify-start rounded-[24px] bg-transparent p-0 flex gap-2 h-auto">
             <TabsTrigger value="users" className="rounded-full font-bold text-sm h-11 px-5 gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground bg-muted/40 text-muted-foreground transition-all"><Users className="h-4 w-4" /> Usuários</TabsTrigger>
+            <TabsTrigger value="badges" className="rounded-full font-bold text-sm h-11 px-5 gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground bg-muted/40 text-muted-foreground transition-all"><BadgeCheck className="h-4 w-4" /> Selos</TabsTrigger>
             <TabsTrigger value="map" className="rounded-full font-bold text-sm h-11 px-5 gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground bg-muted/40 text-muted-foreground transition-all"><MapPin className="h-4 w-4" /> Mapa do Campus</TabsTrigger>
+            <TabsTrigger value="communities" className="rounded-full font-bold text-sm h-11 px-5 gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground bg-muted/40 text-muted-foreground transition-all"><Users className="h-4 w-4" /> Comunidades</TabsTrigger>
             <TabsTrigger value="announcements" className="rounded-full font-bold text-sm h-11 px-5 gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground bg-muted/40 text-muted-foreground transition-all"><LayoutDashboard className="h-4 w-4" /> Banners</TabsTrigger>
-            <TabsTrigger value="reports" className="rounded-full font-bold text-sm h-11 px-5 gap-2 data-[state=active]:bg-destructive data-[state=active]:text-white bg-muted/40 text-muted-foreground transition-all"><AlertTriangle className="h-4 w-4" /> Denúncias {reports.length > 0 && <span className="bg-white text-destructive rounded-full px-2 py-0.5 text-[10px] ml-1">{reports.length}</span>}</TabsTrigger>
+            <TabsTrigger value="reports" className="rounded-full font-bold text-sm h-11 px-5 gap-2 data-[state=active]:bg-destructive data-[state=active]:text-white bg-muted/40 text-muted-foreground transition-all"><AlertTriangle className="h-4 w-4" /> Denúncias {totalPendingReports > 0 && <span className="bg-white text-destructive rounded-full px-2 py-0.5 text-[10px] ml-1">{totalPendingReports}</span>}</TabsTrigger>
+            <TabsTrigger value="audit" className="rounded-full font-bold text-sm h-11 px-5 gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground bg-muted/40 text-muted-foreground transition-all"><ClipboardList className="h-4 w-4" /> Auditoria</TabsTrigger>
             <TabsTrigger value="feedbacks" className="rounded-full font-bold text-sm h-11 px-5 gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground bg-muted/40 text-muted-foreground transition-all"><MessageSquare className="h-4 w-4" /> Avaliações</TabsTrigger>
             <TabsTrigger value="broadcast" className="rounded-full font-bold text-sm h-11 px-5 gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground bg-muted/40 text-muted-foreground transition-all"><Megaphone className="h-4 w-4" /> Megafone</TabsTrigger>
           </TabsList>
@@ -498,6 +601,80 @@ export default function AdminDashboard() {
                   </CardContent>
                 </Card>
               ))
+            )}
+          </div>
+        </TabsContent>
+
+        {/* 1.2 SELOS DE VERIFICAÇÃO INSTITUCIONAL */}
+        <TabsContent value="badges" className="space-y-4 animate-in fade-in">
+          <Card className="rounded-[28px] border-0 bg-card shadow-sm">
+            <CardContent className="p-6 space-y-4">
+              <div className="flex items-center gap-3 border-b border-border/40 pb-4">
+                <div className="h-10 w-10 bg-primary/10 rounded-xl flex items-center justify-center"><BadgeCheck className="h-5 w-5 text-primary" /></div>
+                <div><h3 className="font-black text-lg">Verificação Institucional</h3><p className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">Conceda os selos que aparecem no Connect</p></div>
+              </div>
+              <div className="relative group">
+                <Search className="absolute left-5 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                <Input value={badgeSearch} onChange={(e) => setBadgeSearch(e.target.value)} placeholder="Localizar aluno por nome..." className="pl-14 h-14 rounded-[24px] bg-muted/30 border-0 shadow-sm text-base font-medium focus-visible:ring-primary transition-all" />
+              </div>
+            </CardContent>
+          </Card>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {filteredBadgeUsers.length === 0 ? (
+              <div className="md:col-span-2"><EmptyState icon={<Users className="h-10 w-10" />} text="Nenhum usuário encontrado." /></div>
+            ) : (
+              filteredBadgeUsers.map((u) => {
+                const userBadges = badgeMap.get(u.user_id) ?? [];
+                return (
+                  <Card key={u.user_id} className="rounded-[28px] border-0 bg-card shadow-sm">
+                    <CardContent className="p-4 sm:p-5 space-y-3">
+                      <div className="flex items-center gap-3">
+                        <Avatar className="h-11 w-11 border border-border/30 shrink-0">
+                          <AvatarImage src={u.avatar_url} className="object-cover" />
+                          <AvatarFallback className="bg-primary/10 text-primary font-black">{u.full_name?.charAt(0) || "U"}</AvatarFallback>
+                        </Avatar>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-black text-sm truncate">{u.full_name || "Perfil Pendente"}</p>
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {userBadges.length === 0 ? (
+                              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Sem selo</span>
+                            ) : userBadges.map((role) => {
+                              const meta = BADGE_ROLES[role];
+                              if (!meta) return null;
+                              const Icon = meta.icon;
+                              return (
+                                <Badge key={role} variant="secondary" className="bg-primary/10 text-primary border-0 text-[9px] font-black gap-1 pr-1">
+                                  <Icon className="h-3 w-3" /> {meta.label}
+                                  <button onClick={() => revokeBadge(u.user_id, role)} className="ml-1 hover:text-destructive"><X className="h-3 w-3" /></button>
+                                </Badge>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <Select value={badgeRoleToGrant} onValueChange={setBadgeRoleToGrant}>
+                          <SelectTrigger className="h-10 rounded-xl bg-muted/30 border-0 text-xs font-bold flex-1"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {Object.entries(BADGE_ROLES).map(([role, meta]) => (
+                              <SelectItem key={role} value={role}>{meta.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Button
+                          size="sm"
+                          className="h-10 rounded-xl font-black text-xs shrink-0"
+                          disabled={userBadges.includes(badgeRoleToGrant)}
+                          onClick={() => grantBadge(u.user_id, badgeRoleToGrant)}
+                        >
+                          <Plus className="h-3.5 w-3.5 mr-1" /> Conceder
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })
             )}
           </div>
         </TabsContent>
@@ -618,6 +795,61 @@ export default function AdminDashboard() {
           </Card>
         </TabsContent>
 
+        {/* 1.7 MODERAÇÃO DE COMUNIDADES */}
+        <TabsContent value="communities" className="space-y-3 animate-in fade-in">
+          {communitiesList.length === 0 ? (
+            <EmptyState icon={<Users className="h-10 w-10" />} text="Nenhuma comunidade criada ainda." />
+          ) : (
+            communitiesList.map((c) => (
+              <Card key={c.id} className="rounded-[24px] border-0 bg-card shadow-sm overflow-hidden">
+                <CardContent className="p-0">
+                  <button onClick={() => toggleCommunityExpand(c.id)} className="w-full flex items-center justify-between gap-3 p-4 sm:p-5 text-left hover:bg-muted/20 transition-colors">
+                    <div className="flex items-center gap-3 min-w-0">
+                      {expandedCommunityId === c.id ? <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" /> : <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />}
+                      <div className="min-w-0">
+                        <p className="font-black text-sm truncate flex items-center gap-2">
+                          {c.name}
+                          {c.status === "archived" && <Badge variant="secondary" className="bg-muted text-muted-foreground border-0 text-[9px]">Arquivada</Badge>}
+                        </p>
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mt-0.5">{c.type} · {c.member_count ?? 0} integrantes</p>
+                      </div>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-9 rounded-xl font-black text-[11px] gap-1.5 shrink-0"
+                      onClick={(e) => { e.stopPropagation(); toggleCommunityStatus(c.id, c.status); }}
+                    >
+                      {c.status === "archived" ? <><ArchiveRestore className="h-3.5 w-3.5" /> Reativar</> : <><Archive className="h-3.5 w-3.5" /> Arquivar</>}
+                    </Button>
+                  </button>
+
+                  {expandedCommunityId === c.id && (
+                    <div className="border-t border-border/30 p-4 sm:p-5 space-y-2 bg-muted/10">
+                      {!communityMembers[c.id] ? (
+                        <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+                      ) : communityMembers[c.id].length === 0 ? (
+                        <p className="text-xs text-muted-foreground font-medium text-center py-2">Nenhum integrante.</p>
+                      ) : communityMembers[c.id].map((m: any) => (
+                        <div key={m.id} className="flex items-center justify-between gap-2 bg-card rounded-xl px-3 py-2.5">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <Avatar className="h-8 w-8 shrink-0"><AvatarImage src={m.profiles?.avatar_url} /><AvatarFallback className="text-[10px] bg-primary/10 text-primary font-black">{m.profiles?.full_name?.charAt(0) || "U"}</AvatarFallback></Avatar>
+                            <span className="text-xs font-bold truncate">{m.profiles?.full_name || "Estudante"}</span>
+                            {m.role === "admin" && <Badge variant="secondary" className="text-[8px] bg-amber-500/10 text-amber-600 border-0">Mod</Badge>}
+                          </div>
+                          <Button size="icon" variant="ghost" className="h-7 w-7 rounded-full shrink-0 hover:bg-destructive/10 hover:text-destructive" onClick={() => removeCommunityMember(c.id, m.id, m.user_id)}>
+                            <UserMinus className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            ))
+          )}
+        </TabsContent>
+
         {/* 2. DASHBOARD ANNOUNCEMENTS (BANNERS) */}
         <TabsContent value="announcements" className="space-y-6 animate-in fade-in">
           <Card className="rounded-[32px] border-0 bg-card shadow-md">
@@ -693,28 +925,71 @@ export default function AdminDashboard() {
           </div>
         </TabsContent>
 
-        {/* 3. DENÚNCIAS */}
+        {/* 3. DENÚNCIAS (posts + comentários/usuários/mensagens) */}
         <TabsContent value="reports" className="space-y-4 animate-in fade-in">
-          {reports.length === 0 ? (
+          {totalPendingReports === 0 ? (
             <EmptyState icon={<CheckCircle2 className="h-12 w-12 text-emerald-500" />} text="O ecossistema está limpo e seguro." />
           ) : (
-            reports.map((r) => (
-              <Card key={r.id} className="rounded-[28px] border border-destructive/30 bg-destructive/5 shadow-sm">
-                <CardContent className="p-5 sm:p-6 space-y-4">
-                  <div className="flex items-center justify-between border-b border-destructive/20 pb-3">
-                    <div className="flex items-center gap-2 text-destructive"><AlertTriangle className="h-5 w-5" /><span className="font-black uppercase tracking-widest text-[11px]">{r.reason || "Violação de Termos"}</span></div>
-                    <span className="text-[10px] font-bold text-muted-foreground">{new Date(r.created_at).toLocaleString("pt-BR")}</span>
-                  </div>
-                  {r.posts && (
-                    <div className="bg-background rounded-[20px] p-4 border border-border/40">
-                      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Conteúdo Denunciado:</p>
-                      <p className="text-sm font-medium text-foreground whitespace-pre-wrap">{r.posts.content || <em className="opacity-50">(Conteúdo removido pelo autor)</em>}</p>
+            <>
+              {reports.map((r) => (
+                <Card key={`post-${r.id}`} className="rounded-[28px] border border-destructive/30 bg-destructive/5 shadow-sm">
+                  <CardContent className="p-5 sm:p-6 space-y-4">
+                    <div className="flex items-center justify-between border-b border-destructive/20 pb-3">
+                      <div className="flex items-center gap-2 text-destructive"><AlertTriangle className="h-5 w-5" /><span className="font-black uppercase tracking-widest text-[11px]">Post · {r.reason || "Violação de Termos"}</span></div>
+                      <span className="text-[10px] font-bold text-muted-foreground">{new Date(r.created_at).toLocaleString("pt-BR")}</span>
                     </div>
-                  )}
-                  <div className="flex flex-col sm:flex-row gap-3 pt-2">
-                    <Button variant="destructive" className="rounded-xl font-black h-12 flex-1 shadow-md" onClick={() => handleDeletePost(r.id, r.post_id)}><Trash2 className="h-4 w-4 mr-2" /> Deletar Publicação</Button>
-                    <Button variant="outline" className="rounded-xl font-bold h-12 flex-1 bg-background" onClick={() => handleIgnoreReport(r.id)}>Ignorar Alerta</Button>
+                    {r.posts && (
+                      <div className="bg-background rounded-[20px] p-4 border border-border/40">
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">Conteúdo Denunciado:</p>
+                        <p className="text-sm font-medium text-foreground whitespace-pre-wrap">{r.posts.content || <em className="opacity-50">(Conteúdo removido pelo autor)</em>}</p>
+                      </div>
+                    )}
+                    <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                      <Button variant="destructive" className="rounded-xl font-black h-12 flex-1 shadow-md" onClick={() => handleDeletePost(r.id, r.post_id)}><Trash2 className="h-4 w-4 mr-2" /> Deletar Publicação</Button>
+                      <Button variant="outline" className="rounded-xl font-bold h-12 flex-1 bg-background" onClick={() => handleIgnoreReport(r.id)}>Ignorar Alerta</Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+
+              {contentReports.map((r) => (
+                <Card key={`content-${r.id}`} className="rounded-[28px] border border-destructive/30 bg-destructive/5 shadow-sm">
+                  <CardContent className="p-5 sm:p-6 space-y-4">
+                    <div className="flex items-center justify-between border-b border-destructive/20 pb-3">
+                      <div className="flex items-center gap-2 text-destructive"><Flag className="h-5 w-5" /><span className="font-black uppercase tracking-widest text-[11px]">{REPORT_TARGET_LABEL[r.target_type]} · {r.reason}</span></div>
+                      <span className="text-[10px] font-bold text-muted-foreground">{new Date(r.created_at).toLocaleString("pt-BR")}</span>
+                    </div>
+                    <div className="bg-background rounded-[20px] p-4 border border-border/40">
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">
+                        {r.target_type === "user" ? "Perfil denunciado:" : "Conteúdo denunciado:"}
+                      </p>
+                      <p className="text-sm font-medium text-foreground whitespace-pre-wrap">{r._preview || <em className="opacity-50">(Conteúdo indisponível)</em>}</p>
+                      {r.context && <p className="text-xs text-muted-foreground mt-2 italic">"{r.context}"</p>}
+                    </div>
+                    <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                      <Button variant="destructive" className="rounded-xl font-black h-12 flex-1 shadow-md" onClick={() => resolveContentReport(r.id, "resolved")}><CheckCircle2 className="h-4 w-4 mr-2" /> Marcar Resolvida</Button>
+                      <Button variant="outline" className="rounded-xl font-bold h-12 flex-1 bg-background" onClick={() => resolveContentReport(r.id, "dismissed")}>Ignorar Alerta</Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </>
+          )}
+        </TabsContent>
+
+        {/* 3.5 LOG DE AUDITORIA */}
+        <TabsContent value="audit" className="space-y-2 animate-in fade-in">
+          {auditLog.length === 0 ? (
+            <EmptyState icon={<ClipboardList className="h-10 w-10" />} text="Nenhuma ação administrativa registrada ainda." />
+          ) : (
+            auditLog.map((l) => (
+              <Card key={l.id} className="rounded-2xl border-0 bg-card shadow-sm">
+                <CardContent className="p-4 flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-xs font-black text-foreground">{adminNames[l.admin_id] || "Admin"} <span className="font-medium text-muted-foreground">· {l.action}</span></p>
+                    {l.target_type && <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mt-0.5">{l.target_type}{l.target_id ? ` · ${l.target_id.slice(0, 8)}` : ""}</p>}
                   </div>
+                  <span className="text-[10px] font-bold text-muted-foreground shrink-0">{new Date(l.created_at).toLocaleString("pt-BR")}</span>
                 </CardContent>
               </Card>
             ))
