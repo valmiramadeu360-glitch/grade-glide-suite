@@ -2533,6 +2533,42 @@ export type Database = {
         }
         Relationships: []
       }
+      weekly_goals: {
+        Row: {
+          completed: boolean
+          created_at: string
+          id: string
+          progress: number
+          target: number
+          title: string
+          updated_at: string
+          user_id: string
+          week_start: string
+        }
+        Insert: {
+          completed?: boolean
+          created_at?: string
+          id?: string
+          progress?: number
+          target?: number
+          title: string
+          updated_at?: string
+          user_id: string
+          week_start?: string
+        }
+        Update: {
+          completed?: boolean
+          created_at?: string
+          id?: string
+          progress?: number
+          target?: number
+          title?: string
+          updated_at?: string
+          user_id?: string
+          week_start?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       trending_posts: {
