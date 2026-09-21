@@ -920,21 +920,32 @@ export default function Connect() {
             </p>
           </div>
         ) : (
-          <div className={cn("mt-4", activeTab === "market" ? "grid grid-cols-1 sm:grid-cols-2 gap-4" : "space-y-6")}>
+          <div className={cn("mt-4", activeTab === "market" ? "grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4" : "space-y-6")}>
             {visiblePosts.map((p) => (
-              <PostCard 
-                key={p.id} 
-                post={p} 
-                isOwner={p.user_id === user?.id} 
-                navigate={navigate} 
-                isMarketplace={activeTab === "market"} 
-                onLike={() => handleLike(p)} 
-                onSave={() => handleSave(p)} 
-                onComment={() => openComments(p)} 
-                onDelete={() => handleDelete(p)} 
-                onMarkAsSold={() => handleMarkAsSold(p)}
-                onAddToCalendar={() => handleAddToCalendar(p)}
-              />
+              activeTab === "market" ? (
+                <MarketCard
+                  key={p.id}
+                  post={p}
+                  isOwner={p.user_id === user?.id}
+                  navigate={navigate}
+                  onSave={() => handleSave(p)}
+                  onDelete={() => handleDelete(p)}
+                  onMarkAsSold={() => handleMarkAsSold(p)}
+                />
+              ) : (
+                <PostCard
+                  key={p.id}
+                  post={p}
+                  isOwner={p.user_id === user?.id}
+                  navigate={navigate}
+                  onLike={() => handleLike(p)}
+                  onSave={() => handleSave(p)}
+                  onComment={() => openComments(p)}
+                  onDelete={() => handleDelete(p)}
+                  onMarkAsSold={() => handleMarkAsSold(p)}
+                  onAddToCalendar={() => handleAddToCalendar(p)}
+                />
+              )
             ))}
           </div>
         )
@@ -1062,8 +1073,133 @@ export default function Connect() {
   );
 }
 
-// O NOVO POST CARD COM O SUPER APP DO MERCADO (Painel, Preços, Carrossel)
-function PostCard({ post, onLike, onSave, onComment, isOwner, onDelete, navigate, isMarketplace, onMarkAsSold, onAddToCalendar }: any) {
+// VITRINE DO MERCADO — card de produto em formato de loja: foto grande,
+// preço em destaque, sem avatar/curtidas (aquilo é do Feed, não da vitrine).
+function MarketCard({ post, isOwner, navigate, onSave, onDelete, onMarkAsSold }: any) {
+  const mediaList = post.media_urls && post.media_urls.length > 0 ? post.media_urls : (post.media_url ? [post.media_url] : []);
+  const cover = mediaList[0];
+
+  return (
+    <Card className={cn(
+      "group relative flex flex-col overflow-hidden rounded-[24px] border shadow-sm transition-all",
+      post.is_sold ? "border-border/40 bg-muted/20 opacity-75" : "border-border/20 bg-card hover:shadow-lg",
+    )}>
+      {/* Foto — o produto é o protagonista */}
+      <button
+        type="button"
+        onClick={() => navigate(`/profile/${post.user_id}`)}
+        className="relative block aspect-square w-full overflow-hidden bg-muted/30"
+      >
+        {cover ? (
+          <img src={cover} className="h-full w-full object-cover transition-transform group-hover:scale-105" />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center text-muted-foreground/30">
+            <Store className="h-10 w-10" />
+          </div>
+        )}
+
+        {post.is_sold && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+            <span className="rounded-full bg-zinc-900 px-4 py-1.5 text-[10px] font-black uppercase tracking-widest text-white shadow-lg">
+              Vendido
+            </span>
+          </div>
+        )}
+
+        {mediaList.length > 1 && !post.is_sold && (
+          <Badge variant="secondary" className="absolute right-2 top-2 border-0 bg-black/50 text-[9px] text-white backdrop-blur-md">
+            {mediaList.length} fotos
+          </Badge>
+        )}
+
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onSave(); }}
+          className={cn(
+            "absolute right-2 bottom-2 flex h-9 w-9 items-center justify-center rounded-full backdrop-blur-md transition-all",
+            post.user_saved ? "bg-amber-500 text-white" : "bg-black/40 text-white hover:bg-black/60",
+          )}
+        >
+          <Bookmark className={cn("h-4 w-4", post.user_saved && "fill-current")} />
+        </button>
+      </button>
+
+      {/* Preço + título */}
+      <div className="flex flex-1 flex-col gap-1 p-3">
+        <div className="flex items-baseline gap-1.5">
+          {post.price !== null && (
+            <span className="text-base font-black leading-none text-emerald-600">
+              R$ {post.price.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+            </span>
+          )}
+          {post.original_price && (
+            <span className="text-[10px] font-bold leading-none text-muted-foreground line-through decoration-destructive">
+              R$ {post.original_price.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+            </span>
+          )}
+        </div>
+
+        {post.title && <p className="line-clamp-2 text-[13px] font-bold leading-snug text-foreground">{post.title}</p>}
+
+        {post.tag && (
+          <Badge variant="secondary" className="w-fit rounded-md border-0 bg-muted/80 px-2 py-0.5 text-[8px] font-black uppercase tracking-wider text-muted-foreground">
+            {post.tag}
+          </Badge>
+        )}
+
+        {/* Vendedor — discreto, é a assinatura da loja, não o autor de um post */}
+        <button
+          type="button"
+          onClick={() => navigate(`/profile/${post.user_id}`)}
+          className="mt-1 flex items-center gap-1 text-[10px] font-semibold text-muted-foreground hover:text-primary"
+        >
+          <span className="truncate">{post.profiles?.full_name || "Estudante"}</span>
+          {post.author_badge && ROLE_BADGES[post.author_badge] && (() => {
+            const BadgeIcon = ROLE_BADGES[post.author_badge].icon;
+            return <BadgeIcon className="h-3 w-3 shrink-0 text-primary" />;
+          })()}
+          {isOwner && <Badge variant="secondary" className="ml-auto shrink-0 border-0 bg-primary/10 px-1.5 py-0 text-[8px] text-primary">Seu</Badge>}
+        </button>
+      </div>
+
+      {/* Ação — comprador negocia por chat, dono gerencia o anúncio */}
+      <div className="border-t border-border/20 p-2">
+        {isOwner ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="h-9 w-full rounded-xl text-[11px] font-black text-muted-foreground hover:bg-muted/80">
+                <MoreHorizontal className="mr-1.5 h-4 w-4" /> Gerenciar
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="min-w-[190px] rounded-2xl border border-border/20 bg-background/95 p-2 shadow-xl backdrop-blur-xl">
+              <DropdownMenuItem onClick={onMarkAsSold} className="mb-1 cursor-pointer rounded-xl py-2.5 font-bold focus:bg-primary/10 focus:text-primary">
+                <CheckCircle2 className="mr-2 h-4 w-4" /> {post.is_sold ? "Reativar Anúncio" : "Marcar como Vendido"}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={onDelete} className="cursor-pointer rounded-xl py-2.5 font-bold text-destructive focus:bg-destructive/10">
+                <Trash2 className="mr-2 h-4 w-4" /> Excluir Anúncio
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : post.is_sold ? (
+          <Button disabled className="h-9 w-full rounded-xl bg-muted text-[11px] font-black text-muted-foreground">
+            Indisponível
+          </Button>
+        ) : (
+          <Button
+            onClick={() => navigate(`/messages?user=${post.user_id}`)}
+            className="h-9 w-full rounded-xl bg-foreground text-[11px] font-black text-background hover:bg-foreground/90"
+          >
+            <ShoppingBag className="mr-1.5 h-3.5 w-3.5" /> Tenho Interesse
+          </Button>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+// POST CARD DO FEED (Para Você, Em Alta, Universidade, Curso, Comunidades e Notícias).
+// O Mercado tem seu próprio card — veja MarketCard acima.
+function PostCard({ post, onLike, onSave, onComment, isOwner, onDelete, navigate, onAddToCalendar }: any) {
   const isVideo = post.media_url?.match(/\.(mp4|webm|mov)$/i);
   const isPdf = post.media_url?.match(/\.pdf$/i) || post.document_url;
   
@@ -1072,14 +1208,7 @@ function PostCard({ post, onLike, onSave, onComment, isOwner, onDelete, navigate
   const mediaSource = post.document_url || post.video_url || mediaList[0];
 
   return (
-    <Card className={cn("rounded-[32px] border shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden transition-all relative", post.is_sold ? "border-border/40 opacity-80 bg-muted/20" : "border-border/20 bg-card hover:shadow-lg")}>
-      
-      {/* Tarja de Vendido (Mercado) */}
-      {isMarketplace && post.is_sold && (
-        <div className="absolute top-6 -right-10 bg-zinc-900 text-white font-black text-[10px] uppercase tracking-widest py-1.5 px-12 rotate-45 z-10 shadow-lg">
-          Vendido
-        </div>
-      )}
+    <Card className="rounded-[32px] border border-border/20 bg-card shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden transition-all relative hover:shadow-lg">
 
       <CardHeader className="p-5 pb-3 flex flex-row items-center justify-between">
         <div className="flex gap-3 items-center group cursor-pointer" onClick={() => navigate(`/profile/${post.user_id}`)}>
@@ -1098,26 +1227,20 @@ function PostCard({ post, onLike, onSave, onComment, isOwner, onDelete, navigate
                   </span>
                 );
               })()}
-              {isMarketplace && isOwner && <Badge variant="secondary" className="ml-2 text-[8px] bg-primary/10 text-primary border-0">Seu Anúncio</Badge>}
             </p>
             <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mt-0.5">{formatDistanceToNow(new Date(post.created_at), { locale: ptBR, addSuffix: true })}</p>
           </div>
         </div>
 
-        {/* Gerenciamento do Vendedor ou Autor */}
+        {/* Gerenciamento do Autor */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full text-muted-foreground hover:bg-muted/80"><MoreHorizontal className="h-5 w-5"/></Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="rounded-2xl border border-border/20 shadow-xl bg-background/95 backdrop-blur-xl p-2 min-w-[200px]">
-            {isOwner && isMarketplace && (
-              <DropdownMenuItem onClick={onMarkAsSold} className="font-bold rounded-xl py-3 focus:bg-primary/10 focus:text-primary cursor-pointer mb-1">
-                <CheckCircle2 className="h-4 w-4 mr-2"/> {post.is_sold ? "Reativar Anúncio" : "Marcar como Vendido"}
-              </DropdownMenuItem>
-            )}
             {isOwner && (
               <DropdownMenuItem onClick={onDelete} className="text-destructive font-bold rounded-xl focus:bg-destructive/10 py-3 cursor-pointer">
-                <Trash2 className="h-4 w-4 mr-2"/> {isMarketplace ? "Excluir Anúncio" : "Apagar Publicação"}
+                <Trash2 className="h-4 w-4 mr-2"/> Apagar Publicação
               </DropdownMenuItem>
             )}
             <DropdownMenuItem onClick={() => navigator.clipboard.writeText(window.location.href)} className="font-bold rounded-xl py-3 cursor-pointer">
@@ -1128,38 +1251,14 @@ function PostCard({ post, onLike, onSave, onComment, isOwner, onDelete, navigate
       </CardHeader>
       
       <CardContent className="p-5 pt-1">
-        {/* Renderização Premium do Marketplace */}
-        {isMarketplace ? (
-          <div className="mb-4 space-y-3">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                {post.title && <h3 className="font-black text-2xl text-foreground leading-tight line-clamp-2">{post.title}</h3>}
-                {post.tag && <Badge variant="secondary" className="mt-2 rounded-lg text-[9px] font-black uppercase tracking-widest px-3 py-1 bg-muted/80 text-muted-foreground">{post.tag}</Badge>}
-              </div>
-              {post.price !== null && (
-                <div className="flex flex-col items-end shrink-0 text-right bg-emerald-500/10 px-4 py-2 rounded-2xl border border-emerald-500/20">
-                  {post.original_price && (
-                    <span className="text-[11px] font-bold text-muted-foreground line-through decoration-destructive mb-0.5">
-                      R$ {post.original_price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                    </span>
-                  )}
-                  <span className="font-black text-xl text-emerald-600 leading-none">
-                    R$ {post.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                  </span>
-                </div>
-              )}
-            </div>
-          </div>
-        ) : (
-          post.tag && (() => {
-            const CatIcon = POST_CATEGORY_ICONS[post.tag];
-            return (
-              <Badge variant="secondary" className="mb-3 rounded-lg text-[9px] font-black uppercase tracking-widest px-3 py-1 bg-primary/10 text-primary border-0 gap-1">
-                {CatIcon && <CatIcon className="h-3 w-3" />} {post.tag}
-              </Badge>
-            );
-          })()
-        )}
+        {post.tag && (() => {
+          const CatIcon = POST_CATEGORY_ICONS[post.tag];
+          return (
+            <Badge variant="secondary" className="mb-3 rounded-lg text-[9px] font-black uppercase tracking-widest px-3 py-1 bg-primary/10 text-primary border-0 gap-1">
+              {CatIcon && <CatIcon className="h-3 w-3" />} {post.tag}
+            </Badge>
+          );
+        })()}
         
         <p className="whitespace-pre-wrap text-[15px] leading-relaxed text-foreground/90">{post.content}</p>
 
@@ -1181,7 +1280,7 @@ function PostCard({ post, onLike, onSave, onComment, isOwner, onDelete, navigate
           <div className="mt-5 flex overflow-x-auto snap-x snap-mandatory rounded-[24px] gap-2 pb-2 scrollbar-none">
             {mediaList.map((url: string, idx: number) => (
               <div key={idx} className="shrink-0 w-full snap-center relative border border-border/10 rounded-[24px] overflow-hidden bg-muted/10">
-                <img src={url} className={cn("w-full object-cover", isMarketplace ? "aspect-square" : "max-h-[400px]")} />
+                <img src={url} className="w-full max-h-[400px] object-cover" />
                 {mediaList.length > 1 && (
                   <Badge variant="secondary" className="absolute top-3 right-3 bg-black/50 text-white border-0 backdrop-blur-md">
                     {idx + 1}/{mediaList.length}
@@ -1210,20 +1309,7 @@ function PostCard({ post, onLike, onSave, onComment, isOwner, onDelete, navigate
         )}
       </CardContent>
 
-      <CardFooter className={cn("p-4 flex flex-col gap-3 bg-muted/10 border-t border-border/20", isMarketplace ? "pt-5" : "pt-3")}>
-        
-        {/* Botão de Compra Real */}
-        {isMarketplace && !isOwner && !post.is_sold && (
-          <Button onClick={() => navigate(`/messages?user=${post.user_id}`)} className="w-full h-14 rounded-2xl bg-foreground text-background hover:bg-foreground/90 font-black text-base shadow-xl hover:scale-[1.02] transition-transform flex items-center justify-center">
-            <ShoppingBag className="h-5 w-5 mr-2" /> Tenho Interesse
-          </Button>
-        )}
-        {isMarketplace && post.is_sold && (
-          <Button disabled className="w-full h-14 rounded-2xl bg-muted text-muted-foreground font-black text-base opacity-70">
-            Produto Indisponível
-          </Button>
-        )}
-
+      <CardFooter className="p-4 pt-3 flex flex-col gap-3 bg-muted/10 border-t border-border/20">
         <div className="flex justify-between items-center w-full">
           <div className="flex gap-2">
             <Button variant="ghost" onClick={onLike} className={cn("h-11 rounded-2xl px-4 text-xs font-black transition-all border border-transparent", post.user_liked ? "text-red-500 hover:text-red-600 bg-red-500/10 border-red-500/20" : "text-muted-foreground hover:bg-muted/80")}>
@@ -1234,27 +1320,24 @@ function PostCard({ post, onLike, onSave, onComment, isOwner, onDelete, navigate
             </Button>
           </div>
           <div className="flex gap-1">
-            {/* IA contextual (Capítulo 6, seção 8) — não aparece no Marketplace, que não tem conteúdo a explicar/resumir */}
-            {!isMarketplace && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-11 w-11 rounded-2xl text-primary hover:bg-primary/10" title="Perguntar à IA sobre este post">
-                    <Sparkles className="h-5 w-5" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="rounded-2xl border border-border/20 shadow-xl bg-background/95 backdrop-blur-xl p-2 min-w-[220px]">
-                  <DropdownMenuItem className="rounded-xl font-bold text-sm gap-2 py-2.5" onClick={() => navigate("/assistant", { state: { initialPrompt: `Explique este conteúdo de forma clara e didática:\n\n"${post.content}"` } })}>
-                    <Sparkles className="h-4 w-4 text-primary" /> Explicar este conteúdo
-                  </DropdownMenuItem>
-                  <DropdownMenuItem className="rounded-xl font-bold text-sm gap-2 py-2.5" onClick={() => navigate("/assistant", { state: { initialPrompt: `Gere flashcards (pergunta e resposta) a partir deste conteúdo:\n\n"${post.content}"` } })}>
-                    <Brain className="h-4 w-4 text-primary" /> Gerar flashcards
-                  </DropdownMenuItem>
-                  <DropdownMenuItem className="rounded-xl font-bold text-sm gap-2 py-2.5" onClick={() => navigate("/assistant", { state: { initialPrompt: `Resuma em 5 tópicos objetivos:\n\n"${post.content}"` } })}>
-                    <FileText className="h-4 w-4 text-primary" /> Resumir em 5 tópicos
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-11 w-11 rounded-2xl text-primary hover:bg-primary/10" title="Perguntar à IA sobre este post">
+                  <Sparkles className="h-5 w-5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="rounded-2xl border border-border/20 shadow-xl bg-background/95 backdrop-blur-xl p-2 min-w-[220px]">
+                <DropdownMenuItem className="rounded-xl font-bold text-sm gap-2 py-2.5" onClick={() => navigate("/assistant", { state: { initialPrompt: `Explique este conteúdo de forma clara e didática:\n\n"${post.content}"` } })}>
+                  <Sparkles className="h-4 w-4 text-primary" /> Explicar este conteúdo
+                </DropdownMenuItem>
+                <DropdownMenuItem className="rounded-xl font-bold text-sm gap-2 py-2.5" onClick={() => navigate("/assistant", { state: { initialPrompt: `Gere flashcards (pergunta e resposta) a partir deste conteúdo:\n\n"${post.content}"` } })}>
+                  <Brain className="h-4 w-4 text-primary" /> Gerar flashcards
+                </DropdownMenuItem>
+                <DropdownMenuItem className="rounded-xl font-bold text-sm gap-2 py-2.5" onClick={() => navigate("/assistant", { state: { initialPrompt: `Resuma em 5 tópicos objetivos:\n\n"${post.content}"` } })}>
+                  <FileText className="h-4 w-4 text-primary" /> Resumir em 5 tópicos
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Button variant="ghost" size="icon" onClick={onSave} className={cn("h-11 w-11 rounded-2xl transition-all border border-transparent", post.user_saved ? "text-amber-500 bg-amber-500/10 border-amber-500/20" : "text-muted-foreground hover:bg-muted/80")}>
               <Bookmark className={cn("h-5 w-5", post.user_saved && "fill-current")} />
             </Button>
@@ -1263,4 +1346,4 @@ function PostCard({ post, onLike, onSave, onComment, isOwner, onDelete, navigate
       </CardFooter>
     </Card>
   );
-      }
+          }
