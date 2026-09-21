@@ -36,17 +36,22 @@ const ACADEMIC_TAGS = ["Resumo", "Dúvida", "Flashcards", "Artigo", "Pesquisa", 
 const RESTRICTED_TAGS = ["Aviso"];
 const MARKETPLACE_TAGS = ["Livro/Apostila", "Eletrônicos", "República", "Vaga de Estágio", "Serviço Acadêmico", "Vestuário", "Outros"];
 
-// Capítulo 6, seção 3 — as 7 abas do feed do Connect. Cada uma tem sua própria
-// fonte de dados/regra de ordenação (ver loadPosts abaixo).
+// Filtros do FEED (só aparecem na aba Feed). Marketplace, Notícias e
+// Comunidades saíram daqui: cada um tem seu próprio botão na barra inferior,
+// e repetir os mesmos nomes em dois lugares confundia o estudante.
 const FEED_TABS = [
   { value: "foryou", label: "Para Você", icon: Sparkles },
   { value: "trending", label: "Em Alta", icon: TrendingUp },
   { value: "university", label: "Universidade", icon: Building2 },
   { value: "course", label: "Curso", icon: GraduationCap },
-  { value: "communities", label: "Comunidades", icon: Users },
-  { value: "market", label: "Marketplace", icon: Store },
-  { value: "news", label: "Notícias", icon: Newspaper },
 ] as const;
+
+// Identidade de cada seção do Connect (título, ícone e legenda do cabeçalho).
+const SECTION_INFO: Record<string, { title: string; subtitle: string; icon: any }> = {
+  market: { title: "Mercado", subtitle: "Compre e venda no campus", icon: Store },
+  news: { title: "Notícias", subtitle: "Jornal universitário", icon: Newspaper },
+  feed: { title: "Feed", subtitle: "Campus Digital", icon: Globe },
+};
 
 // Selos de verificação (Capítulo 6, seção 5) — mapeados a partir de user_roles.role
 const ROLE_BADGES: Record<string, { label: string; icon: any }> = {
@@ -195,6 +200,20 @@ export default function Connect() {
     if (activeTab === "news") loadNews();
     else loadPosts();
   }, [user, activeTab, marketView, showSavedOnly, myProfile]);
+
+  // A barra inferior navega para /connect, /connect?tab=market e /connect?tab=news
+  // sem desmontar esta tela. Sem esta sincronização, a aba ficava "presa" na
+  // anterior — era por isso que o Feed aparecia idêntico ao Mercado.
+  useEffect(() => {
+    const raw = searchParams.get("tab") || "foryou";
+    const next = raw === "global" ? "foryou" : raw;
+    if (next !== activeTab) {
+      setActiveTab(next);
+      setShowSavedOnly(false);
+      setMarketSearch("");
+      setMarketView("explore");
+    }
+  }, [searchParams]);
 
   function changeTab(v: string) {
     setActiveTab(v);
@@ -588,16 +607,24 @@ export default function Connect() {
   return (
     <div className="p-4 md:p-6 max-w-3xl mx-auto space-y-6 pb-28 animate-in fade-in duration-500">
       
-      {/* HEADER COMPACTO E AÇÃO RÁPIDA */}
+      {/* HEADER COMPACTO E AÇÃO RÁPIDA — muda conforme a seção aberta */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="h-11 w-11 bg-primary/10 rounded-full flex items-center justify-center text-primary shadow-inner">
-            <Globe className="h-6 w-6" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-black tracking-tight text-foreground">Connect</h1>
-            <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">Campus Digital</p>
-          </div>
+          {(() => {
+            const info = SECTION_INFO[activeTab] ?? SECTION_INFO.feed;
+            const SectionIcon = info.icon;
+            return (
+              <>
+                <div className="h-11 w-11 bg-primary/10 rounded-full flex items-center justify-center text-primary shadow-inner">
+                  <SectionIcon className="h-6 w-6" />
+                </div>
+                <div>
+                  <h1 className="text-2xl font-black tracking-tight text-foreground">{info.title}</h1>
+                  <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">{info.subtitle}</p>
+                </div>
+              </>
+            );
+          })()}
         </div>
         
         <div className="flex items-center gap-2">
@@ -630,25 +657,26 @@ export default function Connect() {
         </div>
       </div>
 
-      {/* Capítulo 6, seção 3 — as 7 abas do Connect (Para Você / Em Alta /
-          Universidade / Curso / Comunidades / Marketplace / Notícias).
-          Roláveis horizontalmente porque não cabem 7 em uma linha em telas móveis. */}
-      <Tabs value={activeTab} onValueChange={changeTab}>
-        <ScrollArea className="w-full whitespace-nowrap">
-          <TabsList className="rounded-[24px] bg-muted/40 p-1.5 inline-flex shadow-inner gap-1">
-            {FEED_TABS.map(({ value, label, icon: Icon }) => (
-              <TabsTrigger
-                key={value}
-                value={value}
-                className="rounded-[20px] font-bold text-sm h-11 gap-2 px-4 data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-foreground text-muted-foreground transition-all"
-              >
-                <Icon className="h-4 w-4" /> {label}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-          <ScrollBar orientation="horizontal" className="h-1.5" />
-        </ScrollArea>
-      </Tabs>
+      {/* Filtros do Feed. No Mercado e nas Notícias eles somem: aquelas seções
+          já têm seu próprio botão na barra inferior e seus próprios controles. */}
+      {activeTab !== "market" && activeTab !== "news" && (
+        <Tabs value={activeTab} onValueChange={changeTab}>
+          <ScrollArea className="w-full whitespace-nowrap">
+            <TabsList className="rounded-[24px] bg-muted/40 p-1.5 inline-flex shadow-inner gap-1">
+              {FEED_TABS.map(({ value, label, icon: Icon }) => (
+                <TabsTrigger
+                  key={value}
+                  value={value}
+                  className="rounded-[20px] font-bold text-sm h-11 gap-2 px-4 data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-foreground text-muted-foreground transition-all"
+                >
+                  <Icon className="h-4 w-4" /> {label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+            <ScrollBar orientation="horizontal" className="h-1.5" />
+          </ScrollArea>
+        </Tabs>
+      )}
 
       {/* SUB-MENU DO MERCADO (Painel do Vendedor vs Explorar) */}
       {activeTab === "market" && !showSavedOnly && (
@@ -892,7 +920,7 @@ export default function Connect() {
             </p>
           </div>
         ) : (
-          <div className="space-y-6 mt-4">
+          <div className={cn("mt-4", activeTab === "market" ? "grid grid-cols-1 sm:grid-cols-2 gap-4" : "space-y-6")}>
             {visiblePosts.map((p) => (
               <PostCard 
                 key={p.id} 
@@ -1235,4 +1263,4 @@ function PostCard({ post, onLike, onSave, onComment, isOwner, onDelete, navigate
       </CardFooter>
     </Card>
   );
-}
+      }
