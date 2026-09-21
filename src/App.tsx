@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
+import { TenantProvider, useTenant } from "@/hooks/useTenant";
 import { ThemeProvider } from "@/hooks/useTheme";
 import { SemesterProvider } from "@/hooks/useSemester";
 import { AppLayout } from "@/components/AppLayout";
@@ -34,6 +35,8 @@ import AdminInstitutions from "./pages/AdminInstitutions";
 import Assistant from "./pages/Assistant";
 import ResetPassword from "./pages/ResetPassword";
 import Community from "./pages/Community";
+import Communities from "./pages/Communities";
+import { UniversityOnboarding } from "./pages/UniversityOnboarding";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -45,11 +48,33 @@ const queryClient = new QueryClient({
   },
 });
 
+/** Tela de carregamento padrão do app. */
+function FullScreenLoader({ label }: { label?: string }) {
+  return (
+    <div className="flex h-[100dvh] w-full items-center justify-center bg-background transition-colors duration-500">
+      <div className="flex flex-col items-center gap-6 animate-in fade-in duration-700">
+        <div className="relative flex items-center justify-center">
+          <div className="animate-spin h-14 w-14 border-[3px] border-primary/20 border-t-primary rounded-full shadow-inner" />
+          <div className="absolute h-6 w-6 bg-primary/10 rounded-full animate-pulse" />
+        </div>
+        <div className="text-center space-y-2">
+          <p className="text-[11px] font-black uppercase tracking-[0.4em] text-primary leading-none">EduConect</p>
+          <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-muted-foreground/60 italic">
+            {label ?? "Sincronizando segurança..."}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /**
- * Filtro de Segurança Avançado: Impede acesso de deslogados e usuários BANIDOS
+ * Filtro de Segurança Avançado: impede acesso de deslogados, de usuários BANIDOS
+ * e de quem ainda não escolheu a universidade (onboarding).
  */
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
+  const { loading: tenantLoading, needsOnboarding } = useTenant();
   const { toast } = useToast();
   const [isBanned, setIsBanned] = useState<boolean | null>(null);
   const [checkingBan, setCheckingBan] = useState(true);
@@ -90,26 +115,28 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     checkUserStatus();
   }, [user, toast]);
 
-  if (loading || checkingBan) {
-    return (
-      <div className="flex h-[100dvh] w-full items-center justify-center bg-background transition-colors duration-500">
-        <div className="flex flex-col items-center gap-6 animate-in fade-in duration-700">
-          <div className="relative flex items-center justify-center">
-            <div className="animate-spin h-14 w-14 border-[3px] border-primary/20 border-t-primary rounded-full shadow-inner" />
-            <div className="absolute h-6 w-6 bg-primary/10 rounded-full animate-pulse" />
-          </div>
-          <div className="text-center space-y-2">
-            <p className="text-[11px] font-black uppercase tracking-[0.4em] text-primary leading-none">EduFlow Academy</p>
-            <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-muted-foreground/60 italic">Sincronizando segurança...</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  if (loading || checkingBan || tenantLoading) return <FullScreenLoader />;
 
   if (!user || isBanned) return <Navigate to="/auth" replace />;
 
+  if (needsOnboarding) return <Navigate to="/onboarding" replace />;
+
   return <AppLayout>{children}</AppLayout>;
+}
+
+/**
+ * Rota do onboarding: tela cheia, sem cabeçalho nem abas.
+ * Quem já escolheu a universidade é devolvido para o feed.
+ */
+function OnboardingRoute() {
+  const { user, loading } = useAuth();
+  const { loading: tenantLoading, needsOnboarding } = useTenant();
+
+  if (loading || tenantLoading) return <FullScreenLoader label="Preparando seu cadastro..." />;
+  if (!user) return <Navigate to="/auth" replace />;
+  if (!needsOnboarding) return <Navigate to="/" replace />;
+
+  return <UniversityOnboarding />;
 }
 
 /**
@@ -170,52 +197,63 @@ const App = () => (
       <TooltipProvider>
         <BrowserRouter>
           <AuthProvider>
-            <SemesterProvider>
-              <Routes>
-                {/* Rotas de Acesso */}
-                <Route path="/auth" element={<PublicRoute><Auth /></PublicRoute>} />
-                <Route path="/reset-password" element={<ResetPassword />} />
-                
-                {/* Rotas Acadêmicas Protegidas */}
-                <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-                <Route path="/disciplines" element={<ProtectedRoute><Disciplines /></ProtectedRoute>} />
-                <Route path="/disciplines/:id" element={<ProtectedRoute><DisciplineDetail /></ProtectedRoute>} />
-                <Route path="/connect" element={<ProtectedRoute><Connect /></ProtectedRoute>} />
-                <Route path="/community/:id" element={<ProtectedRoute><Community /></ProtectedRoute>} />
-                <Route path="/news" element={<Navigate to="/connect?tab=news" replace />} />
-                <Route path="/messages" element={<ProtectedRoute><Messages /></ProtectedRoute>} />
-                <Route path="/campus" element={<ProtectedRoute><Campus /></ProtectedRoute>} />
-                <Route path="/campus/ru" element={<ProtectedRoute><Ru /></ProtectedRoute>} />
-                <Route path="/campus/map" element={<ProtectedRoute><CampusMap /></ProtectedRoute>} />
-                <Route path="/campus/library" element={<ProtectedRoute><CampusLibrary /></ProtectedRoute>} />
-                <Route path="/campus/transport" element={<ProtectedRoute><CampusTransport /></ProtectedRoute>} />
-                <Route path="/campus/scholarships" element={<ProtectedRoute><CampusScholarships /></ProtectedRoute>} />
-                <Route path="/extra-courses" element={<Navigate to="/disciplines?tab=extra" replace />} />
-                <Route path="/reminders" element={<ProtectedRoute><Reminders /></ProtectedRoute>} />
-                <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
-                <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-                <Route path="/profile/:id" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-                <Route path="/feedback" element={<ProtectedRoute><Feedback /></ProtectedRoute>} />
-                <Route path="/assistant" element={<ProtectedRoute><Assistant /></ProtectedRoute>} />
-                
-                {/* Rota Protegida Administrativa Corrigida */}
-                <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
-                <Route path="/admin/institutions" element={<AdminRoute><AdminInstitutions /></AdminRoute>} />
-                
-                {/* Fallback de Erro */}
-                <Route path="*" element={<NotFound />} />
-              </Routes>
-              
-              <Toaster />
-              <Sonner 
-                position="top-center"
-                closeButton 
-                richColors 
-                expand={false}
-                theme="system"
-                className="font-bold"
-              />
-            </SemesterProvider>
+            <TenantProvider>
+              <SemesterProvider>
+                <Routes>
+                  {/* Rotas de Acesso */}
+                  <Route path="/auth" element={<PublicRoute><Auth /></PublicRoute>} />
+                  <Route path="/reset-password" element={<ResetPassword />} />
+                  <Route path="/onboarding" element={<OnboardingRoute />} />
+
+                  {/* As 5 abas do EduConect */}
+                  <Route path="/" element={<ProtectedRoute><Connect /></ProtectedRoute>} />
+                  <Route path="/connect" element={<ProtectedRoute><Connect /></ProtectedRoute>} />
+                  <Route path="/communities" element={<ProtectedRoute><Communities /></ProtectedRoute>} />
+                  <Route path="/community/:id" element={<ProtectedRoute><Community /></ProtectedRoute>} />
+                  <Route path="/news" element={<Navigate to="/connect?tab=news" replace />} />
+                  <Route path="/messages" element={<ProtectedRoute><Messages /></ProtectedRoute>} />
+
+                  {/* Utilitários do campus */}
+                  <Route path="/campus" element={<ProtectedRoute><Campus /></ProtectedRoute>} />
+                  <Route path="/campus/ru" element={<ProtectedRoute><Ru /></ProtectedRoute>} />
+                  <Route path="/campus/map" element={<ProtectedRoute><CampusMap /></ProtectedRoute>} />
+                  <Route path="/campus/library" element={<ProtectedRoute><CampusLibrary /></ProtectedRoute>} />
+                  <Route path="/campus/transport" element={<ProtectedRoute><CampusTransport /></ProtectedRoute>} />
+                  <Route path="/campus/scholarships" element={<ProtectedRoute><CampusScholarships /></ProtectedRoute>} />
+
+                  {/* Área acadêmica (menu lateral) */}
+                  <Route path="/academico" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+                  <Route path="/disciplines" element={<ProtectedRoute><Disciplines /></ProtectedRoute>} />
+                  <Route path="/disciplines/:id" element={<ProtectedRoute><DisciplineDetail /></ProtectedRoute>} />
+                  <Route path="/extra-courses" element={<Navigate to="/disciplines?tab=extra" replace />} />
+                  <Route path="/reminders" element={<ProtectedRoute><Reminders /></ProtectedRoute>} />
+                  <Route path="/assistant" element={<ProtectedRoute><Assistant /></ProtectedRoute>} />
+
+                  {/* Conta */}
+                  <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+                  <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+                  <Route path="/profile/:id" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+                  <Route path="/feedback" element={<ProtectedRoute><Feedback /></ProtectedRoute>} />
+
+                  {/* Rota Protegida Administrativa */}
+                  <Route path="/admin" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
+                  <Route path="/admin/institutions" element={<AdminRoute><AdminInstitutions /></AdminRoute>} />
+
+                  {/* Fallback de Erro */}
+                  <Route path="*" element={<NotFound />} />
+                </Routes>
+
+                <Toaster />
+                <Sonner
+                  position="top-center"
+                  closeButton
+                  richColors
+                  expand={false}
+                  theme="system"
+                  className="font-bold"
+                />
+              </SemesterProvider>
+            </TenantProvider>
           </AuthProvider>
         </BrowserRouter>
       </TooltipProvider>
