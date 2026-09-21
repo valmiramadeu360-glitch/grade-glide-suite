@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -6,6 +6,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
@@ -13,11 +15,13 @@ import { cn } from "@/lib/utils";
 import {
   UtensilsCrossed, Clock, MapPin, Megaphone, Star, BarChart3, Bot,
   Camera, Loader2, Flame, ChevronLeft, ShieldCheck, Send, History,
+  Image as ImageIcon, CheckCircle2, Timer, CalendarClock,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import {
   useRu, requestPosition, distanceMeters, hashFile, currentMeal, MEAL_LABEL,
-  LEVEL_META, CONFIDENCE_LABEL, type RuLevel,
+  LEVEL_META, CONFIDENCE_LABEL, REPORT_COOLDOWN_SECONDS, formatServiceDate,
+  type RuLevel, type RuMenu,
 } from "@/hooks/useRu";
 
 const LEVELS: RuLevel[] = ["none", "small", "medium", "large"];
@@ -31,11 +35,30 @@ function itemsOf(items: unknown): string[] {
   return [];
 }
 
+function formatCooldown(totalSeconds: number) {
+  const m = Math.floor(totalSeconds / 60);
+  const s = totalSeconds % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+/** Um card fechado (Almoço/Jantar + data) e sua foto original, cada um representa
+ * uma única refeição — nunca mistura almoço com jantar nem dias diferentes. */
+interface MenuGroup {
+  key: string;
+  service_date: string;
+  meal: "lunch" | "dinner";
+  primary: RuMenu;
+  photoCount: number;
+}
+
 export default function Ru() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { toast } = useToast();
-  const { restaurant, status, history, peak, menus, notices, ratingSummary, loading, reload, reloadStatus } = useRu();
+  const {
+    restaurant, status, history, peak, menus, notices, ratingSummary, myLastReport,
+    loading, reload, reloadStatus,
+  } = useRu();
 
   const [sending, setSending] = useState<RuLevel | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -44,30 +67,81 @@ export default function Ru() {
   const [asking, setAsking] = useState(false);
   const [rating, setRating] = useState<Record<string, number>>({});
   const [savingRating, setSavingRating] = useState(false);
+  const [lightboxPhoto, setLightboxPhoto] = useState<{ url: string; label: string } | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
 
-  const todayMenu = useMemo(() => {
-    const today = new Date().toISOString().slice(0, 10);
-    const meal = currentMeal(restaurant);
-    // Prioriza a refeição corrente (almoço/jantar) do dia, depois qualquer coisa de hoje.
-    return (
-      menus.find((m) => m.service_date === today && m.meal === meal) ??
-      menus.find((m) => m.service_date === today) ??
-      menus[0] ??
-      null
-    );
-  }, [menus, restaurant]);
+  // Relógio de 1 em 1 segundo só para o contador de "aguarde Xmin" da fila.
+  const [nowTick, setNowTick] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNowTick(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
 
   const activeMeal = currentMeal(restaurant);
+  const todayISO = new Date().toISOString().slice(0, 10);
 
+  // Agrupa as fotos por refeição+dia (uma foto igual só soma "confirmações";
+  // uma foto diferente da mesma refeição vira variação dentro do mesmo grupo).
+  const groupedMenus = useMemo<MenuGroup[]>(() => {
+    const map = new Map<string, MenuGroup>();
+    for (const m of menus) {
+      const key = `${m.service_date}__${m.meal}`;
+      const g = map.get(key);
+      if (!g) {
+        map.set(key, { key, service_date: m.service_date, meal: m.meal, primary: m, photoCount: 1 });
+      } else {
+        g.photoCount += 1;
+        // A entrada canônica (sem duplicate_of) é sempre a preferida como "capa" do grupo.
+        if (!m.duplicate_of && g.primary.duplicate_of) g.primary = m;
+      }
+    }
+    return Array.from(map.values()).sort((a, b) => {
+      if (a.service_date !== b.service_date) return a.service_date < b.service_date ? 1 : -1;
+      if (a.meal === b.meal) return 0;
+      return a.meal === "dinner" ? -1 : 1; // no mesmo dia, o jantar é "mais recente" que o almoço
+    });
+  }, [menus]);
+
+  // A refeição corrente (decidida pelo horário local do restaurante, nunca pela
+  // leitura da foto) é a que fica aberta. Todo o resto vira histórico fechado.
+  const currentGroup = useMemo(
+    () =>
+      groupedMenus.find((g) => g.service_date === todayISO && g.meal === activeMeal) ??
+      groupedMenus.find((g) => g.service_date === todayISO) ??
+      groupedMenus[0] ??
+      null,
+    [groupedMenus, todayISO, activeMeal],
+  );
+
+  const pastGroups = useMemo(
+    () => groupedMenus.filter((g) => g.key !== currentGroup?.key),
+    [groupedMenus, currentGroup],
+  );
+
+  const todayMenu = currentGroup?.primary ?? null;
   const nutrition = (todayMenu?.nutrition ?? null) as Record<string, any> | null;
   const statusMeta = status?.level ? LEVEL_META[status.level] : null;
   const reliable = (status?.sample_size ?? 0) >= 3;
 
   const maxPeak = Math.max(1, ...peak.map((p) => p.avg_score));
 
+  // Fila reinicia todo dia — misturar relatos de ontem com os de hoje só confunde.
+  const historyToday = useMemo(() => {
+    const today = new Date().toDateString();
+    return history.filter((h) => new Date(h.created_at).toDateString() === today);
+  }, [history]);
+
+  // Cooldown de 3 min entre relatos (o mesmo limite que o servidor já valida) —
+  // mostrado ao vivo em vez de deixar o estudante descobrir só quando dá erro.
+  const cooldownRemaining = useMemo(() => {
+    if (!myLastReport) return 0;
+    const elapsed = (nowTick - new Date(myLastReport.created_at).getTime()) / 1000;
+    return Math.max(0, Math.ceil(REPORT_COOLDOWN_SECONDS - elapsed));
+  }, [myLastReport, nowTick]);
+  const onCooldown = cooldownRemaining > 0;
+
   async function handleReport(level: RuLevel) {
-    if (!user || !restaurant) return;
+    if (!user || !restaurant || onCooldown) return;
     setSending(level);
     try {
       const position = await requestPosition();
@@ -154,11 +228,14 @@ export default function Ru() {
       if (aiErr) throw aiErr;
       if (ai?.error) throw new Error(ai.error);
 
-      // 2) Refeição e data vêm da própria foto (quadro do RU); se a IA não conseguir
-      // ler, o horário oficial de almoço/jantar decide.
+      // 2) A refeição e a data são decididas pelo HORÁRIO LOCAL do restaurante —
+      // é o dado confiável. A leitura da foto pela IA (detectedMeal) é só uma
+      // informação de apoio: se ela discordar do horário, o horário vence, e o
+      // estudante é avisado no toast abaixo (em vez de o app aceitar cegamente
+      // o que a foto "parece" dizer).
       const detectedMeal = ai?.meal === "lunch" || ai?.meal === "dinner" ? ai.meal : null;
-      const meal = detectedMeal ?? currentMeal(restaurant);
-      const serviceDate = ai?.service_date ?? new Date().toISOString().slice(0, 10);
+      const meal = currentMeal(restaurant);
+      const serviceDate = new Date().toISOString().slice(0, 10);
 
       const { data: submitted, error: insErr } = await supabase.rpc("ru_submit_menu", {
         _restaurant_id: restaurant.id,
@@ -177,11 +254,14 @@ export default function Ru() {
       if (insErr) throw insErr;
 
       const variation = Array.isArray(submitted) ? submitted[0]?.was_duplicate : false;
+      const mealMismatch = detectedMeal && detectedMeal !== meal;
       toast({
         title: `${MEAL_LABEL[meal as "lunch" | "dinner"]} publicado! 📸`,
-        description: variation
+        description: mealMismatch
+          ? `A foto parecia ser do ${MEAL_LABEL[detectedMeal as "lunch" | "dinner"]}, mas o horário local confirma ${MEAL_LABEL[meal as "lunch" | "dinner"]} — usamos o horário.`
+          : variation
           ? "Já havia um envio para esta refeição — o seu ficou registrado como conferência adicional."
-          : "A foto original fica disponível para conferência.",
+          : "A foto original fica disponível, em miniatura, para os colegas conferirem.",
       });
       await reload();
     } catch (error: any) {
@@ -321,19 +401,43 @@ export default function Ru() {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               {LEVELS.map((level) => {
                 const meta = LEVEL_META[level];
+                const isMyLast = myLastReport?.level === level && onCooldown;
                 return (
                   <Button
                     key={level}
                     variant="outline"
-                    disabled={!!sending}
+                    disabled={!!sending || onCooldown}
                     onClick={() => handleReport(level)}
-                    className={cn("h-12 rounded-xl text-[12px] font-bold border shadow-sm", meta.classes)}
+                    className={cn(
+                      "h-12 rounded-xl text-[12px] font-bold border shadow-sm relative",
+                      meta.classes,
+                      isMyLast && "ring-2 ring-primary ring-offset-1",
+                      onCooldown && !isMyLast && "opacity-40",
+                    )}
                   >
-                    {sending === level ? <Loader2 className="h-4 w-4 animate-spin" /> : `${meta.emoji} ${meta.label}`}
+                    {sending === level ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <>
+                        {isMyLast && <CheckCircle2 className="h-3.5 w-3.5 absolute left-2 text-primary" />}
+                        {meta.emoji} {meta.label}
+                      </>
+                    )}
                   </Button>
                 );
               })}
             </div>
+
+            {/* Cooldown ao vivo — evita descobrir só quando o servidor recusa o envio */}
+            {onCooldown ? (
+              <p className="text-[11px] font-semibold text-muted-foreground bg-muted/40 rounded-xl p-3 border border-border/30 flex items-center gap-1.5">
+                <Timer className="h-3.5 w-3.5 shrink-0" />
+                Você relatou {myLastReport ? LEVEL_META[myLastReport.level].label.toLowerCase() : ""} há pouco.
+                Pode relatar de novo em <span className="font-black text-foreground">{formatCooldown(cooldownRemaining)}</span>.
+              </p>
+            ) : (
+              <p className="text-[10px] text-muted-foreground">Seu relato vale por 3 minutos e ajuda a manter a estimativa atualizada.</p>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -355,7 +459,7 @@ export default function Ru() {
                   <h2 className="text-sm font-bold flex items-center gap-2"><UtensilsCrossed className="h-4 w-4 text-primary" /> Cardápio do dia</h2>
                   <p className="text-[11px] text-muted-foreground mt-0.5">
                     {todayMenu
-                      ? `${MEAL_LABEL[todayMenu.meal]} • ${todayMenu.service_date}`
+                      ? `${MEAL_LABEL[todayMenu.meal]} • ${formatServiceDate(todayMenu.service_date)}`
                       : `${MEAL_LABEL[activeMeal]} de hoje ainda não publicado`}
                   </p>
                   {todayMenu && (todayMenu.confirmations ?? 1) > 1 && (
@@ -397,22 +501,33 @@ export default function Ru() {
 
               {todayMenu ? (
                 <div className="space-y-3">
-                  {itemsOf(todayMenu.items).length > 0 ? (
-                    <div className="flex flex-wrap gap-2">
-                      {itemsOf(todayMenu.items).map((item, i) => (
-                        <Badge key={i} variant="secondary" className="rounded-full text-[11px] font-semibold">{item}</Badge>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-xs whitespace-pre-line text-muted-foreground">{todayMenu.raw_text ?? "Texto não reconhecido."}</p>
-                  )}
+                  <div className="flex items-start justify-between gap-3">
+                    {itemsOf(todayMenu.items).length > 0 ? (
+                      <div className="flex flex-wrap gap-2">
+                        {itemsOf(todayMenu.items).map((item, i) => (
+                          <Badge key={i} variant="secondary" className="rounded-full text-[11px] font-semibold">{item}</Badge>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs whitespace-pre-line text-muted-foreground">{todayMenu.raw_text ?? "Texto não reconhecido."}</p>
+                    )}
 
-                  {todayMenu.signedPhoto && (
-                    <a href={todayMenu.signedPhoto} target="_blank" rel="noreferrer" className="block">
-                      <img src={todayMenu.signedPhoto} alt="Foto original do cardápio do Restaurante Universitário" className="w-full max-h-64 object-cover rounded-2xl border border-border/40" loading="lazy" />
-                      <p className="text-[10px] text-muted-foreground mt-1.5">Foto original enviada por um estudante — toque para conferir.</p>
-                    </a>
-                  )}
+                    {/* Só um ícone pequeno da foto — é para conferir, o cardápio já foi
+                        organizado em texto acima. Toque para ver em tamanho real. */}
+                    {todayMenu.signedPhoto && (
+                      <button
+                        type="button"
+                        onClick={() => setLightboxPhoto({ url: todayMenu.signedPhoto!, label: `${MEAL_LABEL[todayMenu.meal]} • ${formatServiceDate(todayMenu.service_date)}` })}
+                        className="shrink-0 h-11 w-11 rounded-xl overflow-hidden border border-border/40 shadow-sm relative group"
+                        title="Conferir foto original"
+                      >
+                        <img src={todayMenu.signedPhoto} alt="Miniatura da foto original do cardápio" className="h-full w-full object-cover" loading="lazy" />
+                        <span className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center">
+                          <ImageIcon className="h-3.5 w-3.5 text-white opacity-0 group-hover:opacity-100" />
+                        </span>
+                      </button>
+                    )}
+                  </div>
 
                   {nutrition && (
                     <div className="space-y-2">
@@ -450,29 +565,87 @@ export default function Ru() {
             </CardContent>
           </Card>
 
-          {menus.length > 1 && (
+          {pastGroups.length > 0 && (
             <Card className="rounded-[24px] border border-border/30">
-              <CardContent className="p-5 space-y-2">
-                <h3 className="text-[10px] font-black uppercase tracking-[0.18em] text-muted-foreground">Cardápios anteriores</h3>
-                {menus.slice(1).map((menu) => (
-                  <div key={menu.id} className="flex items-center justify-between gap-3 bg-muted/30 rounded-xl p-3 border border-border/30">
-                    <div className="min-w-0">
-                      <p className="text-xs font-bold">
-                        {MEAL_LABEL[menu.meal]} • {menu.service_date}
-                        {menu.duplicate_of && <span className="ml-1.5 font-semibold text-muted-foreground">(variação)</span>}
-                        {(menu.confirmations ?? 1) > 1 && <span className="ml-1.5 text-emerald-600">✅ {menu.confirmations}</span>}
-                      </p>
-                      <p className="text-[11px] text-muted-foreground truncate">{itemsOf(menu.items).join(", ") || menu.raw_text || "—"}</p>
-                    </div>
-                    {menu.signedPhoto && (
-                      <a href={menu.signedPhoto} target="_blank" rel="noreferrer" className="text-[10px] font-bold text-primary shrink-0">Ver foto</a>
-                    )}
-                  </div>
-                ))}
+              <CardContent className="p-5 space-y-1">
+                <h3 className="text-[10px] font-black uppercase tracking-[0.18em] text-muted-foreground flex items-center gap-1.5">
+                  <CalendarClock className="h-3.5 w-3.5" /> Refeições anteriores
+                </h3>
+                <p className="text-[10px] text-muted-foreground pb-2">Fica disponível por 3 dias — depois o app apaga automaticamente.</p>
+
+                <Accordion type="single" collapsible className="space-y-0">
+                  {pastGroups.map((g) => {
+                    const menu = g.primary;
+                    const n = (menu.nutrition ?? null) as Record<string, any> | null;
+                    return (
+                      <AccordionItem key={g.key} value={g.key} className="!mb-2 !rounded-2xl">
+                        <AccordionTrigger className="!py-3 !px-1 text-xs !normal-case !tracking-normal !font-bold text-foreground">
+                          <span className="flex items-center gap-2">
+                            {MEAL_LABEL[g.meal]} · {formatServiceDate(g.service_date)}
+                            {(menu.confirmations ?? 1) > 1 && (
+                              <Badge variant="secondary" className="text-[9px] font-bold text-emerald-600 bg-emerald-500/10 border-0">
+                                ✅ {menu.confirmations}
+                              </Badge>
+                            )}
+                          </span>
+                        </AccordionTrigger>
+                        <AccordionContent className="px-1 pb-4 space-y-3">
+                          <div className="flex items-start justify-between gap-3">
+                            {itemsOf(menu.items).length > 0 ? (
+                              <div className="flex flex-wrap gap-1.5">
+                                {itemsOf(menu.items).map((item, i) => (
+                                  <Badge key={i} variant="secondary" className="rounded-full text-[10px] font-semibold">{item}</Badge>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="text-[11px] whitespace-pre-line text-muted-foreground">{menu.raw_text ?? "Texto não reconhecido."}</p>
+                            )}
+                            {menu.signedPhoto && (
+                              <button
+                                type="button"
+                                onClick={() => setLightboxPhoto({ url: menu.signedPhoto!, label: `${MEAL_LABEL[g.meal]} • ${formatServiceDate(g.service_date)}` })}
+                                className="shrink-0 h-10 w-10 rounded-lg overflow-hidden border border-border/40"
+                                title="Conferir foto original"
+                              >
+                                <img src={menu.signedPhoto} alt="Miniatura da foto original do cardápio" className="h-full w-full object-cover" loading="lazy" />
+                              </button>
+                            )}
+                          </div>
+                          {n && (
+                            <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
+                              {[
+                                { label: "🔥", value: n.calories, unit: "kcal" },
+                                { label: "🥩", value: n.protein_g, unit: "g" },
+                                { label: "🍞", value: n.carbs_g, unit: "g" },
+                              ].map((it, i) => (
+                                <div key={i} className="bg-muted/40 rounded-lg p-1.5 border border-border/30 text-center">
+                                  <p className="text-[10px] font-black">{it.label} {it.value ?? "—"}<span className="text-[8px] font-medium text-muted-foreground">{it.unit}</span></p>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </AccordionContent>
+                      </AccordionItem>
+                    );
+                  })}
+                </Accordion>
               </CardContent>
             </Card>
           )}
         </TabsContent>
+
+        {/* Lightbox — a única foto grande do módulo, e só quando o estudante pede para conferir */}
+        <Dialog open={!!lightboxPhoto} onOpenChange={(open) => !open && setLightboxPhoto(null)}>
+          <DialogContent className="max-w-lg p-2 rounded-[28px] border border-border/30 bg-background/95 backdrop-blur-xl">
+            <DialogTitle className="sr-only">{lightboxPhoto?.label ?? "Foto do cardápio"}</DialogTitle>
+            {lightboxPhoto && (
+              <div className="space-y-2">
+                <img src={lightboxPhoto.url} alt={lightboxPhoto.label} className="w-full max-h-[75vh] object-contain rounded-2xl" />
+                <p className="text-[11px] text-center text-muted-foreground font-semibold pb-1">{lightboxPhoto.label} — foto original enviada por um estudante.</p>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
 
         {/* MOVIMENTO */}
         <TabsContent value="stats" className="space-y-4 m-0">
@@ -498,11 +671,17 @@ export default function Ru() {
 
           <Card className="rounded-[24px] border border-border/30">
             <CardContent className="p-5 space-y-2">
-              <h2 className="text-sm font-bold flex items-center gap-2"><History className="h-4 w-4 text-primary" /> Histórico recente</h2>
-              {history.length === 0 ? (
-                <p className="text-xs text-muted-foreground">Nenhum relato registrado ainda.</p>
+              <div className="flex items-center justify-between">
+                <h2 className="text-sm font-bold flex items-center gap-2"><History className="h-4 w-4 text-primary" /> Relatos de hoje</h2>
+                {historyToday.length > 0 && (
+                  <Badge variant="secondary" className="text-[10px] font-bold">{historyToday.length}</Badge>
+                )}
+              </div>
+              <p className="text-[10px] text-muted-foreground">A fila reinicia todos os dias — relatos de outros dias não entram aqui.</p>
+              {historyToday.length === 0 ? (
+                <p className="text-xs text-muted-foreground pt-1">Nenhum relato hoje ainda. Seja o primeiro a colaborar 🍲</p>
               ) : (
-                history.slice(0, 12).map((h, i) => (
+                historyToday.slice(0, 12).map((h, i) => (
                   <div key={i} className="flex items-center justify-between text-xs bg-muted/30 rounded-xl px-3 py-2 border border-border/30">
                     <span className="font-semibold">{new Date(h.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</span>
                     <span className="font-bold">{LEVEL_META[h.level].emoji} {LEVEL_META[h.level].label}</span>
@@ -646,4 +825,4 @@ export default function Ru() {
       </Tabs>
     </div>
   );
-}
+          }
