@@ -918,7 +918,7 @@ export default function AdminDashboard() {
               <div><h3 className="font-black text-lg">Central de Denúncias</h3><p className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">Conteúdos, Posts e Mensagens reportadas pela comunidade</p></div>
             </div>
 
-            {totalPendingReports === 0 ? (
+            {reports.length === 0 && contentReports.length === 0 ? (
               <EmptyState icon={<CheckCircle2 className="h-12 w-12 text-emerald-500" />} text="O ecossistema acadêmico está limpo e seguro no momento." />
             ) : (
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
@@ -1137,4 +1137,4 @@ function EmptyState({ icon, text }: { icon: React.ReactNode; text: string }) {
       <p className="text-sm font-black tracking-wide text-foreground px-4 text-center">{text}</p>
     </div>
   );
-}
+  }
