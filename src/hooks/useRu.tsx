@@ -121,7 +121,7 @@ export async function hashFile(file: File): Promise<string> {
     .join("");
 }
 
-export function useRu() {
+export function useRu(campusId?: string | null) {
   const [restaurant, setRestaurant] = useState<RuRestaurant | null>(null);
   const [status, setStatus] = useState<RuQueueStatus | null>(null);
   const [history, setHistory] = useState<{ level: RuLevel; created_at: string }[]>([]);
@@ -165,12 +165,16 @@ export function useRu() {
   const loadAll = useCallback(async () => {
     setLoading(true);
     try {
-      const { data: ru } = await supabase
-        .from("ru_restaurants")
-        .select("*")
-        .order("created_at", { ascending: true })
-        .limit(1)
-        .maybeSingle();
+      // O RU é por campus — cada estudante só deve ver o do seu próprio campus.
+      // Enquanto o perfil/campus ainda não carregou (campusId === undefined), evita
+      // mostrar por engano o RU de outro lugar; assim que o campus chega, refaz a busca.
+      if (campusId === undefined) {
+        return;
+      }
+
+      let ruQuery = supabase.from("ru_restaurants").select("*").order("created_at", { ascending: true }).limit(1);
+      if (campusId) ruQuery = ruQuery.eq("campus_id", campusId);
+      const { data: ru } = await ruQuery.maybeSingle();
 
       if (!ru) {
         setRestaurant(null);
@@ -249,7 +253,7 @@ export function useRu() {
     } finally {
       setLoading(false);
     }
-  }, [loadStatus, loadMyLastReport]);
+  }, [loadStatus, loadMyLastReport, campusId]);
 
   useEffect(() => {
     loadAll();
@@ -288,4 +292,4 @@ export async function requestPosition(): Promise<{ coords: { latitude: number; l
       );
     }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 });
   });
-}
+                              }
