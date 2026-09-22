@@ -13,12 +13,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 
 import {
   ShieldCheck, Users, MessageSquare, AlertTriangle, Loader2, ArrowLeft, CheckCircle2,
   Trash2, Ban, Megaphone, Send, Search, Sparkles, Plus, Power, X, Crown, LayoutDashboard,
   MapPin, ImagePlus, Building2, BadgeCheck, GraduationCap, Briefcase, FileText, UtensilsCrossed,
-  FlaskConical, ClipboardList, Archive, ArchiveRestore, UserMinus, ChevronDown, ChevronRight, Flag, Activity
+  FlaskConical, ClipboardList, Archive, ArchiveRestore, UserMinus, ChevronDown, ChevronRight, Flag, Activity,
+  Pencil, LocateFixed, Clock,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -87,6 +91,29 @@ export default function AdminDashboard() {
   const [blockDescription, setBlockDescription] = useState("");
   const [savingBlock, setSavingBlock] = useState(false);
 
+  // Restaurante Universitário (RU)
+  const [ruRestaurants, setRuRestaurants] = useState<any[]>([]);
+  const [ruCampusOptions, setRuCampusOptions] = useState<any[]>([]);
+  const [ruFormOpen, setRuFormOpen] = useState(false);
+  const [ruEditingId, setRuEditingId] = useState<string | null>(null);
+  const [ruSavingRestaurant, setRuSavingRestaurant] = useState(false);
+  const [ruLocating, setRuLocating] = useState(false);
+  const [ruForm, setRuForm] = useState({
+    campus_id: "",
+    name: "Restaurante Universitário",
+    description: "",
+    latitude: "",
+    longitude: "",
+    radius_meters: "100",
+    lunch_start: "11:00",
+    lunch_end: "14:00",
+    dinner_start: "17:00",
+    dinner_end: "19:00",
+    is_open: true,
+    closed_reason: "",
+    notice: "",
+  });
+
   // Moderação e Auditoria
   const [auditLog, setAuditLog] = useState<any[]>([]);
   const [adminNames, setAdminNames] = useState<Record<string, string>>({});
@@ -146,6 +173,7 @@ export default function AdminDashboard() {
     if (activeTab === "feedbacks" && feedbacks.length === 0) loadFeedbacks();
     if (activeTab === "communities" && communitiesList.length === 0) loadCommunities();
     if (activeTab === "map" && campuses.length === 0) loadCampuses();
+    if (activeTab === "ru" && ruRestaurants.length === 0) loadRuRestaurants();
     if (activeTab === "announcements" && announcements.length === 0) loadAnnouncements();
 
   }, [activeTab, searchUser, badgeSearch, initialLoading]);
@@ -248,6 +276,155 @@ export default function AdminDashboard() {
     setCampuses(data || []);
     if (data && data.length > 0 && !selectedCampusId) setSelectedCampusId(data[0].id);
     setLoadingTab(false);
+  }
+
+  // RESTAURANTE UNIVERSITÁRIO (RU) — um por campus, criado/editado aqui.
+  async function loadRuRestaurants() {
+    setLoadingTab(true);
+    const [ruRes, campusRes] = await Promise.all([
+      supabase
+        .from("ru_restaurants")
+        .select("*, campuses(name, university_id, universities(name, acronym))")
+        .order("created_at", { ascending: true }),
+      supabase
+        .from("campuses")
+        .select("id, name, city, university_id, universities(name, acronym)")
+        .order("name", { ascending: true }),
+    ]);
+    setRuRestaurants(ruRes.data || []);
+    setRuCampusOptions(campusRes.data || []);
+    setLoadingTab(false);
+  }
+
+  function resetRuForm() {
+    setRuForm({
+      campus_id: "",
+      name: "Restaurante Universitário",
+      description: "",
+      latitude: "",
+      longitude: "",
+      radius_meters: "100",
+      lunch_start: "11:00",
+      lunch_end: "14:00",
+      dinner_start: "17:00",
+      dinner_end: "19:00",
+      is_open: true,
+      closed_reason: "",
+      notice: "",
+    });
+  }
+
+  function openRuCreateForm() {
+    setRuEditingId(null);
+    resetRuForm();
+    setRuFormOpen(true);
+  }
+
+  function openRuEditForm(ru: any) {
+    setRuEditingId(ru.id);
+    setRuForm({
+      campus_id: ru.campus_id ?? "",
+      name: ru.name ?? "",
+      description: ru.description ?? "",
+      latitude: String(ru.latitude ?? ""),
+      longitude: String(ru.longitude ?? ""),
+      radius_meters: String(ru.radius_meters ?? "100"),
+      lunch_start: (ru.lunch_start ?? "11:00").slice(0, 5),
+      lunch_end: (ru.lunch_end ?? "14:00").slice(0, 5),
+      dinner_start: (ru.dinner_start ?? "17:00").slice(0, 5),
+      dinner_end: (ru.dinner_end ?? "19:00").slice(0, 5),
+      is_open: ru.is_open ?? true,
+      closed_reason: ru.closed_reason ?? "",
+      notice: ru.notice ?? "",
+    });
+    setRuFormOpen(true);
+  }
+
+  // Botão "Usar minha localização atual" — muito mais confiável do que o admin
+  // digitar coordenadas de cabeça; ele só precisa estar em pé no restaurante.
+  function useMyLocationForRu() {
+    if (!navigator.geolocation) {
+      toast({ title: "Geolocalização indisponível", description: "Seu navegador não suporta essa função.", variant: "destructive" });
+      return;
+    }
+    setRuLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setRuForm((f) => ({
+          ...f,
+          latitude: pos.coords.latitude.toFixed(6),
+          longitude: pos.coords.longitude.toFixed(6),
+        }));
+        setRuLocating(false);
+        toast({ title: "Localização capturada 📍", description: "Confira o pino no mapa antes de salvar." });
+      },
+      () => {
+        setRuLocating(false);
+        toast({ title: "Não foi possível obter sua localização", description: "Verifique a permissão de GPS do navegador.", variant: "destructive" });
+      },
+      { enableHighAccuracy: true, timeout: 10_000 },
+    );
+  }
+
+  async function saveRuRestaurant() {
+    if (!ruForm.campus_id) {
+      toast({ title: "Escolha o campus", description: "Todo RU precisa estar vinculado a um campus.", variant: "destructive" });
+      return;
+    }
+    const lat = parseFloat(ruForm.latitude.replace(",", "."));
+    const lng = parseFloat(ruForm.longitude.replace(",", "."));
+    if (!ruForm.name.trim() || Number.isNaN(lat) || Number.isNaN(lng)) {
+      toast({ title: "Preencha nome e coordenadas", description: "Nome, latitude e longitude são obrigatórios.", variant: "destructive" });
+      return;
+    }
+
+    setRuSavingRestaurant(true);
+    try {
+      const payload = {
+        campus_id: ruForm.campus_id,
+        name: ruForm.name.trim(),
+        description: ruForm.description.trim() || null,
+        latitude: lat,
+        longitude: lng,
+        radius_meters: parseInt(ruForm.radius_meters, 10) || 100,
+        lunch_start: ruForm.lunch_start || null,
+        lunch_end: ruForm.lunch_end || null,
+        dinner_start: ruForm.dinner_start || null,
+        dinner_end: ruForm.dinner_end || null,
+        is_open: ruForm.is_open,
+        closed_reason: ruForm.is_open ? null : (ruForm.closed_reason.trim() || null),
+        notice: ruForm.notice.trim() || null,
+      };
+
+      if (ruEditingId) {
+        const { error } = await supabase.from("ru_restaurants").update(payload).eq("id", ruEditingId);
+        if (error) throw error;
+        toast({ title: "RU atualizado ✅" });
+      } else {
+        const { error } = await supabase.from("ru_restaurants").insert(payload);
+        if (error) throw error;
+        toast({ title: "RU cadastrado ✅", description: "Já aparece para os estudantes do campus escolhido." });
+      }
+
+      setRuFormOpen(false);
+      setRuRestaurants([]); // força recarregar a lista com o campus/university já unidos
+      await loadRuRestaurants();
+    } catch (e: any) {
+      toast({ title: "Erro ao salvar", description: e.message ?? "Tente novamente.", variant: "destructive" });
+    } finally {
+      setRuSavingRestaurant(false);
+    }
+  }
+
+  async function deleteRuRestaurant(id: string, name: string) {
+    if (!confirm(`Excluir "${name}"? Os cardápios e relatos de fila deste RU também serão apagados.`)) return;
+    const { error } = await supabase.from("ru_restaurants").delete().eq("id", id);
+    if (error) {
+      toast({ title: "Erro ao excluir", description: error.message, variant: "destructive" });
+      return;
+    }
+    setRuRestaurants((prev) => prev.filter((r) => r.id !== id));
+    toast({ title: "RU excluído" });
   }
 
   async function loadAnnouncements() {
@@ -563,6 +740,7 @@ export default function AdminDashboard() {
               <TabsTrigger value="badges" className="justify-start rounded-2xl font-bold text-sm h-11 px-4 gap-3 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground bg-muted/30 text-muted-foreground transition-all shrink-0 snap-center"><BadgeCheck className="h-4 w-4" /> Selos</TabsTrigger>
               <TabsTrigger value="communities" className="justify-start rounded-2xl font-bold text-sm h-11 px-4 gap-3 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground bg-muted/30 text-muted-foreground transition-all shrink-0 snap-center"><Users className="h-4 w-4" /> Comunidades</TabsTrigger>
               <TabsTrigger value="map" className="justify-start rounded-2xl font-bold text-sm h-11 px-4 gap-3 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground bg-muted/30 text-muted-foreground transition-all shrink-0 snap-center"><MapPin className="h-4 w-4" /> Mapa Campus</TabsTrigger>
+              <TabsTrigger value="ru" className="justify-start rounded-2xl font-bold text-sm h-11 px-4 gap-3 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground bg-muted/30 text-muted-foreground transition-all shrink-0 snap-center"><UtensilsCrossed className="h-4 w-4" /> Restaurante (RU)</TabsTrigger>
             </TabsList>
           </div>
 
@@ -846,7 +1024,155 @@ export default function AdminDashboard() {
             )}
           </TabsContent>
 
-          {/* 1.7 MODERAÇÃO DE COMUNIDADES */}
+          {/* 1.6 RESTAURANTE UNIVERSITÁRIO (RU) — um por campus */}
+          <TabsContent value="ru" className="space-y-6 mt-0 animate-in fade-in">
+            <div className="flex items-center justify-between gap-3 border-b border-border/40 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 bg-primary/10 rounded-xl flex items-center justify-center"><UtensilsCrossed className="h-5 w-5 text-primary" /></div>
+                <div><h3 className="font-black text-lg">Restaurantes Universitários</h3><p className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">Um RU por campus — cada estudante só vê o do seu</p></div>
+              </div>
+              <Button onClick={openRuCreateForm} className="rounded-2xl font-bold shrink-0"><Plus className="h-4 w-4 mr-1.5" /> Novo RU</Button>
+            </div>
+
+            {ruRestaurants.length === 0 ? (
+              <EmptyState icon={<UtensilsCrossed className="h-10 w-10" />} text="Nenhum RU cadastrado ainda. Crie o primeiro." />
+            ) : (
+              <div className="grid grid-cols-1 gap-3">
+                {ruRestaurants.map((ru) => (
+                  <div key={ru.id} className="rounded-[24px] border border-border/30 bg-background shadow-sm p-4 sm:p-5 flex items-center justify-between gap-4">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="font-black text-sm">{ru.name}</p>
+                        <Badge variant="secondary" className={cn("text-[9px] font-black uppercase", ru.is_open ? "bg-emerald-500/10 text-emerald-600" : "bg-destructive/10 text-destructive")}>
+                          {ru.is_open ? "Aberto" : "Fechado"}
+                        </Badge>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground font-semibold mt-0.5 truncate">
+                        {ru.campuses?.universities?.acronym ? `${ru.campuses.universities.acronym} · ` : ""}
+                        {ru.campuses?.name ?? "Sem campus vinculado"}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground mt-1 flex items-center gap-1.5">
+                        <Clock className="h-3 w-3" /> Almoço {ru.lunch_start?.slice(0,5) ?? "--"}–{ru.lunch_end?.slice(0,5) ?? "--"} · Jantar {ru.dinner_start?.slice(0,5) ?? "--"}–{ru.dinner_end?.slice(0,5) ?? "--"}
+                      </p>
+                    </div>
+                    <div className="flex gap-1.5 shrink-0">
+                      <Button variant="outline" size="icon" className="h-10 w-10 rounded-xl" onClick={() => openRuEditForm(ru)} title="Editar">
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button variant="outline" size="icon" className="h-10 w-10 rounded-xl text-destructive hover:bg-destructive/10" onClick={() => deleteRuRestaurant(ru.id, ru.name)} title="Excluir">
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Formulário de criação/edição */}
+            <Dialog open={ruFormOpen} onOpenChange={setRuFormOpen}>
+              <DialogContent className="max-w-lg rounded-[28px] border border-border/30 max-h-[85vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle className="font-black">{ruEditingId ? "Editar RU" : "Novo Restaurante Universitário"}</DialogTitle>
+                </DialogHeader>
+
+                <div className="space-y-4 pt-2">
+                  <div className="space-y-1.5">
+                    <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Campus</Label>
+                    <Select value={ruForm.campus_id} onValueChange={(v) => setRuForm((f) => ({ ...f, campus_id: v }))}>
+                      <SelectTrigger className="h-12 rounded-xl bg-muted/30 border-0 font-bold"><SelectValue placeholder="Selecione o campus" /></SelectTrigger>
+                      <SelectContent>
+                        {ruCampusOptions.map((c) => (
+                          <SelectItem key={c.id} value={c.id}>
+                            {c.universities?.acronym ? `${c.universities.acronym} · ` : ""}{c.name}{c.city ? ` — ${c.city}` : ""}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {ruCampusOptions.length === 0 && (
+                      <p className="text-[10px] text-muted-foreground">Nenhum campus cadastrado ainda — crie um campus primeiro na aba "Mapa Campus".</p>
+                    )}
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Nome</Label>
+                    <Input value={ruForm.name} onChange={(e) => setRuForm((f) => ({ ...f, name: e.target.value }))} className="h-12 rounded-xl bg-muted/30 border-0 font-bold" placeholder="Ex: Restaurante Universitário — Campus A.C. Simões" />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Descrição (opcional)</Label>
+                    <Textarea value={ruForm.description} onChange={(e) => setRuForm((f) => ({ ...f, description: e.target.value }))} className="rounded-xl bg-muted/30 border-0 font-medium min-h-[70px]" placeholder="Como chegar, observações para os estudantes..." />
+                  </div>
+
+                  {/* Coordenadas — o botão de localização evita o admin ter que descobrir lat/long na mão */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Localização (para validar quem reporta a fila)</Label>
+                      <Button type="button" size="sm" variant="outline" onClick={useMyLocationForRu} disabled={ruLocating} className="h-8 rounded-lg text-[10px] font-black">
+                        {ruLocating ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : <LocateFixed className="h-3.5 w-3.5 mr-1" />}
+                        Usar minha localização
+                      </Button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <Input value={ruForm.latitude} onChange={(e) => setRuForm((f) => ({ ...f, latitude: e.target.value }))} className="h-12 rounded-xl bg-muted/30 border-0 font-bold" placeholder="Latitude" inputMode="decimal" />
+                      <Input value={ruForm.longitude} onChange={(e) => setRuForm((f) => ({ ...f, longitude: e.target.value }))} className="h-12 rounded-xl bg-muted/30 border-0 font-bold" placeholder="Longitude" inputMode="decimal" />
+                    </div>
+                    <p className="text-[10px] text-muted-foreground">Dica: abra esta tela pelo celular estando no próprio RU e toque em "Usar minha localização".</p>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Raio de validação (metros)</Label>
+                    <Input value={ruForm.radius_meters} onChange={(e) => setRuForm((f) => ({ ...f, radius_meters: e.target.value.replace(/\D/g, "") }))} className="h-12 rounded-xl bg-muted/30 border-0 font-bold" inputMode="numeric" />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Almoço — início</Label>
+                      <Input type="time" value={ruForm.lunch_start} onChange={(e) => setRuForm((f) => ({ ...f, lunch_start: e.target.value }))} className="h-12 rounded-xl bg-muted/30 border-0 font-bold" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Almoço — fim</Label>
+                      <Input type="time" value={ruForm.lunch_end} onChange={(e) => setRuForm((f) => ({ ...f, lunch_end: e.target.value }))} className="h-12 rounded-xl bg-muted/30 border-0 font-bold" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Jantar — início</Label>
+                      <Input type="time" value={ruForm.dinner_start} onChange={(e) => setRuForm((f) => ({ ...f, dinner_start: e.target.value }))} className="h-12 rounded-xl bg-muted/30 border-0 font-bold" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Jantar — fim</Label>
+                      <Input type="time" value={ruForm.dinner_end} onChange={(e) => setRuForm((f) => ({ ...f, dinner_end: e.target.value }))} className="h-12 rounded-xl bg-muted/30 border-0 font-bold" />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between rounded-xl bg-muted/30 p-3.5">
+                    <div>
+                      <Label className="text-xs font-bold">RU aberto normalmente</Label>
+                      <p className="text-[10px] text-muted-foreground">Desative em greves, reformas ou recessos.</p>
+                    </div>
+                    <Switch checked={ruForm.is_open} onCheckedChange={(v) => setRuForm((f) => ({ ...f, is_open: v }))} />
+                  </div>
+
+                  {!ruForm.is_open && (
+                    <div className="space-y-1.5">
+                      <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Motivo do fechamento</Label>
+                      <Input value={ruForm.closed_reason} onChange={(e) => setRuForm((f) => ({ ...f, closed_reason: e.target.value }))} className="h-12 rounded-xl bg-muted/30 border-0 font-bold" placeholder="Ex: Em reforma até 30/09" />
+                    </div>
+                  )}
+
+                  <div className="space-y-1.5">
+                    <Label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Aviso fixo (opcional)</Label>
+                    <Input value={ruForm.notice} onChange={(e) => setRuForm((f) => ({ ...f, notice: e.target.value }))} className="h-12 rounded-xl bg-muted/30 border-0 font-bold" placeholder="Ex: Hoje o cardápio é especial" />
+                  </div>
+
+                  <Button onClick={saveRuRestaurant} disabled={ruSavingRestaurant} className="w-full h-12 rounded-xl font-black">
+                    {ruSavingRestaurant ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle2 className="h-4 w-4 mr-2" />}
+                    {ruEditingId ? "Salvar alterações" : "Cadastrar RU"}
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+          </TabsContent>
+
+
           <TabsContent value="communities" className="space-y-6 mt-0 animate-in fade-in">
             <div className="flex items-center gap-3 border-b border-border/40 pb-4">
               <div className="h-10 w-10 bg-primary/10 rounded-xl flex items-center justify-center"><Users className="h-5 w-5 text-primary" /></div>
@@ -1137,4 +1463,4 @@ function EmptyState({ icon, text }: { icon: React.ReactNode; text: string }) {
       <p className="text-sm font-black tracking-wide text-foreground px-4 text-center">{text}</p>
     </div>
   );
-  }
+      }
