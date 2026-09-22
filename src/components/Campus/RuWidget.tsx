@@ -4,6 +4,7 @@ import { Card } from "@/components/ui/card";
 import { UtensilsCrossed, Clock, ChevronRight, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { CONFIDENCE_LABEL, LEVEL_META, MEAL_LABEL, currentMeal, useRu } from "@/hooks/useRu";
+import { useTenant } from "@/hooks/useTenant";
 
 /**
  * Prévia do módulo RU exibida na Home.
@@ -12,7 +13,8 @@ import { CONFIDENCE_LABEL, LEVEL_META, MEAL_LABEL, currentMeal, useRu } from "@/
  */
 export function RuWidget() {
   const navigate = useNavigate();
-  const { restaurant, status, menus, loading } = useRu();
+  const { profile } = useTenant();
+  const { restaurant, status, menus, loading } = useRu(profile?.campus_id);
 
   const level = status?.level ?? null;
   const meta = level ? LEVEL_META[level] : null;
