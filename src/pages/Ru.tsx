@@ -10,6 +10,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
+import { useTenant } from "@/hooks/useTenant";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import {
@@ -54,11 +55,12 @@ interface MenuGroup {
 export default function Ru() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { profile } = useTenant();
   const { toast } = useToast();
   const {
     restaurant, status, history, peak, menus, notices, ratingSummary, myLastReport,
     loading, reload, reloadStatus,
-  } = useRu();
+  } = useRu(profile?.campus_id);
 
   const [sending, setSending] = useState<RuLevel | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -825,4 +827,4 @@ export default function Ru() {
       </Tabs>
     </div>
   );
-          }
+                        }
