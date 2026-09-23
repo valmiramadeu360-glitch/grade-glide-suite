@@ -5,7 +5,6 @@ import { useAuth } from "@/hooks/useAuth";
 import { Card, CardContent, CardHeader, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
@@ -19,8 +18,8 @@ import {
   Globe, Heart, MessageSquare, MoreHorizontal, Image as ImageIcon, FileText, Video,
   Send, Loader2, Trash2, Download, Bookmark, Share2, X, Plus, Newspaper, PenLine,
   ExternalLink, Pin, Store, Check, UploadCloud, Search, ShoppingBag, Tag, ChevronRight, CheckCircle2,
-  Sparkles, TrendingUp, Building2, GraduationCap, Users, BadgeCheck, HelpCircle, Brain,
-  FlaskConical, Award, Briefcase, Home as HomeIcon
+  Sparkles, Building2, GraduationCap, Users, BadgeCheck, HelpCircle, Brain,
+  FlaskConical, Award, Briefcase, Home as HomeIcon, Volume2, VolumeX, Play,
 } from "lucide-react";
 
 import { formatDistanceToNow } from "date-fns";
@@ -36,22 +35,51 @@ const ACADEMIC_TAGS = ["Resumo", "Dúvida", "Flashcards", "Artigo", "Pesquisa", 
 const RESTRICTED_TAGS = ["Aviso"];
 const MARKETPLACE_TAGS = ["Livro/Apostila", "Eletrônicos", "República", "Vaga de Estágio", "Serviço Acadêmico", "Vestuário", "Outros"];
 
-// Filtros do FEED (só aparecem na aba Feed). Marketplace, Notícias e
-// Comunidades saíram daqui: cada um tem seu próprio botão na barra inferior,
-// e repetir os mesmos nomes em dois lugares confundia o estudante.
-const FEED_TABS = [
-  { value: "foryou", label: "Para Você", icon: Sparkles },
-  { value: "trending", label: "Em Alta", icon: TrendingUp },
-  { value: "university", label: "Universidade", icon: Building2 },
-  { value: "course", label: "Curso", icon: GraduationCap },
-] as const;
-
 // Identidade de cada seção do Connect (título, ícone e legenda do cabeçalho).
 const SECTION_INFO: Record<string, { title: string; subtitle: string; icon: any }> = {
   market: { title: "Mercado", subtitle: "Compre e venda no campus", icon: Store },
   news: { title: "Notícias", subtitle: "Jornal universitário", icon: Newspaper },
   feed: { title: "Feed", subtitle: "Campus Digital", icon: Globe },
 };
+
+// Links antigos podem chegar com "global", "foryou", "trending", "university",
+// "course" ou "communities" — todos viram "feed", já que essas abas se fundiram
+// no algoritmo único (ver rankFeedPosts).
+const LEGACY_FEED_TABS = new Set(["global", "foryou", "trending", "university", "course", "communities"]);
+
+/**
+ * O algoritmo do feed único. Substitui as 4 abas antigas por UMA ordem só,
+ * combinando três sinais — igual ao que Instagram/TikTok fazem, simplificado
+ * para o tamanho do EduConect:
+ *  - Recência: post de hoje pesa mais que post de 5 dias atrás, mas com queda
+ *    suave (meia-vida de ~28h) em vez de um corte seco — nada "desaparece" de repente.
+ *  - Engajamento: curtidas + comentários (peso maior, comentário é sinal mais forte
+ *    de interesse real que curtida), em escala logarítmica pra um post viral não
+ *    dominar o feed pra sempre.
+ *  - Afinidade: um empurrãozinho para posts de gente da mesma universidade, do
+ *    mesmo curso (mais forte) ou de uma comunidade da qual o estudante participa —
+ *    é o que as abas "Universidade"/"Curso"/"Comunidades" faziam, só que agora
+ *    misturado ao invés de exigir trocar de aba.
+ * Um pequeno "jitter" evita que o feed fique idêntico a cada refresh.
+ */
+function rankFeedPosts(list: any[], myProfile: MyProfile | null, myCommunityIds: Set<string>) {
+  const now = Date.now();
+  return [...list]
+    .map((p) => {
+      const ageHours = Math.max(0, (now - new Date(p.created_at).getTime()) / 36e5);
+      const recency = Math.exp(-ageHours / 28);
+      const engagementRaw = (p.likes_count ?? 0) * 1 + (p.comments_count ?? 0) * 2.5;
+      const engagement = Math.min(Math.log1p(engagementRaw) / 4, 1);
+      let affinity = 0;
+      if (myProfile?.university_id && p.profiles?.university_id === myProfile.university_id) affinity += 0.12;
+      if (myProfile?.course_id && p.profiles?.course_id === myProfile.course_id) affinity += 0.22;
+      if (p.community_id && myCommunityIds.has(p.community_id)) affinity += 0.18;
+      const jitter = Math.random() * 0.03;
+      const score = recency * 0.42 + engagement * 0.4 + Math.min(affinity, 0.4) + jitter;
+      return { ...p, _score: score };
+    })
+    .sort((a, b) => b._score - a._score);
+}
 
 // Selos de verificação (Capítulo 6, seção 5) — mapeados a partir de user_roles.role
 const ROLE_BADGES: Record<string, { label: string; icon: any }> = {
@@ -119,12 +147,10 @@ export default function Connect() {
   const { toast } = useToast();
   const navigate = useNavigate();
   const { communities } = useCommunities();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
 
-  // "global" continua aceito na URL por compatibilidade com links antigos,
-  // mas o novo padrão de abas é "foryou" (Capítulo 6, seção 3).
-  const rawInitialTab = searchParams.get("tab") || "foryou";
-  const initialTab = rawInitialTab === "global" ? "foryou" : rawInitialTab;
+  const rawInitialTab = searchParams.get("tab") || "feed";
+  const initialTab = LEGACY_FEED_TABS.has(rawInitialTab) ? "feed" : rawInitialTab;
   const [activeTab, setActiveTab] = useState<string>(initialTab);
 
   // Perfil do usuário logado (universidade/campus/curso), necessário para
@@ -195,18 +221,19 @@ export default function Connect() {
 
   useEffect(() => {
     if (!user) return;
-    // As abas Universidade e Curso dependem do perfil carregado; aguarda.
-    if ((activeTab === "university" || activeTab === "course") && myProfile === null) return;
     if (activeTab === "news") loadNews();
     else loadPosts();
+    // myProfile some no dependency array de propósito: quando ele chega depois
+    // (perfil ainda carregando), o feed já mostrado é reordenado com o afinidade
+    // de universidade/curso, sem precisar de uma tela de espera.
   }, [user, activeTab, marketView, showSavedOnly, myProfile]);
 
   // A barra inferior navega para /connect, /connect?tab=market e /connect?tab=news
   // sem desmontar esta tela. Sem esta sincronização, a aba ficava "presa" na
   // anterior — era por isso que o Feed aparecia idêntico ao Mercado.
   useEffect(() => {
-    const raw = searchParams.get("tab") || "foryou";
-    const next = raw === "global" ? "foryou" : raw;
+    const raw = searchParams.get("tab") || "feed";
+    const next = LEGACY_FEED_TABS.has(raw) ? "feed" : raw;
     if (next !== activeTab) {
       setActiveTab(next);
       setShowSavedOnly(false);
@@ -214,14 +241,6 @@ export default function Connect() {
       setMarketView("explore");
     }
   }, [searchParams]);
-
-  function changeTab(v: string) {
-    setActiveTab(v);
-    setShowSavedOnly(false);
-    setMarketSearch("");
-    setMarketView("explore");
-    setSearchParams(v === "foryou" ? {} : { tab: v }, { replace: true });
-  }
 
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files || []);
@@ -272,81 +291,29 @@ export default function Connect() {
         return;
       }
 
-      // Capítulo 6, seção 3 — cada aba tem sua própria fonte/ordenação.
-      if (activeTab === "trending") {
-        // Aba "Em Alta": usa a view trending_posts (engagement_score desc).
-        const { data, error } = await supabase
-          .from("trending_posts")
-          .select("*")
-          .order("engagement_score", { ascending: false })
-          .limit(60);
-        if (error) throw error;
-        const ids = (data ?? []).map((p: any) => p.id).filter(Boolean);
-        if (ids.length === 0) { setPosts([]); return; }
-        const { data: fullPosts } = await supabase.from("posts").select("*").in("id", ids);
-        // Preserva a ordem de engajamento retornada por trending_posts.
-        const order = new Map(ids.map((id: string, i: number) => [id, i]));
-        const ordered = (fullPosts ?? []).sort((a: any, b: any) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
-        setPosts(await fetchMetricsForPosts(ordered));
-        return;
-      }
-
-      if (activeTab === "university" || activeTab === "course") {
-        // Abas "Universidade" e "Curso": filtra pelos autores que compartilham
-        // university_id / course_id com o usuário logado.
-        const field = activeTab === "university" ? "university_id" : "course_id";
-        const myValue = myProfile?.[field as keyof MyProfile];
-        if (!myValue) { setPosts([]); return; }
-        const { data: peers } = await supabase.from("profiles").select("user_id").eq(field, myValue);
-        const peerIds = (peers ?? []).map((p: any) => p.user_id);
-        if (peerIds.length === 0) { setPosts([]); return; }
-        const { data, error } = await supabase
-          .from("posts")
-          .select("*")
-          .in("user_id", peerIds)
-          .not("tag", "in", `(${MARKETPLACE_TAGS.join(',')})`)
-          .order("created_at", { ascending: false })
-          .limit(60);
-        if (error) throw error;
-        if (data) setPosts(await fetchMetricsForPosts(data));
-        return;
-      }
-
-      if (activeTab === "communities") {
-        // Aba "Comunidades": só posts de comunidades das quais o usuário participa.
-        const { data: memberships } = await supabase.from("community_members").select("community_id").eq("user_id", user!.id);
-        const communityIds = (memberships ?? []).map((m: any) => m.community_id);
-        if (communityIds.length === 0) { setPosts([]); return; }
-        const { data, error } = await supabase
-          .from("posts")
-          .select("*")
-          .in("community_id", communityIds)
-          .order("created_at", { ascending: false })
-          .limit(60);
-        if (error) throw error;
-        if (data) setPosts(await fetchMetricsForPosts(data));
-        return;
-      }
-
-      // Abas "Para Você" (foryou) e "Marketplace" (market) seguem daqui.
-      let query = supabase.from("posts").select("*").order("created_at", { ascending: false }).limit(60);
-
       if (activeTab === "market") {
-        query = query.in("tag", MARKETPLACE_TAGS);
-        if (marketView === "my_ads") {
-          query = query.eq("user_id", user!.id);
-        }
-      } else {
-        // "foryou": exclui marketplace do feed acadêmico (Capítulo 6, regra de isolamento).
-        // TODO (roadmap item 1, próxima iteração): aplicar o score de prioridade
-        // completo da seção 6 (universidade > curso > comunidades > eventos > ...)
-        // via view materializada dedicada, em vez de só cronológico.
-        query = query.not("tag", "in", `(${MARKETPLACE_TAGS.join(',')})`);
+        let query = supabase.from("posts").select("*").in("tag", MARKETPLACE_TAGS).order("created_at", { ascending: false }).limit(60);
+        if (marketView === "my_ads") query = query.eq("user_id", user!.id);
+        const { data, error } = await query;
+        if (error) throw error;
+        if (data) setPosts(await fetchMetricsForPosts(data));
+        return;
       }
 
-      const { data, error } = await query;
+      // FEED ÚNICO — as antigas abas (Para Você/Em Alta/Universidade/Curso/Comunidades)
+      // viraram sinais de UM algoritmo só, em vez de 4 listas separadas que o
+      // estudante tinha que escolher manualmente. Busca um lote amplo e recente,
+      // e quem decide a ordem final é rankFeedPosts (recência + engajamento + afinidade).
+      const { data, error } = await supabase
+        .from("posts")
+        .select("*")
+        .not("tag", "in", `(${MARKETPLACE_TAGS.join(',')})`)
+        .order("created_at", { ascending: false })
+        .limit(150);
       if (error) throw error;
-      if (data) setPosts(await fetchMetricsForPosts(data));
+      const withMetrics = await fetchMetricsForPosts(data ?? []);
+      const myCommunityIds = new Set(communities.map((c) => c.id));
+      setPosts(rankFeedPosts(withMetrics, myProfile, myCommunityIds));
     } catch (e) {
       toast({ title: "Erro ao atualizar o feed", variant: "destructive" });
     } finally {
@@ -363,7 +330,7 @@ export default function Connect() {
       supabase.from("post_likes").select("post_id,user_id").in("post_id", postIds),
       supabase.from("post_comments").select("post_id").in("post_id", postIds),
       supabase.from("saved_posts").select("post_id").eq("user_id", user.id).in("post_id", postIds),
-      supabase.from("profiles").select("user_id,full_name,avatar_url").in("user_id", userIds),
+      supabase.from("profiles").select("user_id,full_name,avatar_url,university_id,course_id").in("user_id", userIds),
       // Capítulo 6, seção 5 — selos de verificação por autor.
       supabase.from("user_roles").select("user_id,role").in("user_id", userIds)
     ]);
@@ -657,26 +624,9 @@ export default function Connect() {
         </div>
       </div>
 
-      {/* Filtros do Feed. No Mercado e nas Notícias eles somem: aquelas seções
-          já têm seu próprio botão na barra inferior e seus próprios controles. */}
-      {activeTab !== "market" && activeTab !== "news" && (
-        <Tabs value={activeTab} onValueChange={changeTab}>
-          <ScrollArea className="w-full whitespace-nowrap">
-            <TabsList className="rounded-[24px] bg-muted/40 p-1.5 inline-flex shadow-inner gap-1">
-              {FEED_TABS.map(({ value, label, icon: Icon }) => (
-                <TabsTrigger
-                  key={value}
-                  value={value}
-                  className="rounded-[20px] font-bold text-sm h-11 gap-2 px-4 data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-foreground text-muted-foreground transition-all"
-                >
-                  <Icon className="h-4 w-4" /> {label}
-                </TabsTrigger>
-              ))}
-            </TabsList>
-            <ScrollBar orientation="horizontal" className="h-1.5" />
-          </ScrollArea>
-        </Tabs>
-      )}
+      {/* As pílulas de filtro (Para Você/Em Alta/Universidade/Curso) saíram —
+          o feed agora é um único fluxo, ordenado por um algoritmo que já mistura
+          esses sinais (ver rankFeedPosts). Uma aba a menos para o estudante decidir. */}
 
       {/* SUB-MENU DO MERCADO (Painel do Vendedor vs Explorar) */}
       {activeTab === "market" && !showSavedOnly && (
@@ -881,28 +831,8 @@ export default function Connect() {
         </DialogContent>
       </Dialog>
 
-      {/* RENDERIZAÇÃO DO FEED — cobre as 6 abas de posts (Para Você, Em Alta,
-          Universidade, Curso, Comunidades, Marketplace). "news" tem seu próprio
-          bloco abaixo, pois usa a tabela news_posts, não posts. */}
-      {/* Atalho para a página dedicada de cada comunidade (9 abas internas) */}
-      {activeTab === "communities" && communities.length > 0 && (
-        <div className="mt-4 space-y-2">
-          {communities.map((c) => (
-            <button
-              key={c.id}
-              type="button"
-              onClick={() => navigate(`/community/${c.id}`)}
-              className="w-full text-left p-4 rounded-3xl bg-card border border-border/40 shadow-sm hover:bg-muted/60 transition-colors"
-            >
-              <p className="text-sm font-bold truncate">{c.name}</p>
-              <p className="text-[11px] font-medium text-muted-foreground mt-0.5 uppercase tracking-wider">
-                {c.type} · {c.member_count} integrantes
-              </p>
-            </button>
-          ))}
-        </div>
-      )}
-
+      {/* RENDERIZAÇÃO DO FEED — feed único (algoritmo) ou Mercado.
+          "news" tem seu próprio bloco abaixo, pois usa a tabela news_posts, não posts. */}
       {activeTab !== "news" && (
         loading ? (
           <div className="flex justify-center py-20"><Loader2 className="h-10 w-10 animate-spin text-primary" /></div>
@@ -911,11 +841,8 @@ export default function Connect() {
             {activeTab === "market" ? <Store className="h-16 w-16 mx-auto mb-4 text-muted-foreground/30" /> : <Globe className="h-16 w-16 mx-auto mb-4 text-muted-foreground/30" />}
             <p className="text-xl font-black text-foreground">Nada por aqui.</p>
             <p className="text-sm font-medium text-muted-foreground mt-2">
-              {activeTab === "market" ? "Não há produtos ou serviços listados agora."
-                : activeTab === "university" ? "Nenhuma publicação da sua universidade ainda."
-                : activeTab === "course" ? "Nenhuma publicação do seu curso ainda."
-                : activeTab === "communities" ? "Entre em uma comunidade para ver publicações aqui."
-                : activeTab === "trending" ? "Ainda não há publicações em alta."
+              {showSavedOnly ? "Você ainda não salvou nenhuma publicação."
+                : activeTab === "market" ? "Não há produtos ou serviços listados agora."
                 : "Seja o primeiro a postar no campus."}
             </p>
           </div>
@@ -1197,8 +1124,74 @@ function MarketCard({ post, isOwner, navigate, onSave, onDelete, onMarkAsSold }:
   );
 }
 
-// POST CARD DO FEED (Para Você, Em Alta, Universidade, Curso, Comunidades e Notícias).
-// O Mercado tem seu próprio card — veja MarketCard acima.
+/**
+ * Vídeo do feed, no estilo Instagram/TikTok: toca sozinho (mudo, por exigência
+ * dos navegadores) assim que pelo menos 60% dele aparece na tela ao rolar, e
+ * pausa quando sai de vista — sem precisar tocar em "play". Um toque no vídeo
+ * liga/desliga o som; o ícone de alto-falante no canto mostra o estado atual.
+ */
+function AutoplayVideo({ src }: { src: string }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [inView, setInView] = useState(false);
+  const [muted, setMuted] = useState(true);
+
+  useEffect(() => {
+    const el = videoRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => setInView(entry.isIntersecting && entry.intersectionRatio >= 0.6),
+      { threshold: [0, 0.6, 1] },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const el = videoRef.current;
+    if (!el) return;
+    if (inView) {
+      // O navegador pode recusar o autoplay com som antes do primeiro toque do
+      // usuário na página inteira — por isso o vídeo já nasce mudo (muted=true
+      // no <video>) e falha silenciosamente se mesmo assim for bloqueado.
+      el.play().catch(() => {});
+    } else {
+      el.pause();
+    }
+  }, [inView]);
+
+  return (
+    <div className="relative rounded-[24px] overflow-hidden bg-black shadow-sm">
+      <video
+        ref={videoRef}
+        src={src}
+        muted={muted}
+        loop
+        playsInline
+        preload="metadata"
+        onClick={() => setMuted((m) => !m)}
+        className="w-full max-h-[520px] object-cover bg-black cursor-pointer"
+      />
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); setMuted((m) => !m); }}
+        className="absolute bottom-3 right-3 h-9 w-9 rounded-full bg-black/50 backdrop-blur-md flex items-center justify-center text-white transition-transform active:scale-90"
+        title={muted ? "Ativar som" : "Silenciar"}
+      >
+        {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+      </button>
+      {!inView && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/10 pointer-events-none">
+          <div className="h-14 w-14 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center">
+            <Play className="h-6 w-6 text-white/90 fill-white/90 ml-0.5" />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// POST CARD DO FEED — usado no feed único e nas Notícias. O Mercado tem seu
+// próprio card (MarketCard, acima).
 function PostCard({ post, onLike, onSave, onComment, isOwner, onDelete, navigate, onAddToCalendar }: any) {
   const isVideo = post.media_url?.match(/\.(mp4|webm|mov)$/i);
   const isPdf = post.media_url?.match(/\.pdf$/i) || post.document_url;
@@ -1208,16 +1201,16 @@ function PostCard({ post, onLike, onSave, onComment, isOwner, onDelete, navigate
   const mediaSource = post.document_url || post.video_url || mediaList[0];
 
   return (
-    <Card className="rounded-[32px] border border-border/20 bg-card shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden transition-all relative hover:shadow-lg">
+    <Card className="rounded-[28px] border border-border/10 bg-card shadow-[0_1px_3px_rgba(0,0,0,0.04),0_8px_24px_rgba(0,0,0,0.03)] overflow-hidden transition-shadow duration-300 relative hover:shadow-[0_4px_16px_rgba(0,0,0,0.06),0_16px_36px_rgba(0,0,0,0.05)]">
 
       <CardHeader className="p-5 pb-3 flex flex-row items-center justify-between">
         <div className="flex gap-3 items-center group cursor-pointer" onClick={() => navigate(`/profile/${post.user_id}`)}>
-          <Avatar className="h-11 w-11 shadow-sm border border-border/30 group-hover:scale-105 transition-transform">
+          <Avatar className="h-11 w-11 ring-1 ring-border/40 group-hover:scale-105 transition-transform">
             <AvatarImage src={post.profiles?.avatar_url} />
             <AvatarFallback className="bg-primary/10 text-primary font-black text-sm">{post.profiles?.full_name?.charAt(0) || "U"}</AvatarFallback>
           </Avatar>
           <div className="flex flex-col">
-            <p className="font-black text-[15px] text-foreground leading-tight group-hover:text-primary transition-colors flex items-center gap-1">
+            <p className="font-bold text-[15px] text-foreground leading-tight group-hover:text-primary transition-colors flex items-center gap-1">
               {post.profiles?.full_name || "Estudante"}
               {post.author_badge && ROLE_BADGES[post.author_badge] && (() => {
                 const BadgeIcon = ROLE_BADGES[post.author_badge].icon;
@@ -1228,7 +1221,7 @@ function PostCard({ post, onLike, onSave, onComment, isOwner, onDelete, navigate
                 );
               })()}
             </p>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mt-0.5">{formatDistanceToNow(new Date(post.created_at), { locale: ptBR, addSuffix: true })}</p>
+            <p className="text-[12.5px] font-medium text-muted-foreground/70 mt-0.5">{formatDistanceToNow(new Date(post.created_at), { locale: ptBR, addSuffix: true })}</p>
           </div>
         </div>
 
@@ -1254,7 +1247,7 @@ function PostCard({ post, onLike, onSave, onComment, isOwner, onDelete, navigate
         {post.tag && (() => {
           const CatIcon = POST_CATEGORY_ICONS[post.tag];
           return (
-            <Badge variant="secondary" className="mb-3 rounded-lg text-[9px] font-black uppercase tracking-widest px-3 py-1 bg-primary/10 text-primary border-0 gap-1">
+            <Badge variant="secondary" className="mb-3 rounded-full text-[10.5px] font-bold tracking-wide px-3 py-1 bg-primary/[0.07] text-primary border-0 gap-1">
               {CatIcon && <CatIcon className="h-3 w-3" />} {post.tag}
             </Badge>
           );
@@ -1291,39 +1284,42 @@ function PostCard({ post, onLike, onSave, onComment, isOwner, onDelete, navigate
           </div>
         )}
 
-        {/* Fallback para Documentos e Vídeos antigos */}
-        {(isPdf || isVideo) && mediaSource && (
+        {/* Documento anexo */}
+        {isPdf && mediaSource && (
           <div className="mt-4 rounded-[24px] overflow-hidden border border-border/20 shadow-sm bg-muted/10">
-            {isPdf ? (
-              <div className="flex items-center justify-between p-5">
-                <div className="flex items-center gap-3">
-                  <div className="h-12 w-12 bg-primary/10 rounded-2xl flex items-center justify-center text-primary"><FileText className="h-6 w-6" /></div>
-                  <div><span className="text-sm font-black text-foreground block">Documento Anexo</span><span className="text-xs font-semibold text-muted-foreground">Toque para baixar</span></div>
-                </div>
-                <Button size="sm" className="h-10 rounded-xl font-bold px-4 shadow-sm" onClick={() => window.open(mediaSource)}><Download className="h-4 w-4 mr-1.5"/>Baixar</Button>
+            <div className="flex items-center justify-between p-5">
+              <div className="flex items-center gap-3">
+                <div className="h-12 w-12 bg-primary/10 rounded-2xl flex items-center justify-center text-primary"><FileText className="h-6 w-6" /></div>
+                <div><span className="text-sm font-black text-foreground block">Documento Anexo</span><span className="text-xs font-semibold text-muted-foreground">Toque para baixar</span></div>
               </div>
-            ) : (
-              <video src={mediaSource} controls className="w-full max-h-[400px] object-cover bg-black" />
-            )}
+              <Button size="sm" className="h-10 rounded-xl font-bold px-4 shadow-sm" onClick={() => window.open(mediaSource)}><Download className="h-4 w-4 mr-1.5"/>Baixar</Button>
+            </div>
+          </div>
+        )}
+
+        {/* Vídeo — toca sozinho ao rolar até ele, como no Instagram (ver AutoplayVideo) */}
+        {isVideo && mediaSource && (
+          <div className="mt-4">
+            <AutoplayVideo src={mediaSource} />
           </div>
         )}
       </CardContent>
 
-      <CardFooter className="p-4 pt-3 flex flex-col gap-3 bg-muted/10 border-t border-border/20">
+      <CardFooter className="px-5 py-3 flex flex-col gap-3 border-t border-border/10">
         <div className="flex justify-between items-center w-full">
-          <div className="flex gap-2">
-            <Button variant="ghost" onClick={onLike} className={cn("h-11 rounded-2xl px-4 text-xs font-black transition-all border border-transparent", post.user_liked ? "text-red-500 hover:text-red-600 bg-red-500/10 border-red-500/20" : "text-muted-foreground hover:bg-muted/80")}>
-              <Heart className={cn("h-4 w-4 mr-1.5", post.user_liked && "fill-current")} /> {post.likes_count > 0 ? post.likes_count : "Curtir"}
+          <div className="flex items-center gap-1">
+            <Button variant="ghost" onClick={onLike} className={cn("h-10 rounded-full px-3 text-[13px] font-bold transition-colors", post.user_liked ? "text-red-500 hover:text-red-600 hover:bg-red-500/10" : "text-muted-foreground hover:text-foreground hover:bg-muted/60")}>
+              <Heart className={cn("h-[18px] w-[18px]", post.likes_count > 0 && "mr-1.5", post.user_liked && "fill-current")} /> {post.likes_count > 0 && post.likes_count}
             </Button>
-            <Button variant="ghost" onClick={onComment} className="h-11 rounded-2xl px-4 text-xs font-black text-muted-foreground hover:bg-muted/80 transition-all">
-              <MessageSquare className="h-4 w-4 mr-1.5"/> {post.comments_count > 0 ? post.comments_count : "Comentar"}
+            <Button variant="ghost" onClick={onComment} className="h-10 rounded-full px-3 text-[13px] font-bold text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors">
+              <MessageSquare className={cn("h-[18px] w-[18px]", post.comments_count > 0 && "mr-1.5")} /> {post.comments_count > 0 && post.comments_count}
             </Button>
           </div>
-          <div className="flex gap-1">
+          <div className="flex items-center gap-1">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-11 w-11 rounded-2xl text-primary hover:bg-primary/10" title="Perguntar à IA sobre este post">
-                  <Sparkles className="h-5 w-5" />
+                <Button variant="ghost" size="icon" className="h-10 w-10 rounded-full text-primary hover:bg-primary/10" title="Perguntar à IA sobre este post">
+                  <Sparkles className="h-[18px] w-[18px]" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="rounded-2xl border border-border/20 shadow-xl bg-background/95 backdrop-blur-xl p-2 min-w-[220px]">
@@ -1338,12 +1334,12 @@ function PostCard({ post, onLike, onSave, onComment, isOwner, onDelete, navigate
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            <Button variant="ghost" size="icon" onClick={onSave} className={cn("h-11 w-11 rounded-2xl transition-all border border-transparent", post.user_saved ? "text-amber-500 bg-amber-500/10 border-amber-500/20" : "text-muted-foreground hover:bg-muted/80")}>
-              <Bookmark className={cn("h-5 w-5", post.user_saved && "fill-current")} />
+            <Button variant="ghost" size="icon" onClick={onSave} className={cn("h-10 w-10 rounded-full transition-colors", post.user_saved ? "text-amber-500 hover:bg-amber-500/10" : "text-muted-foreground hover:text-foreground hover:bg-muted/60")}>
+              <Bookmark className={cn("h-[18px] w-[18px]", post.user_saved && "fill-current")} />
             </Button>
           </div>
         </div>
       </CardFooter>
     </Card>
   );
-          }
+      }
