@@ -314,9 +314,11 @@ export type Database = {
         Row: {
           city: string | null
           created_at: string
+          created_by: string | null
           id: string
           map_image_url: string | null
           name: string
+          name_key: string | null
           state: string | null
           university_id: string
           updated_at: string
@@ -324,9 +326,11 @@ export type Database = {
         Insert: {
           city?: string | null
           created_at?: string
+          created_by?: string | null
           id?: string
           map_image_url?: string | null
           name: string
+          name_key?: string | null
           state?: string | null
           university_id: string
           updated_at?: string
@@ -334,9 +338,11 @@ export type Database = {
         Update: {
           city?: string | null
           created_at?: string
+          created_by?: string | null
           id?: string
           map_image_url?: string | null
           name?: string
+          name_key?: string | null
           state?: string | null
           university_id?: string
           updated_at?: string
@@ -614,9 +620,11 @@ export type Database = {
           area: string | null
           campus_id: string
           created_at: string
+          created_by: string | null
           degree: string
           id: string
           name: string
+          name_key: string | null
           total_periods: number | null
           updated_at: string
         }
@@ -624,9 +632,11 @@ export type Database = {
           area?: string | null
           campus_id: string
           created_at?: string
+          created_by?: string | null
           degree?: string
           id?: string
           name: string
+          name_key?: string | null
           total_periods?: number | null
           updated_at?: string
         }
@@ -634,9 +644,11 @@ export type Database = {
           area?: string | null
           campus_id?: string
           created_at?: string
+          created_by?: string | null
           degree?: string
           id?: string
           name?: string
+          name_key?: string | null
           total_periods?: number | null
           updated_at?: string
         }
@@ -1582,6 +1594,7 @@ export type Database = {
           price: number | null
           tag: string | null
           title: string | null
+          university_id: string | null
           updated_at: string
           user_id: string
           video_url: string | null
@@ -1604,6 +1617,7 @@ export type Database = {
           price?: number | null
           tag?: string | null
           title?: string | null
+          university_id?: string | null
           updated_at?: string
           user_id: string
           video_url?: string | null
@@ -1626,6 +1640,7 @@ export type Database = {
           price?: number | null
           tag?: string | null
           title?: string | null
+          university_id?: string | null
           updated_at?: string
           user_id?: string
           video_url?: string | null
@@ -1636,6 +1651,13 @@ export type Database = {
             columns: ["community_id"]
             isOneToOne: false
             referencedRelation: "communities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "posts_university_id_fkey"
+            columns: ["university_id"]
+            isOneToOne: false
+            referencedRelation: "universities"
             referencedColumns: ["id"]
           },
         ]
@@ -2478,10 +2500,13 @@ export type Database = {
           acronym: string
           city: string | null
           created_at: string
+          created_by: string | null
           id: string
+          is_verified: boolean
           kind: string
           logo_url: string | null
           name: string
+          name_key: string | null
           state: string
           updated_at: string
           website: string | null
@@ -2490,10 +2515,13 @@ export type Database = {
           acronym: string
           city?: string | null
           created_at?: string
+          created_by?: string | null
           id?: string
+          is_verified?: boolean
           kind?: string
           logo_url?: string | null
           name: string
+          name_key?: string | null
           state: string
           updated_at?: string
           website?: string | null
@@ -2502,10 +2530,13 @@ export type Database = {
           acronym?: string
           city?: string | null
           created_at?: string
+          created_by?: string | null
           id?: string
+          is_verified?: boolean
           kind?: string
           logo_url?: string | null
           name?: string
+          name_key?: string | null
           state?: string
           updated_at?: string
           website?: string | null
@@ -2627,6 +2658,7 @@ export type Database = {
           community_name: string
         }[]
       }
+      campus_in_my_university: { Args: { _campus: string }; Returns: boolean }
       can_dm_user: {
         Args: { _receiver: string; _sender: string }
         Returns: boolean
@@ -2634,6 +2666,12 @@ export type Database = {
       can_view_user_posts: {
         Args: { _author: string; _viewer: string }
         Returns: boolean
+      }
+      course_in_my_university: { Args: { _course: string }; Returns: boolean }
+      edu_norm: { Args: { _t: string }; Returns: string }
+      find_or_create_campus: {
+        Args: { _city?: string; _name: string; _university_id: string }
+        Returns: string
       }
       find_or_create_class_community: {
         Args: {
@@ -2644,8 +2682,26 @@ export type Database = {
         }
         Returns: string
       }
+      find_or_create_course: {
+        Args: {
+          _campus_id: string
+          _degree?: string
+          _name: string
+          _total_periods?: number
+        }
+        Returns: string
+      }
       find_or_create_discipline_community: {
         Args: { _discipline_id: string }
+        Returns: string
+      }
+      find_or_create_university: {
+        Args: {
+          _acronym?: string
+          _city?: string
+          _name: string
+          _state?: string
+        }
         Returns: string
       }
       get_announcement_poll_totals: {
@@ -2679,10 +2735,16 @@ export type Database = {
         Returns: boolean
       }
       is_user_banned: { Args: { _user_id: string }; Returns: boolean }
+      my_university_id: { Args: never; Returns: string }
       owns_discipline_code: {
         Args: { _code: string; _user_id: string }
         Returns: boolean
       }
+      restaurant_in_my_university: {
+        Args: { _restaurant: string }
+        Returns: boolean
+      }
+      route_in_my_university: { Args: { _route: string }; Returns: boolean }
       ru_distance_meters: {
         Args: { _lat1: number; _lat2: number; _lon1: number; _lon2: number }
         Returns: number
@@ -2753,6 +2815,7 @@ export type Database = {
           was_duplicate: boolean
         }[]
       }
+      same_university: { Args: { _a: string; _b: string }; Returns: boolean }
       shares_institution: { Args: { _a: string; _b: string }; Returns: boolean }
     }
     Enums: {

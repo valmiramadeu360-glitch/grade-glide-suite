@@ -143,7 +143,7 @@ export default function AdminDashboard() {
         supabase.from("profiles").select("*", { count: "exact", head: true }),
         supabase.from("feedbacks").select("*", { count: "exact", head: true }),
         supabase.from("post_reports").select("*", { count: "exact", head: true }).eq("status", "pending"),
-        supabase.from("content_reports").select("*", { count: "exact", head: true }).eq("status", "pending")
+        (supabase as any).from("content_reports").select("*", { count: "exact", head: true }).eq("status", "pending")
       ]);
       setMetrics({
         users: uRes.count || 0,
@@ -215,8 +215,8 @@ export default function AdminDashboard() {
       const { data: rPosts } = await supabase.from("post_reports").select("*, posts(*)").eq("status", "pending");
       setReports(rPosts || []);
 
-      const { data: cReports } = await supabase.from("content_reports").select("*").eq("status", "pending").order("created_at", { ascending: false });
-      const list = cReports || [];
+      const { data: cReports } = await (supabase as any).from("content_reports").select("*").eq("status", "pending").order("created_at", { ascending: false });
+      const list: any[] = cReports || [];
       const commentIds = list.filter((r) => r.target_type === "comment").map((r) => r.target_id);
       const userIds = list.filter((r) => r.target_type === "user").map((r) => r.target_id);
       const messageIds = list.filter((r) => r.target_type === "message").map((r) => r.target_id);
@@ -244,9 +244,9 @@ export default function AdminDashboard() {
 
   async function loadAuditLog() {
     setLoadingTab(true);
-    const { data } = await supabase.from("admin_audit_log").select("*").order("created_at", { ascending: false }).limit(100);
+    const { data } = await (supabase as any).from("admin_audit_log").select("*").order("created_at", { ascending: false }).limit(100);
     setAuditLog(data || []);
-    const ids = Array.from(new Set((data || []).map((l: any) => l.admin_id)));
+    const ids = Array.from(new Set<string>((data || []).map((l: any) => l.admin_id)));
     if (ids.length) {
       const { data: profs } = await supabase.from("profiles").select("user_id,full_name").in("user_id", ids);
       const map: Record<string, string> = {};
@@ -437,7 +437,7 @@ export default function AdminDashboard() {
   // AUDITORIA BASE
   async function audit(action: string, targetType?: string, targetId?: string, details?: Record<string, any>) {
     try {
-      await supabase.rpc("log_admin_action", { _action: action, _target_type: targetType ?? null, _target_id: targetId ?? null, _details: details ?? null } as any);
+      await (supabase as any).rpc("log_admin_action", { _action: action, _target_type: targetType ?? null, _target_id: targetId ?? null, _details: details ?? null } as any);
     } catch (e) { console.error("Falha ao registrar auditoria:", e); }
   }
 
@@ -607,7 +607,7 @@ export default function AdminDashboard() {
 
   async function resolveContentReport(id: string, resolution: "resolved" | "dismissed") {
     try {
-      await supabase.from("content_reports").update({ status: resolution }).eq("id", id);
+      await (supabase as any).from("content_reports").update({ status: resolution }).eq("id", id);
       setContentReports((prev) => prev.filter((r) => r.id !== id));
       await audit(resolution === "resolved" ? "content_report_resolved" : "content_report_dismissed", "content_report", id);
     } catch { toast({ title: "Erro", variant: "destructive" }); }
