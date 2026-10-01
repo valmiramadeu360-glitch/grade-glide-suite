@@ -246,7 +246,7 @@ export default function AdminDashboard() {
     setLoadingTab(true);
     const { data } = await (supabase as any).from("admin_audit_log").select("*").order("created_at", { ascending: false }).limit(100);
     setAuditLog(data || []);
-    const ids = Array.from(new Set((data || []).map((l: any) => l.admin_id)));
+    const ids = Array.from(new Set<string>((data || []).map((l: any) => l.admin_id)));
     if (ids.length) {
       const { data: profs } = await supabase.from("profiles").select("user_id,full_name").in("user_id", ids);
       const map: Record<string, string> = {};
