@@ -216,7 +216,7 @@ export default function AdminDashboard() {
       setReports(rPosts || []);
 
       const { data: cReports } = await (supabase as any).from("content_reports").select("*").eq("status", "pending").order("created_at", { ascending: false });
-      const list = cReports || [];
+      const list: any[] = cReports || [];
       const commentIds = list.filter((r) => r.target_type === "comment").map((r) => r.target_id);
       const userIds = list.filter((r) => r.target_type === "user").map((r) => r.target_id);
       const messageIds = list.filter((r) => r.target_type === "message").map((r) => r.target_id);
