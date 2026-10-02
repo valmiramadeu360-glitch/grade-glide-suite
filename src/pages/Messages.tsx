@@ -73,6 +73,21 @@ export default function Messages() {
 
   const { communities, loading: loadingCommunities } = useCommunities();
 
+  // Link direto: /messages?to=<user_id>&text=<mensagem pronta> (ex.: "Falar com o vendedor")
+  const deepLinkDone = useRef(false);
+  useEffect(() => {
+    if (deepLinkDone.current || !user) return;
+    const params = new URLSearchParams(window.location.search);
+    const to = params.get("to");
+    if (!to || to === user.id) return;
+    deepLinkDone.current = true;
+    const text = params.get("text");
+    openConversation(to);
+    if (text) setNewMessage(text);
+    window.history.replaceState(null, "", "/messages");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
+
   useEffect(() => {
     if (user) loadConversations();
   }, [user]);
