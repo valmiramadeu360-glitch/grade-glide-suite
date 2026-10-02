@@ -18,7 +18,44 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { VoiceNote } from "@/components/chat/VoiceNote";
 import { useCommunities } from "@/hooks/useCommunities";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
+
+// Supabase ainda não gerou os tipos da view public_profiles nem das tabelas
+// novas do Marketplace — o cast evita erro de build até o types.ts ser atualizado.
+const db = supabase as any;
+
+/**
+ * Busca nome/foto/curso de um grupo de usuários respeitando a privacidade
+ * (usa a view public_profiles, não a tabela profiles — ver EduFlow BUG-02).
+ * Quem está com o perfil marcado como privado não aparece aqui.
+ */
+async function fetchPublicProfiles(
+  userIds: string[],
+): Promise<Map<string, { full_name: string | null; avatar_url: string | null; course: string | null }>> {
+  const map = new Map<string, { full_name: string | null; avatar_url: string | null; course: string | null }>();
+  if (userIds.length === 0) return map;
+
+  const { data: profiles } = await db
+    .from("public_profiles")
+    .select("user_id, display_name, avatar_url, course_id")
+    .in("user_id", userIds);
+
+  const courseIds = [...new Set((profiles ?? []).map((p: any) => p.course_id).filter(Boolean))];
+  const courseNames = new Map<string, string>();
+  if (courseIds.length > 0) {
+    const { data: courses } = await db.from("courses").select("id, name").in("id", courseIds);
+    for (const c of courses ?? []) courseNames.set(c.id, c.name);
+  }
+
+  for (const p of profiles ?? []) {
+    map.set(p.user_id, {
+      full_name: p.display_name ?? null,
+      avatar_url: p.avatar_url ?? null,
+      course: p.course_id ? courseNames.get(p.course_id) ?? null : null,
+    });
+  }
+  return map;
+}
 
 interface Conversation {
   user_id: string;
@@ -72,25 +109,21 @@ export default function Messages() {
   const secondsRef = useRef(0);
 
   const { communities, loading: loadingCommunities } = useCommunities();
-
-  // Link direto: /messages?to=<user_id>&text=<mensagem pronta> (ex.: "Falar com o vendedor")
-  const deepLinkDone = useRef(false);
-  useEffect(() => {
-    if (deepLinkDone.current || !user) return;
-    const params = new URLSearchParams(window.location.search);
-    const to = params.get("to");
-    if (!to || to === user.id) return;
-    deepLinkDone.current = true;
-    const text = params.get("text");
-    openConversation(to);
-    if (text) setNewMessage(text);
-    window.history.replaceState(null, "", "/messages");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user]);
+  const [searchParams, setSearchParams] = useSearchParams();
 
   useEffect(() => {
     if (user) loadConversations();
   }, [user]);
+
+  // Chegada vinda de um anúncio do Marketplace ("Falar com o vendedor"):
+  // /messages?to=<vendedor>&listing=<título do anúncio>
+  useEffect(() => {
+    const to = searchParams.get("to");
+    if (!to || !user || to === user.id) return;
+    const listingTitle = searchParams.get("listing");
+    openConversation(to, listingTitle ? `Olá! Vi seu anúncio "${listingTitle}" no Marketplace e queria saber mais.` : undefined);
+    setSearchParams({}, { replace: true });
+  }, [searchParams, user]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -152,12 +185,7 @@ export default function Messages() {
       }
 
       const partnerIds = Array.from(convMap.keys());
-      const { data: profiles } = await supabase
-        .from("profiles")
-        .select("user_id, full_name, avatar_url, course")
-        .in("user_id", partnerIds);
-
-      const profileMap = new Map((profiles ?? []).map(p => [p.user_id, p]));
+      const profileMap = await fetchPublicProfiles(partnerIds);
 
       const convs: Conversation[] = partnerIds.map(pid => {
         const conv = convMap.get(pid)!;
@@ -178,18 +206,19 @@ export default function Messages() {
     }
   }
 
-  async function openConversation(userId: string) {
+  async function openConversation(userId: string, prefill?: string) {
     setSelectedUserId(userId);
     setLoadingMessages(true);
     setSearchQuery("");
     setSearchResults([]);
+    if (prefill) setNewMessage(prefill);
 
     const conv = conversations.find(c => c.user_id === userId);
     if (conv) {
       setSelectedProfile({ full_name: conv.full_name, avatar_url: conv.avatar_url, course: conv.course });
     } else {
-      const { data } = await supabase.from("profiles").select("full_name, avatar_url, course").eq("user_id", userId).single();
-      if (data) setSelectedProfile(data as any);
+      const profile = (await fetchPublicProfiles([userId])).get(userId);
+      if (profile) setSelectedProfile(profile);
     }
 
     const { data } = await supabase
@@ -244,13 +273,30 @@ export default function Messages() {
     setSearchQuery(query);
     if (query.trim().length < 2) { setSearchResults([]); return; }
     setSearching(true);
-    const { data } = await supabase
-      .from("profiles")
-      .select("user_id, full_name, avatar_url, course")
+    // Busca pela view pública (respeita privacidade); ver fetchPublicProfiles acima.
+    const { data } = await db
+      .from("public_profiles")
+      .select("user_id, display_name, avatar_url, course_id")
       .neq("user_id", user!.id)
-      .ilike("full_name", `%${query}%`)
+      .ilike("display_name", `%${query}%`)
       .limit(10);
-    setSearchResults(data ?? []);
+
+    const rows = data ?? [];
+    const courseIds = [...new Set(rows.map((p: any) => p.course_id).filter(Boolean))];
+    const courseNames = new Map<string, string>();
+    if (courseIds.length > 0) {
+      const { data: courses } = await db.from("courses").select("id, name").in("id", courseIds);
+      for (const c of courses ?? []) courseNames.set(c.id, c.name);
+    }
+
+    setSearchResults(
+      rows.map((p: any) => ({
+        user_id: p.user_id,
+        full_name: p.display_name ?? null,
+        avatar_url: p.avatar_url ?? null,
+        course: p.course_id ? courseNames.get(p.course_id) ?? null : null,
+      })),
+    );
     setSearching(false);
   }
 
