@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { ListingCard } from "@/components/marketplace/ListingCard";
+import { ListingCard } from "@/components/Marketplace/ListingCard";
 import { PRODUTO_CATEGORIAS, type Listing } from "@/lib/marketplace";
 import { cn } from "@/lib/utils";
 
