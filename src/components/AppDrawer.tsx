@@ -65,7 +65,7 @@ export function AppDrawer({ open, onOpenChange }: AppDrawerProps) {
   ];
 
   const spaces: DrawerItem[] = [
-    { label: "Minha loja", hint: "Anúncios que você publicou", icon: Store, to: "/marketplace/minha-loja" },
+    { label: "Minha loja", hint: "Anúncios que você publicou", icon: Store, to: "/my-shop" },
     { label: "Meus grupos e comunidades", icon: Users, to: "/communities" },
     ...(canManageChannels
       ? [{ label: "Canais de notícias", hint: "Os que você administra", icon: Newspaper, to: "/connect?tab=news" }]
