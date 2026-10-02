@@ -20,12 +20,11 @@ function useActiveTab(): TabId | null {
   const { pathname } = useLocation();
   const [params] = useSearchParams();
 
-  if (pathname.startsWith("/marketplace")) return "market";
   if (pathname.startsWith("/campus")) return "utilities";
   if (pathname.startsWith("/communit") || pathname.startsWith("/messages")) return "communities";
+  if (pathname.startsWith("/marketplace") || pathname.startsWith("/shop") || pathname.startsWith("/listing") || pathname.startsWith("/my-shop")) return "market";
   if (pathname === "/connect" || pathname === "/") {
     const tab = params.get("tab");
-    if (tab === "market") return "market";
     if (tab === "news") return "news";
     return "feed";
   }
