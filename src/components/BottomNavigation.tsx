@@ -9,7 +9,7 @@ type TabId = "feed" | "market" | "news" | "utilities" | "communities";
 
 const TABS: { id: TabId; label: string; icon: LucideIcon; to: string }[] = [
   { id: "feed", label: "Feed", icon: Home, to: "/connect" },
-  { id: "market", label: "Mercado", icon: ShoppingBag, to: "/connect?tab=market" },
+  { id: "market", label: "Mercado", icon: ShoppingBag, to: "/marketplace" },
   { id: "news", label: "Notícias", icon: Newspaper, to: "/connect?tab=news" },
   { id: "utilities", label: "Utilitários", icon: LayoutGrid, to: "/campus" },
   { id: "communities", label: "Comunidades", icon: Users, to: "/communities" },
@@ -20,6 +20,7 @@ function useActiveTab(): TabId | null {
   const { pathname } = useLocation();
   const [params] = useSearchParams();
 
+  if (pathname.startsWith("/marketplace")) return "market";
   if (pathname.startsWith("/campus")) return "utilities";
   if (pathname.startsWith("/communit") || pathname.startsWith("/messages")) return "communities";
   if (pathname === "/connect" || pathname === "/") {

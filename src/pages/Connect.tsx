@@ -233,6 +233,7 @@ export default function Connect() {
   // anterior — era por isso que o Feed aparecia idêntico ao Mercado.
   useEffect(() => {
     const raw = searchParams.get("tab") || "feed";
+    if (raw === "market") { navigate("/marketplace", { replace: true }); return; }
     const next = LEGACY_FEED_TABS.has(raw) ? "feed" : raw;
     if (next !== activeTab) {
       setActiveTab(next);
