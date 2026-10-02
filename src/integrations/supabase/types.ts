@@ -1126,6 +1126,191 @@ export type Database = {
           },
         ]
       }
+      listing_favorites: {
+        Row: {
+          created_at: string
+          listing_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          listing_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          listing_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "listing_favorites_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "listings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      listing_photos: {
+        Row: {
+          id: string
+          listing_id: string
+          ordem: number
+          url: string
+        }
+        Insert: {
+          id?: string
+          listing_id: string
+          ordem?: number
+          url: string
+        }
+        Update: {
+          id?: string
+          listing_id?: string
+          ordem?: number
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "listing_photos_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "listings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      listing_reports: {
+        Row: {
+          created_at: string
+          id: string
+          listing_id: string
+          motivo: string
+          reporter_id: string
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          listing_id: string
+          motivo: string
+          reporter_id: string
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          listing_id?: string
+          motivo?: string
+          reporter_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "listing_reports_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "listings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      listing_view_marks: {
+        Row: {
+          dia: string
+          listing_id: string
+          viewer_id: string
+        }
+        Insert: {
+          dia?: string
+          listing_id: string
+          viewer_id: string
+        }
+        Update: {
+          dia?: string
+          listing_id?: string
+          viewer_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "listing_view_marks_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "listings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      listings: {
+        Row: {
+          categoria: string | null
+          condicao: string | null
+          created_at: string
+          descricao: string | null
+          id: string
+          is_active: boolean
+          modalidade: string | null
+          prazo_entrega: string | null
+          preco: number | null
+          shop_id: string
+          tipo: string
+          titulo: string
+          university_id: string | null
+          updated_at: string
+          view_count: number
+        }
+        Insert: {
+          categoria?: string | null
+          condicao?: string | null
+          created_at?: string
+          descricao?: string | null
+          id?: string
+          is_active?: boolean
+          modalidade?: string | null
+          prazo_entrega?: string | null
+          preco?: number | null
+          shop_id: string
+          tipo: string
+          titulo: string
+          university_id?: string | null
+          updated_at?: string
+          view_count?: number
+        }
+        Update: {
+          categoria?: string | null
+          condicao?: string | null
+          created_at?: string
+          descricao?: string | null
+          id?: string
+          is_active?: boolean
+          modalidade?: string | null
+          prazo_entrega?: string | null
+          preco?: number | null
+          shop_id?: string
+          tipo?: string
+          titulo?: string
+          university_id?: string | null
+          updated_at?: string
+          view_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "listings_shop_id_fkey"
+            columns: ["shop_id"]
+            isOneToOne: false
+            referencedRelation: "shops"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "listings_university_id_fkey"
+            columns: ["university_id"]
+            isOneToOne: false
+            referencedRelation: "universities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       materials: {
         Row: {
           created_at: string
@@ -2289,6 +2474,91 @@ export type Database = {
           },
         ]
       }
+      shop_followers: {
+        Row: {
+          created_at: string
+          shop_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          shop_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          shop_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shop_followers_shop_id_fkey"
+            columns: ["shop_id"]
+            isOneToOne: false
+            referencedRelation: "shops"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      shops: {
+        Row: {
+          banner_url: string | null
+          bio: string | null
+          created_at: string
+          forma_pagamento: string[]
+          id: string
+          is_active: boolean
+          is_open: boolean
+          is_verified: boolean
+          logo_url: string | null
+          nome: string
+          owner_user_id: string
+          tipo: string
+          university_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          banner_url?: string | null
+          bio?: string | null
+          created_at?: string
+          forma_pagamento?: string[]
+          id?: string
+          is_active?: boolean
+          is_open?: boolean
+          is_verified?: boolean
+          logo_url?: string | null
+          nome: string
+          owner_user_id: string
+          tipo: string
+          university_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          banner_url?: string | null
+          bio?: string | null
+          created_at?: string
+          forma_pagamento?: string[]
+          id?: string
+          is_active?: boolean
+          is_open?: boolean
+          is_verified?: boolean
+          logo_url?: string | null
+          nome?: string
+          owner_user_id?: string
+          tipo?: string
+          university_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shops_university_id_fkey"
+            columns: ["university_id"]
+            isOneToOne: false
+            referencedRelation: "universities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       subjects: {
         Row: {
           code: string | null
@@ -2740,6 +3010,10 @@ export type Database = {
         Args: { _code: string; _user_id: string }
         Returns: boolean
       }
+      register_listing_view: {
+        Args: { _listing_id: string }
+        Returns: undefined
+      }
       restaurant_in_my_university: {
         Args: { _restaurant: string }
         Returns: boolean
@@ -2817,6 +3091,7 @@ export type Database = {
       }
       same_university: { Args: { _a: string; _b: string }; Returns: boolean }
       shares_institution: { Args: { _a: string; _b: string }; Returns: boolean }
+      shop_follower_count: { Args: { _shop_id: string }; Returns: number }
     }
     Enums: {
       app_role:
