@@ -115,13 +115,16 @@ export default function Messages() {
     if (user) loadConversations();
   }, [user]);
 
-  // Chegada vinda de um anúncio do Marketplace ("Falar com o vendedor"):
-  // /messages?to=<vendedor>&listing=<título do anúncio>
+  // Chegada vinda do Marketplace ("Falar com o vendedor"):
+  // sellerChatLink() (em src/lib/marketplace.ts) manda /messages?to=<vendedor>&text=<mensagem pronta>.
+  // Mantemos "listing" (só o título) como alternativa, para compatibilidade com outros pontos de entrada.
   useEffect(() => {
     const to = searchParams.get("to");
     if (!to || !user || to === user.id) return;
+    const text = searchParams.get("text");
     const listingTitle = searchParams.get("listing");
-    openConversation(to, listingTitle ? `Olá! Vi seu anúncio "${listingTitle}" no Marketplace e queria saber mais.` : undefined);
+    const prefill = text ?? (listingTitle ? `Olá! Vi seu anúncio "${listingTitle}" no Marketplace e queria saber mais.` : undefined);
+    openConversation(to, prefill);
     setSearchParams({}, { replace: true });
   }, [searchParams, user]);
 
@@ -684,5 +687,4 @@ export default function Messages() {
       )}
     </div>
   );
-}
-
+                  }
