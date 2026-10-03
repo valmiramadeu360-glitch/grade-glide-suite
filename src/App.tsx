@@ -30,6 +30,10 @@ import CampusLibrary from "./pages/campus/Library";
 import CampusTransport from "./pages/campus/Transport";
 import CampusScholarships from "./pages/campus/Scholarships";
 import NotFound from "./pages/NotFound";
+import Marketplace from "./pages/marketplace/Marketplace";
+import ListingDetail from "./pages/marketplace/ListingDetail";
+import ShopPage from "./pages/marketplace/ShopPage";
+import MyShop from "./pages/marketplace/MyShop";
 import AdminDashboard from "./pages/AdminDashboard";
 import AdminInstitutions from "./pages/AdminInstitutions";
 import Assistant from "./pages/Assistant";
@@ -223,6 +227,13 @@ const App = () => (
                   <Route path="/my-shop" element={<ProtectedRoute><MyShop /></ProtectedRoute>} />
                   <Route path="/shop/:id" element={<ProtectedRoute><Shop /></ProtectedRoute>} />
                   <Route path="/listing/:id" element={<ProtectedRoute><ListingDetail /></ProtectedRoute>} />
+
+                  {/* Marketplace */}
+                  <Route path="/marketplace" element={<ProtectedRoute><Marketplace /></ProtectedRoute>} />
+                  <Route path="/marketplace/item/:id" element={<ProtectedRoute><ListingDetail /></ProtectedRoute>} />
+                  <Route path="/marketplace/loja/:id" element={<ProtectedRoute><ShopPage /></ProtectedRoute>} />
+                  <Route path="/marketplace/minha-loja" element={<ProtectedRoute><MyShop /></ProtectedRoute>} />
+                  <Route path="/my-shop" element={<Navigate to="/marketplace/minha-loja" replace />} />
 
                   {/* Utilitários do campus */}
                   <Route path="/campus" element={<ProtectedRoute><Campus /></ProtectedRoute>} />
