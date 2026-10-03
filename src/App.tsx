@@ -41,11 +41,6 @@ import ResetPassword from "./pages/ResetPassword";
 import Community from "./pages/Community";
 import Communities from "./pages/Communities";
 import { UniversityOnboarding } from "./pages/UniversityOnboarding";
-// Correção do caminho/extensão do Marketplace para bater com o arquivo físico
-import Marketplace from "./pages/marketplace";
-import MyShop from "./pages/MyShop";
-import Shop from "./pages/Shop";
-import ListingDetail from "./pages/ListingDetail";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -222,10 +217,7 @@ const App = () => (
                   <Route path="/news" element={<Navigate to="/connect?tab=news" replace />} />
                   <Route path="/messages" element={<ProtectedRoute><Messages /></ProtectedRoute>} />
 
-                  {/* Marketplace */}
-                  <Route path="/marketplace" element={<ProtectedRoute><Marketplace /></ProtectedRoute>} />
-                  <Route path="/my-shop" element={<ProtectedRoute><MyShop /></ProtectedRoute>} />
-                  <Route path="/shop/:id" element={<ProtectedRoute><Shop /></ProtectedRoute>} />
+                  <Route path="/shop/:id" element={<ProtectedRoute><ShopPage /></ProtectedRoute>} />
                   <Route path="/listing/:id" element={<ProtectedRoute><ListingDetail /></ProtectedRoute>} />
 
                   {/* Marketplace */}
