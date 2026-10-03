@@ -11,7 +11,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { PRODUTO_CATEGORIAS, type Listing, type ListingPhoto } from "@/lib/marketplace";
 
-// A tabela "listings" e o bucket "marketplace-media" ainda não estão no
+// A tabela "listings" e o bucket MEDIA_BUCKET ainda não estão no
 // types.ts gerado pelo Supabase — cast temporário até ele ser regenerado.
 const db = supabase as any;
 
@@ -60,7 +60,7 @@ export function ListingFormDialog({ open, onOpenChange, shopId, listing, onSaved
       db.from("listing_photos").select("*").eq("listing_id", listing.id).order("ordem").then(({ data }: any) => {
         setExistingPhotos((data ?? []).map((p: ListingPhoto) => ({
           ...p,
-          publicUrl: supabase.storage.from("marketplace-media").getPublicUrl(p.url).data.publicUrl,
+          publicUrl: supabase.storage.from(MEDIA_BUCKET).getPublicUrl(p.url).data.publicUrl,
         })));
       });
     } else {
@@ -110,7 +110,7 @@ export function ListingFormDialog({ open, onOpenChange, shopId, listing, onSaved
       // Remove fotos marcadas para exclusão (storage + linha).
       for (const photoId of removedPhotoIds) {
         const photo = existingPhotos.find((p) => p.id === photoId);
-        if (photo) await supabase.storage.from("marketplace-media").remove([photo.url]);
+        if (photo) await supabase.storage.from(MEDIA_BUCKET).remove([photo.url]);
         await db.from("listing_photos").delete().eq("id", photoId);
       }
 
@@ -119,7 +119,7 @@ export function ListingFormDialog({ open, onOpenChange, shopId, listing, onSaved
       for (let i = 0; i < newFiles.length; i++) {
         const file = newFiles[i];
         const path = `${user.id}/listings/${listingId}/${Date.now()}-${i}.${file.name.split(".").pop() || "jpg"}`;
-        const { error: upErr } = await supabase.storage.from("marketplace-media").upload(path, file);
+        const { error: upErr } = await supabase.storage.from(MEDIA_BUCKET).upload(path, file);
         if (upErr) throw upErr;
         await db.from("listing_photos").insert({ listing_id: listingId, url: path, ordem: ordemBase + i });
       }

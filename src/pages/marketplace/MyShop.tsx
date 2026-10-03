@@ -54,7 +54,7 @@ export default function MyShop() {
           const firstPhoto = [...(r.listing_photos ?? [])].sort((a, b) => a.ordem - b.ordem)[0];
           return {
             ...r,
-            coverUrl: firstPhoto ? supabase.storage.from("marketplace-media").getPublicUrl(firstPhoto.url).data.publicUrl : null,
+            coverUrl: firstPhoto ? supabase.storage.from(MEDIA_BUCKET).getPublicUrl(firstPhoto.url).data.publicUrl : null,
             favoriteCount: r.listing_favorites?.[0]?.count ?? 0,
           };
         }),
@@ -110,7 +110,7 @@ export default function MyShop() {
       {/* Cabeçalho da loja */}
       <div className="flex items-center gap-4 rounded-[28px] border border-border/40 bg-card p-4">
         <Avatar className="h-16 w-16 border border-border/40">
-          <AvatarImage src={shop.logo_url ? supabase.storage.from("marketplace-media").getPublicUrl(shop.logo_url).data.publicUrl : undefined} className="object-cover" />
+          <AvatarImage src={shop.logo_url ? supabase.storage.from(MEDIA_BUCKET).getPublicUrl(shop.logo_url).data.publicUrl : undefined} className="object-cover" />
           <AvatarFallback className="bg-primary/10 text-primary"><Store className="h-6 w-6" /></AvatarFallback>
         </Avatar>
         <div className="min-w-0 flex-1">
@@ -143,7 +143,7 @@ export default function MyShop() {
         <div className="space-y-2">
           {listings.map((l) => (
             <div key={l.id} className="flex items-center gap-3 rounded-2xl border border-border/40 bg-card p-3">
-              <div onClick={() => navigate(`/listing/${l.id}`)} className="h-14 w-14 shrink-0 cursor-pointer overflow-hidden rounded-xl bg-muted/40">
+              <div onClick={() => navigate(`/marketplace/item/${l.id}`)} className="h-14 w-14 shrink-0 cursor-pointer overflow-hidden rounded-xl bg-muted/40">
                 {l.coverUrl && <img src={l.coverUrl} alt="" className="h-full w-full object-cover" />}
               </div>
               <div className="min-w-0 flex-1">

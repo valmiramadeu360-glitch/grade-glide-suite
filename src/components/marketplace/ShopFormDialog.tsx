@@ -36,7 +36,7 @@ export function ShopFormDialog({ open, onOpenChange, shop, onSaved }: ShopFormDi
     setNome(shop?.nome ?? "");
     setBio(shop?.bio ?? "");
     setLogoFile(null);
-    setLogoPreview(shop?.logo_url ? supabase.storage.from("marketplace-media").getPublicUrl(shop.logo_url).data.publicUrl : null);
+    setLogoPreview(shop?.logo_url ? supabase.storage.from(MEDIA_BUCKET).getPublicUrl(shop.logo_url).data.publicUrl : null);
   }, [open, shop]);
 
   async function handleSave() {
@@ -48,7 +48,7 @@ export function ShopFormDialog({ open, onOpenChange, shop, onSaved }: ShopFormDi
       let logoPath = shop?.logo_url ?? null;
       if (logoFile) {
         const path = `${user.id}/shops/logo-${Date.now()}.${logoFile.name.split(".").pop() || "jpg"}`;
-        const { error: upErr } = await supabase.storage.from("marketplace-media").upload(path, logoFile);
+        const { error: upErr } = await supabase.storage.from(MEDIA_BUCKET).upload(path, logoFile);
         if (upErr) throw upErr;
         logoPath = path;
       }
