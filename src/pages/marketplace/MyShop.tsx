@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { cn } from "@/lib/utils";
 import { Eye, Heart, Loader2, Pencil, PlusCircle, Store, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -12,7 +13,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { ShopFormDialog } from "@/components/marketplace/ShopFormDialog";
 import { ListingFormDialog } from "@/components/marketplace/ListingFormDialog";
-import { formatPreco, type Listing, type Shop } from "@/lib/marketplace";
+import { MEDIA_BUCKET, SECTIONS, formatPreco, type Listing, type Shop, type ShopTipo } from "@/lib/marketplace";
 
 // shops/listings ainda não estão no types.ts gerado — cast temporário.
 const db = supabase as any;
@@ -26,6 +27,9 @@ export default function MyShop() {
   const { user } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
+  const [params, setParams] = useSearchParams();
+  const tipo = ((params.get("s") as ShopTipo) || "produto");
+  const section = SECTIONS.find((x) => x.id === tipo) ?? SECTIONS[0];
 
   const [loading, setLoading] = useState(true);
   const [shop, setShop] = useState<Shop | null>(null);
@@ -39,7 +43,7 @@ export default function MyShop() {
     if (!user) return;
     setLoading(true);
 
-    const { data: shopRow } = await db.from("shops").select("*").eq("owner_user_id", user.id).eq("tipo", "produto").maybeSingle();
+    const { data: shopRow } = await db.from("shops").select("*").eq("owner_user_id", user.id).eq("tipo", tipo).maybeSingle();
     setShop(shopRow ?? null);
 
     if (shopRow) {
@@ -54,7 +58,7 @@ export default function MyShop() {
           const firstPhoto = [...(r.listing_photos ?? [])].sort((a, b) => a.ordem - b.ordem)[0];
           return {
             ...r,
-            coverUrl: firstPhoto ? supabase.storage.from("marketplace-media").getPublicUrl(firstPhoto.url).data.publicUrl : null,
+            coverUrl: firstPhoto ? supabase.storage.from(MEDIA_BUCKET).getPublicUrl(firstPhoto.url).data.publicUrl : null,
             favoriteCount: r.listing_favorites?.[0]?.count ?? 0,
           };
         }),
@@ -63,9 +67,29 @@ export default function MyShop() {
       setListings([]);
     }
     setLoading(false);
-  }, [user]);
+  }, [user, tipo]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Abre direto a edição: /marketplace/minha-loja?edit=<id>
+  useEffect(() => {
+    const editId = params.get("edit");
+    if (!editId || listings.length === 0) return;
+    const l = listings.find((x) => x.id === editId);
+    if (l) { setEditingListing(l); setListingDialogOpen(true); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listings]);
+
+  const switcher = (
+    <div className="grid grid-cols-3 gap-2">
+      {SECTIONS.map((x) => (
+        <button key={x.id} type="button" onClick={() => setParams({ s: x.id }, { replace: true })}
+          className={cn("flex items-center justify-center gap-1.5 rounded-2xl border p-2.5 text-xs font-bold", x.id === tipo ? "border-primary bg-primary/10 text-primary" : "border-border/40 bg-card text-muted-foreground")}>
+          <x.icon className="h-4 w-4" />{x.label}
+        </button>
+      ))}
+    </div>
+  );
 
   async function togglePause(listing: Listing) {
     const { error } = await db.from("listings").update({ is_active: !listing.is_active }).eq("id", listing.id);
@@ -92,13 +116,13 @@ export default function MyShop() {
   // ---------- sem loja ainda ----------
   if (!shop) {
     return (
-      <div className="mx-auto flex max-w-md flex-col items-center gap-4 px-4 py-16 text-center">
+      <div className="mx-auto max-w-md space-y-4 px-4 py-6">{switcher}<div className="flex flex-col items-center gap-4 py-10 text-center">
         <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 text-primary"><Store className="h-7 w-7" /></div>
-        <h1 className="text-xl font-extrabold">Crie sua loja no Marketplace</h1>
-        <p className="text-sm text-muted-foreground">Dê um nome à sua loja para começar a vender produtos para estudantes da sua universidade.</p>
+        <h1 className="text-xl font-extrabold">Crie sua loja de {section.label.toLowerCase()}</h1>
+        <p className="text-sm text-muted-foreground">Qualquer estudante pode vender. Sua loja aparece só para quem é da sua universidade.</p>
         <Button onClick={() => setShopDialogOpen(true)} className="mt-2 h-12 rounded-2xl px-6 font-bold">Criar minha loja</Button>
-        <ShopFormDialog open={shopDialogOpen} onOpenChange={setShopDialogOpen} shop={null} onSaved={setShop} />
-      </div>
+        <ShopFormDialog open={shopDialogOpen} onOpenChange={setShopDialogOpen} shop={null} onSaved={setShop} tipo={tipo} />
+      </div></div>
     );
   }
 
@@ -107,10 +131,11 @@ export default function MyShop() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 px-4 py-4 sm:py-8">
+      {switcher}
       {/* Cabeçalho da loja */}
       <div className="flex items-center gap-4 rounded-[28px] border border-border/40 bg-card p-4">
         <Avatar className="h-16 w-16 border border-border/40">
-          <AvatarImage src={shop.logo_url ? supabase.storage.from("marketplace-media").getPublicUrl(shop.logo_url).data.publicUrl : undefined} className="object-cover" />
+          <AvatarImage src={shop.logo_url ? supabase.storage.from(MEDIA_BUCKET).getPublicUrl(shop.logo_url).data.publicUrl : undefined} className="object-cover" />
           <AvatarFallback className="bg-primary/10 text-primary"><Store className="h-6 w-6" /></AvatarFallback>
         </Avatar>
         <div className="min-w-0 flex-1">
@@ -118,6 +143,7 @@ export default function MyShop() {
           {shop.bio && <p className="mt-0.5 truncate text-sm text-muted-foreground">{shop.bio}</p>}
         </div>
         <Button variant="outline" size="sm" className="rounded-xl" onClick={() => setShopDialogOpen(true)}>Editar</Button>
+        <Button variant="ghost" size="sm" className="rounded-xl" onClick={() => navigate(`/marketplace/loja/${shop.id}`)}>Ver</Button>
       </div>
 
       {/* Estatísticas */}
@@ -143,7 +169,7 @@ export default function MyShop() {
         <div className="space-y-2">
           {listings.map((l) => (
             <div key={l.id} className="flex items-center gap-3 rounded-2xl border border-border/40 bg-card p-3">
-              <div onClick={() => navigate(`/listing/${l.id}`)} className="h-14 w-14 shrink-0 cursor-pointer overflow-hidden rounded-xl bg-muted/40">
+              <div onClick={() => navigate(`/marketplace/item/${l.id}`)} className="h-14 w-14 shrink-0 cursor-pointer overflow-hidden rounded-xl bg-muted/40">
                 {l.coverUrl && <img src={l.coverUrl} alt="" className="h-full w-full object-cover" />}
               </div>
               <div className="min-w-0 flex-1">
@@ -162,17 +188,14 @@ export default function MyShop() {
                 <Button variant="ghost" size="sm" className="h-9 rounded-xl px-2 text-xs font-bold" onClick={() => togglePause(l)}>
                   {l.is_active ? "Pausar" : "Reativar"}
                 </Button>
-                <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl text-destructive" onClick={() => setDeleteTarget(l)}>
-                  <Trash2 className="h-4 w-4" />
-                </Button>
               </div>
             </div>
           ))}
         </div>
       )}
 
-      <ShopFormDialog open={shopDialogOpen} onOpenChange={setShopDialogOpen} shop={shop} onSaved={setShop} />
-      <ListingFormDialog open={listingDialogOpen} onOpenChange={setListingDialogOpen} shopId={shop.id} listing={editingListing} onSaved={load} />
+      <ShopFormDialog open={shopDialogOpen} onOpenChange={setShopDialogOpen} shop={shop} onSaved={setShop} tipo={tipo} />
+      <ListingFormDialog open={listingDialogOpen} onOpenChange={setListingDialogOpen} shopId={shop.id} listing={editingListing} onSaved={load} shopTipo={tipo} />
 
       <AlertDialog open={!!deleteTarget} onOpenChange={(o) => !o && setDeleteTarget(null)}>
         <AlertDialogContent>

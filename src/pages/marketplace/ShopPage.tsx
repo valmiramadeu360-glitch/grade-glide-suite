@@ -6,7 +6,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ListingCard } from "@/components/marketplace/ListingCard";
-import { fetchListings, fetchMyFavoriteIds, sectionOf, sellerChatLink, toggleFavorite, type Listing, type Shop } from "@/lib/marketplace";
+import { mediaUrl, fetchListings, fetchMyFavoriteIds, sectionOf, sellerChatLink, toggleFavorite, type Listing, type Shop } from "@/lib/marketplace";
 
 export default function ShopPage() {
   const { id } = useParams<{ id: string }>();
@@ -24,7 +24,7 @@ export default function ShopPage() {
     (async () => {
       setLoading(true);
       const { data } = await supabase.from("shops").select("*").eq("id", id).maybeSingle();
-      setShop(data as Shop | null);
+      setShop(data as unknown as Shop | null);
       if (data) {
         const [items, cnt] = await Promise.all([
           fetchListings({ shopId: id }),
@@ -74,12 +74,12 @@ export default function ShopPage() {
 
       <div className="overflow-hidden rounded-3xl border border-border/40 bg-card">
         <div className="h-32 w-full bg-gradient-to-br from-primary/30 to-primary/5 sm:h-44">
-          {shop.banner_url && <img src={shop.banner_url} alt="" className="h-full w-full object-cover" />}
+          {shop.banner_url && <img src={mediaUrl(shop.banner_url) ?? undefined} alt="" className="h-full w-full object-cover" />}
         </div>
         <div className="space-y-3 p-4 pt-0">
           <div className="-mt-10 flex items-end justify-between gap-3">
             <div className="h-20 w-20 shrink-0 overflow-hidden rounded-2xl border-4 border-card bg-muted">
-              {shop.logo_url ? <img src={shop.logo_url} alt="" className="h-full w-full object-cover" /> : <Store className="m-5 h-8 w-8 text-muted-foreground" />}
+              {shop.logo_url ? <img src={mediaUrl(shop.logo_url) ?? undefined} alt="" className="h-full w-full object-cover" /> : <Store className="m-5 h-8 w-8 text-muted-foreground" />}
             </div>
             <div className="flex gap-2 pb-1">
               {isOwner ? (
