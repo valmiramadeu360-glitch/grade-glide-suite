@@ -9,7 +9,7 @@ import { Loader2, ImagePlus, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
-import { PRODUTO_CATEGORIAS, type Listing, type ListingPhoto } from "@/lib/marketplace";
+import { MEDIA_BUCKET, sectionOf, type Listing, type ListingPhoto, type ShopTipo } from "@/lib/marketplace";
 
 // A tabela "listings" e o bucket MEDIA_BUCKET ainda não estão no
 // types.ts gerado pelo Supabase — cast temporário até ele ser regenerado.
@@ -28,9 +28,13 @@ interface ListingFormDialogProps {
   /** Presente = editando; ausente = criando novo anúncio. */
   listing?: Listing | null;
   onSaved: () => void;
+  shopTipo?: ShopTipo;
 }
 
-export function ListingFormDialog({ open, onOpenChange, shopId, listing, onSaved }: ListingFormDialogProps) {
+export function ListingFormDialog({ open, onOpenChange, shopId, listing, onSaved, shopTipo = "produto" }: ListingFormDialogProps) {
+  const section = sectionOf(shopTipo);
+  const PRODUTO_CATEGORIAS = section.categories;
+  const isProduto = shopTipo === "produto";
   const { user } = useAuth();
   const { toast } = useToast();
 
@@ -66,6 +70,7 @@ export function ListingFormDialog({ open, onOpenChange, shopId, listing, onSaved
     } else {
       setExistingPhotos([]);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, listing]);
 
   const totalFotos = existingPhotos.length - removedPhotoIds.length + newFiles.length;
@@ -89,12 +94,12 @@ export function ListingFormDialog({ open, onOpenChange, shopId, listing, onSaved
     try {
       const payload = {
         shop_id: shopId,
-        tipo: "produto",
+        tipo: section.listingTipo,
         titulo: titulo.trim(),
         descricao: descricao.trim() || null,
         preco: preco.trim() ? Number(preco.replace(",", ".")) : null,
         categoria,
-        condicao,
+        condicao: isProduto ? condicao : null,
       };
 
       let listingId = listing?.id;
@@ -183,9 +188,9 @@ export function ListingFormDialog({ open, onOpenChange, shopId, listing, onSaved
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>Preço (R$)</Label>
-              <Input value={preco} onChange={(e) => setPreco(e.target.value)} inputMode="decimal" placeholder="Deixe vazio para \"a combinar\"" />
+              <Input value={preco} onChange={(e) => setPreco(e.target.value)} inputMode="decimal" placeholder="Vazio = a combinar" />
             </div>
-            <div className="space-y-1.5">
+            {isProduto && <div className="space-y-1.5">
               <Label>Condição</Label>
               <Select value={condicao} onValueChange={setCondicao}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
@@ -195,7 +200,7 @@ export function ListingFormDialog({ open, onOpenChange, shopId, listing, onSaved
                   <SelectItem value="seminovo">Seminovo</SelectItem>
                 </SelectContent>
               </Select>
-            </div>
+            </div>}
           </div>
 
           <div className="space-y-1.5">

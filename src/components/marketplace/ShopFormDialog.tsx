@@ -9,7 +9,7 @@ import { Loader2, Store } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
-import type { Shop } from "@/lib/marketplace";
+import { MEDIA_BUCKET, sectionOf, type Shop, type ShopTipo } from "@/lib/marketplace";
 
 // Tabela "shops" ainda não está no types.ts gerado — cast temporário.
 const db = supabase as any;
@@ -19,9 +19,10 @@ interface ShopFormDialogProps {
   onOpenChange: (open: boolean) => void;
   shop: Shop | null;
   onSaved: (shop: Shop) => void;
+  tipo?: ShopTipo;
 }
 
-export function ShopFormDialog({ open, onOpenChange, shop, onSaved }: ShopFormDialogProps) {
+export function ShopFormDialog({ open, onOpenChange, shop, onSaved, tipo = "produto" }: ShopFormDialogProps) {
   const { user } = useAuth();
   const { toast } = useToast();
 
@@ -53,7 +54,7 @@ export function ShopFormDialog({ open, onOpenChange, shop, onSaved }: ShopFormDi
         logoPath = path;
       }
 
-      const payload = { owner_user_id: user.id, tipo: "produto", nome: nome.trim(), bio: bio.trim() || null, logo_url: logoPath };
+      const payload = { owner_user_id: user.id, tipo: shop?.tipo ?? tipo, nome: nome.trim(), bio: bio.trim() || null, logo_url: logoPath };
 
       const { data, error } = shop
         ? await db.from("shops").update(payload).eq("id", shop.id).select("*").single()
@@ -74,7 +75,7 @@ export function ShopFormDialog({ open, onOpenChange, shop, onSaved }: ShopFormDi
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="rounded-[28px] sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>{shop ? "Editar loja" : "Criar minha loja"}</DialogTitle>
+          <DialogTitle>{shop ? "Editar loja" : `Criar loja de ${sectionOf(tipo).label.toLowerCase()}`}</DialogTitle>
           <DialogDescription>Visível para estudantes da sua universidade.</DialogDescription>
         </DialogHeader>
 
