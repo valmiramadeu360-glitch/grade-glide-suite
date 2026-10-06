@@ -44,7 +44,7 @@ export function ArticleEditor({ open, onOpenChange, journal, article, onSaved }:
     const pad = block && before && !before.endsWith("\n\n") ? (before.endsWith("\n") ? "\n" : "\n\n") : "";
     const next = before + pad + prefix + sel + suffix + (block ? "\n\n" : "") + content.slice(e);
     setContent(next);
-    requestAnimationFrame(() => { ta.focus(); const p = before.length + pad + prefix.length; ta.setSelectionRange(p, p + sel.length); });
+    requestAnimationFrame(() => { ta.focus(); const p = before.length + pad.length + prefix.length; ta.setSelectionRange(p, p + sel.length); });
   }
 
   async function upload(file: File, asCover: boolean) {
