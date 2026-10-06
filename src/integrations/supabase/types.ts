@@ -1352,52 +1352,117 @@ export type Database = {
           },
         ]
       }
+      news_channel_members: {
+        Row: {
+          channel_id: string
+          created_at: string
+          role: string
+          user_id: string
+        }
+        Insert: {
+          channel_id: string
+          created_at?: string
+          role?: string
+          user_id: string
+        }
+        Update: {
+          channel_id?: string
+          created_at?: string
+          role?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "news_channel_members_channel_id_fkey"
+            columns: ["channel_id"]
+            isOneToOne: false
+            referencedRelation: "news_channels"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       news_channels: {
         Row: {
+          accent_color: string | null
           banner_url: string | null
           campus_id: string | null
+          category: string | null
           course_id: string | null
           created_at: string
           created_by: string | null
           description: string | null
+          editorial_line: string | null
+          handle: string | null
           icon: string | null
           id: string
           is_active: boolean
+          logo_url: string | null
           member_count: number
           name: string
+          purpose: string | null
+          review_note: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
           scope: Database["public"]["Enums"]["news_channel_scope"]
+          status: string
+          team_note: string | null
+          terms_accepted_at: string | null
           university_id: string | null
           updated_at: string
         }
         Insert: {
+          accent_color?: string | null
           banner_url?: string | null
           campus_id?: string | null
+          category?: string | null
           course_id?: string | null
           created_at?: string
           created_by?: string | null
           description?: string | null
+          editorial_line?: string | null
+          handle?: string | null
           icon?: string | null
           id?: string
           is_active?: boolean
+          logo_url?: string | null
           member_count?: number
           name: string
+          purpose?: string | null
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
           scope?: Database["public"]["Enums"]["news_channel_scope"]
+          status?: string
+          team_note?: string | null
+          terms_accepted_at?: string | null
           university_id?: string | null
           updated_at?: string
         }
         Update: {
+          accent_color?: string | null
           banner_url?: string | null
           campus_id?: string | null
+          category?: string | null
           course_id?: string | null
           created_at?: string
           created_by?: string | null
           description?: string | null
+          editorial_line?: string | null
+          handle?: string | null
           icon?: string | null
           id?: string
           is_active?: boolean
+          logo_url?: string | null
           member_count?: number
           name?: string
+          purpose?: string | null
+          review_note?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
           scope?: Database["public"]["Enums"]["news_channel_scope"]
+          status?: string
+          team_note?: string | null
+          terms_accepted_at?: string | null
           university_id?: string | null
           updated_at?: string
         }
@@ -1425,43 +1490,84 @@ export type Database = {
           },
         ]
       }
+      news_post_likes: {
+        Row: {
+          created_at: string
+          post_id: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          post_id: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          post_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "news_post_likes_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "news_posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       news_posts: {
         Row: {
           author_id: string
+          category: string | null
           channel_id: string
           content: string
           cover_url: string | null
           created_at: string
           id: string
+          like_count: number
           link_url: string | null
           pinned: boolean
           published_at: string
+          read_minutes: number
+          status: string
+          subtitle: string | null
           title: string
           updated_at: string
         }
         Insert: {
           author_id: string
+          category?: string | null
           channel_id: string
           content: string
           cover_url?: string | null
           created_at?: string
           id?: string
+          like_count?: number
           link_url?: string | null
           pinned?: boolean
           published_at?: string
+          read_minutes?: number
+          status?: string
+          subtitle?: string | null
           title: string
           updated_at?: string
         }
         Update: {
           author_id?: string
+          category?: string | null
           channel_id?: string
           content?: string
           cover_url?: string | null
           created_at?: string
           id?: string
+          like_count?: number
           link_url?: string | null
           pinned?: boolean
           published_at?: string
+          read_minutes?: number
+          status?: string
+          subtitle?: string | null
           title?: string
           updated_at?: string
         }
@@ -2933,6 +3039,10 @@ export type Database = {
         Args: { _receiver: string; _sender: string }
         Returns: boolean
       }
+      can_publish_news: {
+        Args: { _channel: string; _user: string }
+        Returns: boolean
+      }
       can_view_user_posts: {
         Args: { _author: string; _viewer: string }
         Returns: boolean
@@ -3002,6 +3112,10 @@ export type Database = {
       }
       is_following: {
         Args: { _follower: string; _following: string }
+        Returns: boolean
+      }
+      is_news_channel_editor: {
+        Args: { _channel: string; _user: string }
         Returns: boolean
       }
       is_user_banned: { Args: { _user_id: string }; Returns: boolean }
