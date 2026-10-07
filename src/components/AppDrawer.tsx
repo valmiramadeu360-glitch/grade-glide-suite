@@ -68,7 +68,7 @@ export function AppDrawer({ open, onOpenChange }: AppDrawerProps) {
     { label: "Minha loja", hint: "Anúncios que você publicou", icon: Store, to: "/my-shop" },
     { label: "Meus grupos e comunidades", icon: Users, to: "/communities" },
     ...(canManageChannels
-      ? [{ label: "Canais de notícias", hint: "Os que você administra", icon: Newspaper, to: "/connect?tab=news" }]
+      ? [{ label: "Minha Redação", hint: "O jornal que você administra", icon: Newspaper, to: "/news" }]
       : []),
     { label: "Itens salvos", hint: "Publicações guardadas", icon: Bookmark, to: "/connect?saved=1" },
   ];
