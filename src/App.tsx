@@ -31,6 +31,8 @@ import CampusTransport from "./pages/campus/Transport";
 import CampusScholarships from "./pages/campus/Scholarships";
 import NotFound from "./pages/NotFound";
 import Marketplace from "./pages/marketplace/Marketplace";
+import News from "./pages/News";
+import NewsroomView from "./pages/NewsroomView";
 import ListingDetail from "./pages/marketplace/ListingDetail";
 import ShopPage from "./pages/marketplace/ShopPage";
 import MyShop from "./pages/marketplace/MyShop";
@@ -214,7 +216,8 @@ const App = () => (
                   <Route path="/connect" element={<ProtectedRoute><Connect /></ProtectedRoute>} />
                   <Route path="/communities" element={<ProtectedRoute><Communities /></ProtectedRoute>} />
                   <Route path="/community/:id" element={<ProtectedRoute><Community /></ProtectedRoute>} />
-                  <Route path="/news" element={<Navigate to="/connect?tab=news" replace />} />
+                  <Route path="/news" element={<ProtectedRoute><News /></ProtectedRoute>} />
+                  <Route path="/newsroom/:id" element={<ProtectedRoute><NewsroomView /></ProtectedRoute>} />
                   <Route path="/messages" element={<ProtectedRoute><Messages /></ProtectedRoute>} />
 
                   <Route path="/shop/:id" element={<ProtectedRoute><ShopPage /></ProtectedRoute>} />
