@@ -138,3 +138,72 @@ export interface Article {
 }
 
 export const ARTICLE_SELECT = "*, news_channels(id, name, handle, logo_url, scope)";
+
+export interface ChannelMember {
+  channel_id: string;
+  user_id: string;
+  role: "editor_in_chief" | "writer";
+  created_at: string;
+  profile?: { full_name: string | null; avatar_url: string | null; course?: string | null } | null;
+}
+
+/** Jornal(is) em que o usuário é dono ou faz parte da equipe (qualquer status). */
+export async function fetchMyJournals(userId: string): Promise<Journal[]> {
+  const { data: memberships } = await supabase
+    .from("news_channel_members" as any)
+    .select("channel_id")
+    .eq("user_id", userId);
+  const ids = [...new Set((memberships ?? []).map((m: any) => m.channel_id))];
+  if (ids.length === 0) return [];
+  const { data } = await supabase.from("news_channels").select("*").in("id", ids).order("created_at", { ascending: false });
+  return (data ?? []) as any;
+}
+
+export async function fetchJournalTeam(channelId: string): Promise<ChannelMember[]> {
+  const { data: members } = await supabase
+    .from("news_channel_members" as any)
+    .select("channel_id, user_id, role, created_at")
+    .eq("channel_id", channelId);
+  const rows = (members ?? []) as ChannelMember[];
+  if (rows.length === 0) return [];
+  const { data: profiles } = await supabase
+    .from("public_profiles" as any)
+    .select("user_id, display_name, avatar_url")
+    .in("user_id", rows.map((r) => r.user_id));
+  const map = new Map((profiles ?? []).map((p: any) => [p.user_id, p]));
+  return rows.map((r) => ({
+    ...r,
+    profile: map.has(r.user_id) ? { full_name: map.get(r.user_id).display_name, avatar_url: map.get(r.user_id).avatar_url } : null,
+  }));
+}
+
+export async function inviteWriter(channelId: string, targetUserId: string) {
+  const { error } = await supabase.rpc("invite_news_writer" as any, { _channel_id: channelId, _target_user_id: targetUserId });
+  if (error) throw error;
+}
+
+export async function reviewJournal(channelId: string, status: "approved" | "rejected" | "suspended", note?: string) {
+  const { error } = await supabase.rpc("review_journal" as any, { _channel_id: channelId, _status: status, _note: note || null });
+  if (error) throw error;
+}
+
+export async function fetchPendingJournals(): Promise<Journal[]> {
+  const { data } = await supabase.from("news_channels").select("*").eq("status", "pending").order("created_at", { ascending: true });
+  return (data ?? []) as any;
+}
+
+export async function toggleArticleLike(postId: string, userId: string, liked: boolean) {
+  if (liked) {
+    await supabase.from("news_post_likes" as any).delete().eq("post_id", postId).eq("user_id", userId);
+  } else {
+    await supabase.from("news_post_likes" as any).insert({ post_id: postId, user_id: userId });
+  }
+}
+
+export async function toggleJournalFollow(channelId: string, userId: string, following: boolean) {
+  if (following) {
+    await supabase.from("news_subscriptions").delete().eq("channel_id", channelId).eq("user_id", userId);
+  } else {
+    await supabase.from("news_subscriptions").insert({ channel_id: channelId, user_id: userId });
+  }
+}
