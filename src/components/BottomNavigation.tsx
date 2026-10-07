@@ -1,4 +1,4 @@
-import { useNavigate, useLocation, useSearchParams } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Home, ShoppingBag, Newspaper, LayoutGrid, Users, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -10,7 +10,7 @@ type TabId = "feed" | "market" | "news" | "utilities" | "communities";
 const TABS: { id: TabId; label: string; icon: LucideIcon; to: string }[] = [
   { id: "feed", label: "Feed", icon: Home, to: "/connect" },
   { id: "market", label: "Mercado", icon: ShoppingBag, to: "/marketplace" },
-  { id: "news", label: "Notícias", icon: Newspaper, to: "/connect?tab=news" },
+  { id: "news", label: "Notícias", icon: Newspaper, to: "/news" },
   { id: "utilities", label: "Utilitários", icon: LayoutGrid, to: "/campus" },
   { id: "communities", label: "Comunidades", icon: Users, to: "/communities" },
 ];
@@ -18,16 +18,12 @@ const TABS: { id: TabId; label: string; icon: LucideIcon; to: string }[] = [
 /** Descobre qual das 5 abas está ativa. Telas fora das 5 (perfil, disciplinas…) não marcam nenhuma. */
 function useActiveTab(): TabId | null {
   const { pathname } = useLocation();
-  const [params] = useSearchParams();
 
   if (pathname.startsWith("/campus")) return "utilities";
   if (pathname.startsWith("/communit") || pathname.startsWith("/messages")) return "communities";
   if (pathname.startsWith("/marketplace") || pathname.startsWith("/shop") || pathname.startsWith("/listing") || pathname.startsWith("/my-shop")) return "market";
-  if (pathname === "/connect" || pathname === "/") {
-    const tab = params.get("tab");
-    if (tab === "news") return "news";
-    return "feed";
-  }
+  if (pathname.startsWith("/news") || pathname.startsWith("/newsroom")) return "news";
+  if (pathname === "/connect" || pathname === "/") return "feed";
   return null;
 }
 
