@@ -18,7 +18,7 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 
 import {
-  ShieldCheck, Users, MessageSquare, AlertTriangle, Loader2, ArrowLeft, CheckCircle2,
+  ShieldCheck, Users, MessageSquare, AlertTriangle, Loader2, ArrowLeft, CheckCircle2, Newspaper, XCircle,
   Trash2, Ban, Megaphone, Send, Search, Sparkles, Plus, Power, X, Crown, LayoutDashboard,
   MapPin, ImagePlus, Building2, BadgeCheck, GraduationCap, Briefcase, FileText, UtensilsCrossed,
   FlaskConical, ClipboardList, Archive, ArchiveRestore, UserMinus, ChevronDown, ChevronRight, Flag, Activity,
@@ -56,6 +56,10 @@ export default function AdminDashboard() {
   const [searchUser, setSearchUser] = useState("");
   
   const [feedbacks, setFeedbacks] = useState<any[]>([]);
+  const [journals, setJournals] = useState<any[]>([]);
+  const [journalFilter, setJournalFilter] = useState<"pending" | "approved" | "all">("pending");
+  const [reviewingJournalId, setReviewingJournalId] = useState<string | null>(null);
+  const [reviewNote, setReviewNote] = useState("");
   const [reports, setReports] = useState<any[]>([]);
   const [contentReports, setContentReports] = useState<any[]>([]);
   
@@ -175,8 +179,9 @@ export default function AdminDashboard() {
     if (activeTab === "map" && campuses.length === 0) loadCampuses();
     if (activeTab === "ru" && ruRestaurants.length === 0) loadRuRestaurants();
     if (activeTab === "announcements" && announcements.length === 0) loadAnnouncements();
+    if (activeTab === "journals") loadJournals();
 
-  }, [activeTab, searchUser, badgeSearch, initialLoading]);
+  }, [activeTab, searchUser, badgeSearch, initialLoading, journalFilter]);
 
   // FUNÇÕES DE LAZY LOAD SERVER-SIDE
   async function loadUsersAndRoles(query: string) {
@@ -261,6 +266,27 @@ export default function AdminDashboard() {
     const { data } = await supabase.from("feedbacks").select("*").order("created_at", { ascending: false });
     setFeedbacks(data || []);
     setLoadingTab(false);
+  }
+
+  async function loadJournals() {
+    setLoadingTab(true);
+    let query = (supabase as any).from("news_channels").select("*").order("created_at", { ascending: false });
+    if (journalFilter !== "all") query = query.eq("status", journalFilter);
+    const { data } = await query;
+    setJournals(data || []);
+    setLoadingTab(false);
+  }
+
+  async function reviewJournalAction(id: string, status: "approved" | "rejected" | "suspended") {
+    const { error } = await (supabase as any).rpc("review_journal", { _channel_id: id, _status: status, _note: reviewNote.trim() || null });
+    if (error) {
+      toast({ title: "Não foi possível revisar", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: status === "approved" ? "Jornal aprovado" : status === "rejected" ? "Jornal recusado" : "Jornal suspenso" });
+    setReviewingJournalId(null);
+    setReviewNote("");
+    loadJournals();
   }
 
   async function loadCommunities() {
@@ -753,6 +779,7 @@ export default function AdminDashboard() {
               </TabsTrigger>
               <TabsTrigger value="audit" className="justify-start rounded-2xl font-bold text-sm h-11 px-4 gap-3 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground bg-muted/30 text-muted-foreground transition-all shrink-0 snap-center"><ClipboardList className="h-4 w-4" /> Auditoria</TabsTrigger>
               <TabsTrigger value="feedbacks" className="justify-start rounded-2xl font-bold text-sm h-11 px-4 gap-3 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground bg-muted/30 text-muted-foreground transition-all shrink-0 snap-center"><MessageSquare className="h-4 w-4" /> Feedbacks</TabsTrigger>
+              <TabsTrigger value="journals" className="justify-start rounded-2xl font-bold text-sm h-11 px-4 gap-3 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground bg-muted/30 text-muted-foreground transition-all shrink-0 snap-center"><Newspaper className="h-4 w-4" /> Jornais</TabsTrigger>
             </TabsList>
           </div>
 
@@ -1346,6 +1373,83 @@ export default function AdminDashboard() {
                         <p className="text-sm font-medium text-foreground leading-relaxed whitespace-pre-wrap">{f.message}</p>
                       </div>
                       <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mt-4 text-right">{new Date(f.created_at).toLocaleString("pt-BR")}</p>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+
+          {/* JORNAIS: FUNDAÇÃO DE REDAÇÕES (aprovar/recusar/suspender) */}
+          <TabsContent value="journals" className="space-y-6 mt-0 animate-in fade-in">
+            <div className="flex items-center gap-3 border-b border-border/40 pb-4">
+              <div className="h-10 w-10 bg-primary/10 rounded-xl flex items-center justify-center"><Newspaper className="h-5 w-5 text-primary" /></div>
+              <div><h3 className="font-black text-lg">Fundação de Jornais</h3><p className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold">Solicitações de redação estudantil para aprovar ou recusar</p></div>
+            </div>
+
+            <div className="flex gap-2 bg-muted/20 p-1.5 rounded-[20px] w-fit border border-border/30">
+              {([
+                { id: "pending", label: "Em análise" },
+                { id: "approved", label: "Aprovados" },
+                { id: "all", label: "Todos" },
+              ] as const).map((f) => (
+                <button key={f.id} type="button" onClick={() => setJournalFilter(f.id)} className={cn("px-4 py-2 rounded-[14px] text-xs font-black uppercase tracking-wider transition-all", journalFilter === f.id ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}>
+                  {f.label}
+                </button>
+              ))}
+            </div>
+
+            {loadingTab ? (
+              <div className="flex justify-center py-16"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
+            ) : journals.length === 0 ? (
+              <EmptyState icon={<Newspaper className="h-10 w-10" />} text="Nenhuma solicitação por aqui." />
+            ) : (
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                {journals.map((j) => (
+                  <Card key={j.id} className="rounded-[24px] border border-border/30 bg-background shadow-none">
+                    <CardContent className="p-5 space-y-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="h-12 w-12 rounded-full bg-muted/40 flex items-center justify-center shrink-0 overflow-hidden">
+                            {j.logo_url ? <img src={j.logo_url} alt="" className="h-full w-full object-cover" /> : <Newspaper className="h-5 w-5 text-muted-foreground" />}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-black text-sm truncate">{j.name}</p>
+                            <p className="text-[11px] text-muted-foreground truncate">@{j.handle} · {j.category || "Sem categoria"}</p>
+                          </div>
+                        </div>
+                        <Badge variant="secondary" className={cn("text-[10px] font-black uppercase tracking-widest px-3 py-1 border-0 shrink-0",
+                          j.status === "approved" ? "bg-emerald-500/10 text-emerald-600" :
+                          j.status === "pending" ? "bg-amber-500/10 text-amber-600" :
+                          j.status === "rejected" ? "bg-destructive/10 text-destructive" : "bg-muted text-muted-foreground")}>
+                          {j.status === "approved" ? "Aprovado" : j.status === "pending" ? "Em análise" : j.status === "rejected" ? "Recusado" : "Suspenso"}
+                        </Badge>
+                      </div>
+
+                      {j.editorial_line && <p className="text-xs text-muted-foreground leading-relaxed bg-muted/10 p-3 rounded-[14px] border border-border/30">{j.editorial_line}</p>}
+                      {j.purpose && <p className="text-xs font-medium leading-relaxed"><span className="font-black">Intuito: </span>{j.purpose}</p>}
+                      {j.team_note && <p className="text-xs font-medium leading-relaxed"><span className="font-black">Equipe: </span>{j.team_note}</p>}
+                      <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">{new Date(j.created_at).toLocaleString("pt-BR")}</p>
+
+                      {reviewingJournalId === j.id ? (
+                        <div className="space-y-2 pt-2 border-t border-border/30">
+                          <Textarea placeholder="Motivo (aparece pro fundador do jornal)" value={reviewNote} onChange={(e) => setReviewNote(e.target.value)} rows={2} className="rounded-[14px] text-xs" />
+                          <div className="flex gap-2">
+                            {j.status !== "approved" && (
+                              <Button size="sm" onClick={() => reviewJournalAction(j.id, "approved")} className="h-9 rounded-xl text-xs font-black gap-1.5 bg-emerald-600 hover:bg-emerald-700"><BadgeCheck className="h-3.5 w-3.5" /> Aprovar</Button>
+                            )}
+                            {j.status === "pending" && (
+                              <Button size="sm" variant="outline" onClick={() => reviewJournalAction(j.id, "rejected")} className="h-9 rounded-xl text-xs font-black gap-1.5 text-destructive border-destructive/30"><XCircle className="h-3.5 w-3.5" /> Recusar</Button>
+                            )}
+                            {j.status === "approved" && (
+                              <Button size="sm" variant="outline" onClick={() => reviewJournalAction(j.id, "suspended")} className="h-9 rounded-xl text-xs font-black gap-1.5 text-destructive border-destructive/30"><Ban className="h-3.5 w-3.5" /> Suspender</Button>
+                            )}
+                            <Button size="sm" variant="ghost" onClick={() => { setReviewingJournalId(null); setReviewNote(""); }} className="h-9 rounded-xl text-xs font-bold">Cancelar</Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <Button size="sm" variant="outline" onClick={() => setReviewingJournalId(j.id)} className="h-9 rounded-xl text-xs font-black w-full">Revisar</Button>
+                      )}
                     </CardContent>
                   </Card>
                 ))}
