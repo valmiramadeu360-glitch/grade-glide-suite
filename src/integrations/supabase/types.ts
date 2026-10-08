@@ -3039,10 +3039,9 @@ export type Database = {
         Args: { _receiver: string; _sender: string }
         Returns: boolean
       }
-      can_publish_news: {
-        Args: { _channel: string; _user: string }
-        Returns: boolean
-      }
+      can_publish_news:
+        | { Args: { _channel: string; _user: string }; Returns: boolean }
+        | { Args: { _channel_id: string }; Returns: boolean }
       can_view_user_posts: {
         Args: { _author: string; _viewer: string }
         Returns: boolean
@@ -3105,6 +3104,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      invite_news_writer: {
+        Args: { _channel_id: string; _target_user_id: string }
+        Returns: undefined
+      }
       is_admin: { Args: never; Returns: boolean }
       is_community_member: {
         Args: { _community_id: string; _user_id: string }
@@ -3114,10 +3117,9 @@ export type Database = {
         Args: { _follower: string; _following: string }
         Returns: boolean
       }
-      is_news_channel_editor: {
-        Args: { _channel: string; _user: string }
-        Returns: boolean
-      }
+      is_news_channel_editor:
+        | { Args: { _channel: string; _user: string }; Returns: boolean }
+        | { Args: { _channel_id: string }; Returns: boolean }
       is_user_banned: { Args: { _user_id: string }; Returns: boolean }
       my_university_id: { Args: never; Returns: string }
       owns_discipline_code: {
@@ -3131,6 +3133,10 @@ export type Database = {
       restaurant_in_my_university: {
         Args: { _restaurant: string }
         Returns: boolean
+      }
+      review_journal: {
+        Args: { _channel_id: string; _note?: string; _status: string }
+        Returns: undefined
       }
       route_in_my_university: { Args: { _route: string }; Returns: boolean }
       ru_distance_meters: {
