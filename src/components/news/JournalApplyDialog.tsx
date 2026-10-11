@@ -37,8 +37,15 @@ export function JournalApplyDialog({ open, onOpenChange, onCreated }: Props) {
   const step2Ok = editorial.trim().length >= 20 && purpose.trim().length >= 20 && team.trim().length >= 3;
 
   function reset() {
-    setStep(1); setName(""); setHandle(""); setDescription(""); setEditorial("");
-    setPurpose(""); setTeam(""); setLogo(null); setAccepted(false);
+    setStep(1);
+    setName("");
+    setHandle("");
+    setDescription("");
+    setEditorial("");
+    setPurpose("");
+    setTeam("");
+    setLogo(null);
+    setAccepted(false);
   }
 
   async function submit() {
@@ -46,22 +53,36 @@ export function JournalApplyDialog({ open, onOpenChange, onCreated }: Props) {
     setSaving(true);
     try {
       const logo_url = logo ? await uploadNewsImage(user.id, logo) : null;
-      const { error } = await supabase.from("news_channels").insert({
-        name: name.trim(), handle, category, description: description.trim(),
-        editorial_line: editorial.trim(), purpose: purpose.trim(), team_note: team.trim(),
-        logo_url, terms_accepted_at: new Date().toISOString(), scope: "university",
+      const { error } = await (supabase as any).from("news_channels").insert({
+        name: name.trim(),
+        handle: handle.trim(),
+        category,
+        description: description.trim(),
+        editorial_line: editorial.trim(),
+        purpose: purpose.trim(),
+        team_note: team.trim(),
+        logo_url,
+        terms_accepted_at: new Date().toISOString(),
+        scope: "university",
       });
       if (error) throw error;
-      toast({ title: "Solicitação enviada!", description: "A equipe do EduConect vai analisar sua redação." });
-      reset(); onOpenChange(false); onCreated();
+      toast({
+        title: "Solicitação enviada com sucesso!",
+        description: "A equipe administrativa do EduConect irá analisar sua redação.",
+      });
+      reset();
+      onOpenChange(false);
+      onCreated();
     } catch (e: any) {
       const msg = String(e?.message ?? "");
       toast({
-        title: "Não foi possível enviar",
-        description: msg.includes("handle") || msg.includes("duplicate") ? "Esse @ já está em uso." : msg,
+        title: "Não foi possível enviar a solicitação",
+        description: msg.includes("handle") || msg.includes("duplicate") ? "Esse endereço @ já está em uso por outro jornal." : msg,
         variant: "destructive",
       });
-    } finally { setSaving(false); }
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -91,40 +112,75 @@ export function JournalApplyDialog({ open, onOpenChange, onCreated }: Props) {
           <div className="space-y-4">
             <label className="flex items-center gap-4 cursor-pointer">
               <div className="h-20 w-20 rounded-2xl bg-muted flex items-center justify-center overflow-hidden border border-dashed">
-                {logo ? <img src={URL.createObjectURL(logo)} className="h-full w-full object-cover" alt="" /> : <ImagePlus className="h-6 w-6 text-muted-foreground" />}
+                {logo ? (
+                  <img src={URL.createObjectURL(logo)} className="h-full w-full object-cover" alt="" />
+                ) : (
+                  <ImagePlus className="h-6 w-6 text-muted-foreground" />
+                )}
               </div>
-              <div className="text-sm"><p className="font-bold">Logotipo</p><p className="text-muted-foreground text-xs">Opcional, quadrado</p></div>
+              <div className="text-sm">
+                <p className="font-bold">Logotipo do Jornal</p>
+                <p className="text-muted-foreground text-xs">Opcional, formato quadrado</p>
+              </div>
               <input type="file" accept="image/*" className="hidden" onChange={(e) => setLogo(e.target.files?.[0] ?? null)} />
             </label>
+
             <div className="space-y-1.5">
               <Label>Nome do jornal</Label>
-              <Input value={name} maxLength={60} placeholder="Ex.: Redação UFAL" onChange={(e) => {
-                setName(e.target.value);
-                if (!handle || handle === normalizeHandle(name)) setHandle(normalizeHandle(e.target.value));
-              }} />
+              <Input
+                value={name}
+                maxLength={60}
+                placeholder="Ex.: Redação UFAL, Os Economistas"
+                onChange={(e) => {
+                  setName(e.target.value);
+                  if (!handle || handle === normalizeHandle(name)) {
+                    setHandle(normalizeHandle(e.target.value));
+                  }
+                }}
+              />
             </div>
+
             <div className="space-y-1.5">
               <Label>Endereço (@)</Label>
               <div className="flex items-center rounded-md border px-3 bg-background">
-                <span className="text-muted-foreground text-sm">@</span>
-                <input className="flex-1 h-10 bg-transparent outline-none text-sm pl-1" value={handle} onChange={(e) => setHandle(normalizeHandle(e.target.value))} placeholder="redacao.ufal" />
+                <span className="text-muted-foreground text-sm font-bold">@</span>
+                <input
+                  className="flex-1 h-10 bg-transparent outline-none text-sm pl-1 font-medium"
+                  value={handle}
+                  onChange={(e) => setHandle(normalizeHandle(e.target.value))}
+                  placeholder="redacao.ufal"
+                />
               </div>
             </div>
+
             <div className="space-y-1.5">
               <Label>Tipo de veículo</Label>
               <div className="flex flex-wrap gap-2">
                 {JOURNAL_CATEGORIES.map((c) => (
-                  <button key={c.value} type="button" onClick={() => setCategory(c.value)}
-                    className={cn("px-3 py-1.5 rounded-full border text-xs font-bold transition",
-                      category === c.value ? "bg-primary text-primary-foreground border-primary" : "bg-card hover:border-primary/40")}>
+                  <button
+                    key={c.value}
+                    type="button"
+                    onClick={() => setCategory(c.value)}
+                    className={cn(
+                      "px-3 py-1.5 rounded-full border text-xs font-bold transition",
+                      category === c.value ? "bg-primary text-primary-foreground border-primary" : "bg-card hover:border-primary/40"
+                    )}
+                  >
                     {c.label}
                   </button>
                 ))}
               </div>
             </div>
+
             <div className="space-y-1.5">
               <Label>Descrição curta (bio)</Label>
-              <Textarea value={description} maxLength={200} rows={2} placeholder="O jornal dos estudantes de Economia da UFAL." onChange={(e) => setDescription(e.target.value)} />
+              <Textarea
+                value={description}
+                maxLength={200}
+                rows={2}
+                placeholder="O jornal independente dos estudantes da UFAL."
+                onChange={(e) => setDescription(e.target.value)}
+              />
             </div>
           </div>
         )}
@@ -133,16 +189,33 @@ export function JournalApplyDialog({ open, onOpenChange, onCreated }: Props) {
           <div className="space-y-4">
             <div className="space-y-1.5">
               <Label>O que o jornal vai publicar?</Label>
-              <Textarea rows={3} value={editorial} onChange={(e) => setEditorial(e.target.value)} placeholder="Notícias do curso, entrevistas com professores, análises de conjuntura econômica..." />
+              <Textarea
+                rows={3}
+                value={editorial}
+                onChange={(e) => setEditorial(e.target.value)}
+                placeholder="Notícias do campus, entrevistas com professores, análises e coberturas de eventos acadêmicos..."
+              />
             </div>
+
             <div className="space-y-1.5">
               <Label>Qual o intuito do jornal?</Label>
-              <Textarea rows={3} value={purpose} onChange={(e) => setPurpose(e.target.value)} placeholder="Aproximar os estudantes das pesquisas do curso e divulgar oportunidades..." />
+              <Textarea
+                rows={3}
+                value={purpose}
+                onChange={(e) => setPurpose(e.target.value)}
+                placeholder="Aproximar os estudantes das pesquisas universitárias e manter a comunidade informada..."
+              />
             </div>
+
             <div className="space-y-1.5">
               <Label>Quem são os integrantes?</Label>
-              <Textarea rows={3} value={team} onChange={(e) => setTeam(e.target.value)} placeholder="Ana Lima (editora-chefe, 5º período), Pedro Souza (repórter)..." />
-              <p className="text-[11px] text-muted-foreground">Depois da aprovação você convida os colegas pelo app.</p>
+              <Textarea
+                rows={3}
+                value={team}
+                onChange={(e) => setTeam(e.target.value)}
+                placeholder="Ana Lima (editora-chefe, 5º período), Pedro Souza (repórter)..."
+              />
+              <p className="text-[11px] text-muted-foreground">Após a aprovação você poderá convidar outros estudantes pelo aplicativo.</p>
             </div>
           </div>
         )}
@@ -151,23 +224,45 @@ export function JournalApplyDialog({ open, onOpenChange, onCreated }: Props) {
           <div className="space-y-4">
             <div className="rounded-2xl bg-muted/50 p-4 space-y-2.5">
               {EDITORIAL_TERMS.map((t) => (
-                <div key={t} className="flex gap-2 text-sm"><ShieldCheck className="h-4 w-4 text-primary shrink-0 mt-0.5" /><span>{t}</span></div>
+                <div key={t} className="flex gap-2 text-sm leading-relaxed">
+                  <ShieldCheck className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                  <span>{t}</span>
+                </div>
               ))}
             </div>
-            <label className="flex items-start gap-3 cursor-pointer">
+
+            <label className="flex items-start gap-3 cursor-pointer select-none">
               <Checkbox checked={accepted} onCheckedChange={(v) => setAccepted(!!v)} className="mt-0.5" />
-              <span className="text-sm font-semibold">Li e aceito o Termo Editorial do EduConect, e entendo que o perfil pode ser derrubado em caso de descumprimento.</span>
+              <span className="text-sm font-semibold leading-snug">
+                Li e aceito o Termo Editorial do EduConect, e entendo que o perfil pode ser derrubado em caso de descumprimento.
+              </span>
             </label>
           </div>
         )}
 
         <div className="flex gap-2 pt-2">
-          {step > 1 && <Button variant="outline" className="rounded-full" onClick={() => setStep(step - 1)}>Voltar</Button>}
+          {step > 1 && (
+            <Button variant="outline" className="rounded-full" onClick={() => setStep(step - 1)}>
+              Voltar
+            </Button>
+          )}
+
           {step < 3 ? (
-            <Button className="flex-1 rounded-full font-bold" disabled={step === 1 ? !step1Ok : !step2Ok} onClick={() => setStep(step + 1)}>Continuar</Button>
+            <Button
+              className="flex-1 rounded-full font-bold"
+              disabled={step === 1 ? !step1Ok : !step2Ok}
+              onClick={() => setStep(step + 1)}
+            >
+              Continuar
+            </Button>
           ) : (
-            <Button className="flex-1 rounded-full font-bold" disabled={!accepted || saving} onClick={submit}>
-              {saving && <Loader2 className="h-4 w-4 animate-spin mr-2" />} Enviar para aprovação
+            <Button
+              className="flex-1 rounded-full font-bold"
+              disabled={!accepted || saving}
+              onClick={submit}
+            >
+              {saving && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+              Enviar para aprovação
             </Button>
           )}
         </div>
