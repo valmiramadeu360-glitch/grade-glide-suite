@@ -3120,6 +3120,10 @@ export type Database = {
       is_news_channel_editor:
         | { Args: { _channel: string; _user: string }; Returns: boolean }
         | { Args: { _channel_id: string }; Returns: boolean }
+      is_news_channel_member: {
+        Args: { _channel_id: string; _user_id: string }
+        Returns: boolean
+      }
       is_user_banned: { Args: { _user_id: string }; Returns: boolean }
       my_university_id: { Args: never; Returns: string }
       owns_discipline_code: {
