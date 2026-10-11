@@ -158,49 +158,51 @@ export interface ChannelMember {
   profile?: { full_name: string | null; avatar_url: string | null; course?: string | null } | null;
 }
 
-/** Jornal(is) em que o usuário é dono ou faz parte da equipe (qualquer status). */
+/** Jornal(is) em que o usuário é fundador ou faz parte da equipe (qualquer status). */
 export async function fetchMyJournals(userId: string): Promise<Journal[]> {
-  const { data: memberships } = await supabase
-    .from("news_channel_members" as any)
+  const { data: memberships } = await (supabase as any)
+    .from("news_channel_members")
     .select("channel_id")
     .eq("user_id", userId);
-  const ids = [...new Set(((memberships as any[]) ?? []).map((m: any) => m.channel_id))];
-  if (ids.length === 0) return [];
-  const { data } = await supabase
-    .from("news_channels")
-    .select("*")
-    .in("id", ids)
-    .order("created_at", { ascending: false });
-  return (data ?? []) as any;
+
+  const memberChannelIds = (((memberships as any[]) ?? []).map((m: any) => m.channel_id));
+
+  // Busca jornais onde é membro OU onde é o criador
+  let query = (supabase as any).from("news_channels").select("*");
+  if (memberChannelIds.length > 0) {
+    query = query.or(`id.in.(${memberChannelIds.join(",")}),created_by.eq.${userId}`);
+  } else {
+    query = query.eq("created_by", userId);
+  }
+
+  const { data } = await query.order("created_at", { ascending: false });
+  return (data ?? []) as Journal[];
 }
 
 export async function fetchJournalTeam(channelId: string): Promise<ChannelMember[]> {
-  const { data: members } = await supabase
-    .from("news_channel_members" as any)
+  const { data: members } = await (supabase as any)
+    .from("news_channel_members")
     .select("channel_id, user_id, role, created_at")
     .eq("channel_id", channelId);
+
   const rows = ((members as unknown) ?? []) as ChannelMember[];
   if (rows.length === 0) return [];
 
+  const userIds = rows.map((r) => r.user_id);
   const { data: profiles } = await supabase
-    .from("public_profiles" as any)
-    .select("user_id, display_name, avatar_url")
-    .in("user_id", rows.map((r) => r.user_id));
+    .from("profiles")
+    .select("user_id, full_name, avatar_url, course")
+    .in("user_id", userIds);
 
   const map = new Map(((profiles as any[]) ?? []).map((p: any) => [p.user_id, p]));
   return rows.map((r) => ({
     ...r,
-    profile: map.has(r.user_id)
-      ? {
-          full_name: map.get(r.user_id).display_name,
-          avatar_url: map.get(r.user_id).avatar_url,
-        }
-      : null,
+    profile: map.get(r.user_id) || null,
   }));
 }
 
 export async function inviteWriter(channelId: string, targetUserId: string) {
-  const { error } = await supabase.rpc("invite_news_writer" as any, {
+  const { error } = await (supabase as any).rpc("invite_news_writer", {
     _channel_id: channelId,
     _target_user_id: targetUserId,
   });
@@ -212,7 +214,7 @@ export async function reviewJournal(
   status: "approved" | "rejected" | "suspended",
   note?: string
 ) {
-  const { error } = await supabase.rpc("review_journal" as any, {
+  const { error } = await (supabase as any).rpc("review_journal", {
     _channel_id: channelId,
     _status: status,
     _note: note || null,
@@ -221,37 +223,37 @@ export async function reviewJournal(
 }
 
 export async function fetchPendingJournals(): Promise<Journal[]> {
-  const { data } = await supabase
+  const { data } = await (supabase as any)
     .from("news_channels")
     .select("*")
     .eq("status", "pending")
     .order("created_at", { ascending: true });
-  return (data ?? []) as any;
+  return (data ?? []) as Journal[];
 }
 
 export async function toggleArticleLike(postId: string, userId: string, liked: boolean) {
   if (liked) {
-    await supabase
-      .from("news_post_likes" as any)
+    await (supabase as any)
+      .from("news_post_likes")
       .delete()
       .eq("post_id", postId)
       .eq("user_id", userId);
   } else {
-    await supabase
-      .from("news_post_likes" as any)
+    await (supabase as any)
+      .from("news_post_likes")
       .insert({ post_id: postId, user_id: userId });
   }
 }
 
 export async function toggleJournalFollow(channelId: string, userId: string, following: boolean) {
   if (following) {
-    await supabase
+    await (supabase as any)
       .from("news_subscriptions")
       .delete()
       .eq("channel_id", channelId)
       .eq("user_id", userId);
   } else {
-    await supabase
+    await (supabase as any)
       .from("news_subscriptions")
       .insert({ channel_id: channelId, user_id: userId });
   }
