@@ -18,1452 +18,4920 @@ import {
   Globe, Heart, MessageSquare, MoreHorizontal, Image as ImageIcon, FileText, Video,
   Send, Loader2, Trash2, Download, Bookmark, Share2, X, Plus, Newspaper, PenLine,
   ExternalLink, Pin, Store, Check, UploadCloud, Search, ShoppingBag, Tag, ChevronRight, CheckCircle2,
-  Sparkles, Building2, GraduationCap, Users, BadgeCheck, HelpCircle, Brain,
-  FlaskConical, Award, Briefcase, Home as HomeIcon, Volume2, VolumeX, Play,
+  Music, Smile, Link as LinkIcon, CalendarDays, MapPin, BarChart3, Sparkles, Brain,
+  UserPlus, Users, Eye, Flag, ImagePlus, Camera, Clock, ArrowUpRight, Edit3, Save,
+  AlertCircle, Info, Megaphone, GraduationCap, BookOpen, BriefcaseBusiness, Trophy,
+  MessageCircle, Paperclip, AtSign, Hash, SlidersHorizontal, Filter, RefreshCw
 } from "lucide-react";
 
+import { cn } from "@/lib/utils";
+import { toast } from "@/hooks/use-toast";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { useToast } from "@/hooks/use-toast";
-import { cn } from "@/lib/utils";
-import { useCommunities } from "@/hooks/useCommunities";
-import { ImageEditor } from "@/components/feed/ImageEditor";
-import { explainPost, isActiveVibe, rankFeedPosts as rankDiscovery, type FeedContext, type FeedMode } from "@/lib/feedRanking";
 
-const VIBE_TAG = "Vibe";
+type FeedMode = "for-you" | "trending" | "university" | "course";
 
-// Capítulo 6, seção 4 — categorias do feed acadêmico (Foto/Vídeo/Enquete usam
-// mediaType, não tag; Livro/Venda/República ficam nas MARKETPLACE_TAGS).
-const ACADEMIC_TAGS = ["Resumo", "Dúvida", "Flashcards", "Artigo", "Pesquisa", "Projeto", "Evento", "Estágio", "Desabafo", "Networking", "Aviso"];
-// "Aviso" é restrito a autores com selo institucional (professor/universidade/admin) — ver isRestrictedTagAllowed.
-const RESTRICTED_TAGS = ["Aviso"];
-const MARKETPLACE_TAGS = ["Livro/Apostila", "Eletrônicos", "República", "Vaga de Estágio", "Serviço Acadêmico", "Vestuário", "Outros"];
+type MediaType =
+  | "text"
+  | "image"
+  | "video"
+  | "document"
+  | "poll";
 
-// Identidade de cada seção do Connect (título, ícone e legenda do cabeçalho).
-const SECTION_INFO: Record<string, { title: string; subtitle: string; icon: any }> = {
-  market: { title: "Mercado", subtitle: "Compre e venda no campus", icon: Store },
-  news: { title: "Notícias", subtitle: "Jornal universitário", icon: Newspaper },
-  feed: { title: "Feed", subtitle: "Campus Digital", icon: Globe },
-};
-
-// Links antigos podem chegar com "global", "foryou", "trending", "university",
-// "course" ou "communities" — todos viram "feed", já que essas abas se fundiram
-// no algoritmo único (ver rankFeedPosts).
-const LEGACY_FEED_TABS = new Set(["global", "foryou", "trending", "university", "course", "communities"]);
-
-/**
- * O algoritmo do feed único. Substitui as 4 abas antigas por UMA ordem só,
- * combinando três sinais — igual ao que Instagram/TikTok fazem, simplificado
- * para o tamanho do EduConect:
- *  - Recência: post de hoje pesa mais que post de 5 dias atrás, mas com queda
- *    suave (meia-vida de ~28h) em vez de um corte seco — nada "desaparece" de repente.
- *  - Engajamento: curtidas + comentários (peso maior, comentário é sinal mais forte
- *    de interesse real que curtida), em escala logarítmica pra um post viral não
- *    dominar o feed pra sempre.
- *  - Afinidade: um empurrãozinho para posts de gente da mesma universidade, do
- *    mesmo curso (mais forte) ou de uma comunidade da qual o estudante participa —
- *    é o que as abas "Universidade"/"Curso"/"Comunidades" faziam, só que agora
- *    misturado ao invés de exigir trocar de aba.
- * Um pequeno "jitter" evita que o feed fique idêntico a cada refresh.
- */
-function rankFeedPosts(list: any[], myProfile: MyProfile | null, myCommunityIds: Set<string>) {
-  const now = Date.now();
-  return [...list]
-    .map((p) => {
-      const ageHours = Math.max(0, (now - new Date(p.created_at).getTime()) / 36e5);
-      const recency = Math.exp(-ageHours / 28);
-      const engagementRaw = (p.likes_count ?? 0) * 1 + (p.comments_count ?? 0) * 2.5;
-      const engagement = Math.min(Math.log1p(engagementRaw) / 4, 1);
-      let affinity = 0;
-      if (myProfile?.university_id && p.profiles?.university_id === myProfile.university_id) affinity += 0.12;
-      if (myProfile?.course_id && p.profiles?.course_id === myProfile.course_id) affinity += 0.22;
-      if (p.community_id && myCommunityIds.has(p.community_id)) affinity += 0.18;
-      const jitter = Math.random() * 0.03;
-      const score = recency * 0.42 + engagement * 0.4 + Math.min(affinity, 0.4) + jitter;
-      return { ...p, _score: score };
-    })
-    .sort((a, b) => b._score - a._score);
+interface Profile {
+  id: string;
+  full_name: string | null;
+  avatar_url: string | null;
+  course: string | null;
+  institution: string | null;
 }
-
-// Selos de verificação (Capítulo 6, seção 5) — mapeados a partir de user_roles.role
-const ROLE_BADGES: Record<string, { label: string; icon: any }> = {
-  student_verified: { label: "Estudante Verificado", icon: BadgeCheck },
-  professor: { label: "Professor", icon: GraduationCap },
-  university_official: { label: "Universidade Oficial", icon: Building2 },
-  company: { label: "Empresa", icon: Briefcase },
-  library: { label: "Biblioteca", icon: FileText },
-  ru: { label: "Restaurante Universitário", icon: HomeIcon },
-  project: { label: "Projeto/Centro Acadêmico", icon: FlaskConical },
-  admin: { label: "Administrador EduFlow", icon: Award },
-};
-
-// Categorias de publicação expandidas (Capítulo 6, seção 4)
-const POST_CATEGORY_ICONS: Record<string, any> = {
-  "Resumo": FileText,
-  "Dúvida": HelpCircle,
-  "Flashcards": Brain,
-  "Artigo": FileText,
-  "Pesquisa": FlaskConical,
-  "Projeto": GraduationCap,
-  "Evento": Pin,
-  "Aviso": BadgeCheck,
-  "Estágio": Briefcase,
-  "República": HomeIcon,
-  "Desabafo": MessageSquare,
-  "Networking": Users,
-};
 
 interface Post {
   id: string;
   user_id: string;
-  title: string | null;
   content: string;
-  media_url: string | null; // Legado
-  media_urls: string[] | null; // Múltiplas fotos
-  price: number | null;
-  original_price: number | null;
-  is_sold: boolean;
-  document_url: string | null;
-  video_url: string | null;
-  tag: string | null;
-  category?: string | null;
+  title?: string | null;
+  created_at: string;
+  updated_at?: string | null;
+  media_url?: string | null;
+  media_urls?: string[] | null;
+  video_url?: string | null;
+  document_url?: string | null;
+  tag?: string | null;
+  price?: number | null;
+  original_price?: number | null;
+  is_sold?: boolean;
   event_at?: string | null;
   event_location?: string | null;
-  created_at: string;
-  profiles?: any;
   likes_count: number;
   comments_count: number;
-  user_liked: boolean;
-  user_saved: boolean;
+  user_liked?: boolean;
+  user_saved?: boolean;
   author_badge?: string | null;
+  profiles?: Profile | null;
 }
 
-// Perfil resumido do usuário logado, usado para filtrar as abas
-// Universidade / Curso (Capítulo 6, seção 3).
-interface MyProfile {
-  university_id: string | null;
-  campus_id: string | null;
-  course_id: string | null;
+interface Vibe {
+  id: string;
+  user_id: string;
+  content: string;
+  media_url?: string | null;
+  created_at: string;
+  expires_at?: string | null;
+  profiles?: Profile | null;
 }
+
+interface NewsChannel {
+  id: string;
+  name: string;
+  description?: string | null;
+  logo_url?: string | null;
+  owner_id: string;
+  status: string;
+  created_at: string;
+}
+
+interface Comment {
+  id: string;
+  post_id: string;
+  user_id: string;
+  content: string;
+  created_at: string;
+  profiles?: Profile | null;
+}
+
+const ACADEMIC_TAGS = [
+  "Geral",
+  "Dúvida",
+  "Oportunidade",
+  "Evento",
+  "Acadêmico",
+  "Estágio",
+  "Pesquisa",
+  "Extensão",
+  "Monitoria",
+  "Aviso",
+];
+
+const RESTRICTED_TAGS = [
+  "Aviso",
+];
+
+const ROLE_BADGES: Record<
+  string,
+  {
+    label: string;
+    icon: any;
+  }
+> = {
+  professor: {
+    label: "Professor",
+    icon: GraduationCap,
+  },
+  university_official: {
+    label: "Institucional",
+    icon: Building2,
+  },
+  admin: {
+    label: "Admin",
+    icon: ShieldCheck,
+  },
+  journalist: {
+    label: "Jornalista",
+    icon: Newspaper,
+  },
+};
+
+const POST_CATEGORY_ICONS: Record<
+  string,
+  any
+> = {
+  Geral: Globe,
+  Dúvida: MessageCircle,
+  Oportunidade: BriefcaseBusiness,
+  Evento: CalendarDays,
+  Acadêmico: BookOpen,
+  Estágio: BriefcaseBusiness,
+  Pesquisa: Search,
+  Extensão: Users,
+  Monitoria: GraduationCap,
+  Aviso: Megaphone,
+};
 
 export default function Connect() {
   const { user } = useAuth();
-  const { toast } = useToast();
   const navigate = useNavigate();
-  const { communities } = useCommunities();
-  const [searchParams] = useSearchParams();
+  const [searchParams] =
+    useSearchParams();
 
-  const rawInitialTab = searchParams.get("tab") || "feed";
-  const initialTab = LEGACY_FEED_TABS.has(rawInitialTab) ? "feed" : rawInitialTab;
-  const [activeTab, setActiveTab] = useState<string>(initialTab);
+  const [activeTab, setActiveTab] =
+    useState<
+      "feed" | "news" | "market"
+    >("feed");
 
-  // Perfil do usuário logado (universidade/campus/curso), necessário para
-  // filtrar as abas Universidade e Curso.
-  const [myProfile, setMyProfile] = useState<MyProfile | null>(null);
-  // Papéis do usuário logado — usado para liberar a categoria "Aviso"
-  // (Capítulo 6, seção 4: restrita a selos institucionais).
-  const [myRoles, setMyRoles] = useState<string[]>([]);
-  // Campos extras quando a categoria selecionada é "Evento".
-  const [eventAt, setEventAt] = useState<string>("");
-  const [eventLocation, setEventLocation] = useState<string>("");
+  const [feedMode, setFeedMode] =
+    useState<FeedMode>("for-you");
 
-  // Market States
-  const [marketView, setMarketView] = useState<"explore" | "my_ads">("explore");
-  const [marketSearch, setMarketSearch] = useState<string>("");
-  const [showSavedOnly, setShowSavedOnly] = useState(searchParams.get("saved") === "1");
-  const [feedMode, setFeedMode] = useState<FeedMode>("for-you");
-  const [vibes, setVibes] = useState<Post[]>([]);
-  const [viewingVibe, setViewingVibe] = useState<Post | null>(null);
-  const [isVibe, setIsVibe] = useState(false);
-  const [musicRef, setMusicRef] = useState("");
-  const [editingFileIndex, setEditingFileIndex] = useState<number | null>(null);
-  const [editingPost, setEditingPost] = useState<Post | null>(null);
-  const [editContent, setEditContent] = useState("");
-  const [savingEdit, setSavingEdit] = useState(false);
-  const [myAvatar, setMyAvatar] = useState<string | null>(null);
+  const [posts, setPosts] =
+    useState<Post[]>([]);
 
-  const [posts, setPosts] = useState<Post[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [vibes, setVibes] =
+    useState<Vibe[]>([]);
 
-  // Composer Post
-  const [newContent, setNewContent] = useState("");
-  const [newTitle, setNewTitle] = useState("");
-  const [newPrice, setNewPrice] = useState("");
-  const [newOriginalPrice, setNewOriginalPrice] = useState("");
-  const [mediaType, setMediaType] = useState<"text" | "image" | "video" | "document" | "poll">("text");
-  const [composerOpen, setComposerOpen] = useState(false);
-  const [selectedTag, setSelectedTag] = useState<string | null>(null);
-  const [posting, setPosting] = useState(false);
-  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
-  const [previewUrls, setPreviewUrls] = useState<string[]>([]);
+  const [newsItems, setNewsItems] =
+    useState<NewsChannel[]>([]);
 
-  // Comments
-  const [commentModalOpen, setCommentModalOpen] = useState(false);
-  const [activePost, setActivePost] = useState<Post | null>(null);
-  const [postComments, setPostComments] = useState<any[]>([]);
-  const [newComment, setNewComment] = useState("");
-  const [sendingComment, setSendingComment] = useState(false);
+  const [myChannels, setMyChannels] =
+    useState<NewsChannel[]>([]);
 
-  // News
-  const [newsItems, setNewsItems] = useState<any[]>([]);
-  const [newsLoading, setNewsLoading] = useState(false);
-  const [activeNews, setActiveNews] = useState<any | null>(null);
-  const [newsComposerOpen, setNewsComposerOpen] = useState(false);
-  const [myChannels, setMyChannels] = useState<any[]>([]);
-  const [newsChannelId, setNewsChannelId] = useState<string>("");
-  const [newsTitle, setNewsTitle] = useState("");
-  const [newsContent, setNewsContent] = useState("");
-  const [newsLink, setNewsLink] = useState("");
-  const [newsCoverFile, setNewsCoverFile] = useState<File | null>(null);
-  const [newsCoverPreview, setNewsCoverPreview] = useState<string | null>(null);
-  const [publishingNews, setPublishingNews] = useState(false);
+  const [comments, setComments] =
+    useState<Comment[]>([]);
+
+  const [loading, setLoading] =
+    useState(true);
+
+  const [newsLoading, setNewsLoading] =
+    useState(false);
+
+  const [commentsLoading, setCommentsLoading] =
+    useState(false);
+
+  const [posting, setPosting] =
+    useState(false);
+
+  const [publishingNews, setPublishingNews] =
+    useState(false);
+
+  const [composerOpen, setComposerOpen] =
+    useState(false);
+
+  const [newsComposerOpen, setNewsComposerOpen] =
+    useState(false);
+
+  const [commentsOpen, setCommentsOpen] =
+    useState(false);
+
+  const [editingPost, setEditingPost] =
+    useState<Post | null>(null);
+
+  const [viewingVibe, setViewingVibe] =
+    useState<Vibe | null>(null);
+
+  const [selectedPost, setSelectedPost] =
+    useState<Post | null>(null);
+
+  const [newContent, setNewContent] =
+    useState("");
+
+  const [newTitle, setNewTitle] =
+    useState("");
+
+  const [newPrice, setNewPrice] =
+    useState("");
+
+  const [newOriginalPrice, setNewOriginalPrice] =
+    useState("");
+
+  const [selectedTag, setSelectedTag] =
+    useState<string | null>(null);
+
+  const [mediaType, setMediaType] =
+    useState<MediaType>("text");
+
+  const [selectedFiles, setSelectedFiles] =
+    useState<File[]>([]);
+
+  const [previewUrls, setPreviewUrls] =
+    useState<string[]>([]);
+
+  const [eventAt, setEventAt] =
+    useState("");
+
+  const [eventLocation, setEventLocation] =
+    useState("");
+
+  const [isVibe, setIsVibe] =
+    useState(false);
+
+  const [musicRef, setMusicRef] =
+    useState("");
+
+  const [editContent, setEditContent] =
+    useState("");
+
+  const [commentText, setCommentText] =
+    useState("");
+
+  const [showSavedOnly, setShowSavedOnly] =
+    useState(false);
+
+  const [searchTerm, setSearchTerm] =
+    useState("");
+
+  const [newsChannelId, setNewsChannelId] =
+    useState<string | null>(null);
+
+  const [newsTitle, setNewsTitle] =
+    useState("");
+
+  const [newsContent, setNewsContent] =
+    useState("");
+
+  const [newsLink, setNewsLink] =
+    useState("");
+
+  const [newsCoverFile, setNewsCoverFile] =
+    useState<File | null>(null);
+
+  const [newsCoverPreview, setNewsCoverPreview] =
+    useState<string | null>(null);
+
+  const [myRoles, setMyRoles] =
+    useState<string[]>([]);
+
+  const [myAvatar, setMyAvatar] =
+    useState<string | null>(null);
+
+  const fileInputRef =
+    useRef<HTMLInputElement | null>(
+      null
+    );
+
+  const composerTextareaRef =
+    useRef<HTMLTextAreaElement | null>(
+      null
+    );
+
+  const filteredPosts =
+    useMemo(() => {
+      let result = [...posts];
+
+      if (showSavedOnly) {
+        result =
+          result.filter(
+            (post) =>
+              post.user_saved
+          );
+      }
+
+      if (searchTerm.trim()) {
+        const term =
+          searchTerm
+            .toLowerCase()
+            .trim();
+
+        result =
+          result.filter(
+            (post) =>
+              post.content
+                ?.toLowerCase()
+                .includes(term) ||
+              post.title
+                ?.toLowerCase()
+                .includes(term) ||
+              post.tag
+                ?.toLowerCase()
+                .includes(term) ||
+              post.profiles?.full_name
+                ?.toLowerCase()
+                .includes(term)
+          );
+      }
+
+      if (feedMode === "trending") {
+        result.sort(
+          (a, b) =>
+            (b.likes_count +
+              b.comments_count) -
+            (a.likes_count +
+              a.comments_count)
+        );
+      }
+
+      return result;
+    }, [
+      posts,
+      showSavedOnly,
+      searchTerm,
+      feedMode,
+    ]);
 
   useEffect(() => {
     if (!user) return;
-    supabase
-      .from("profiles")
-      .select("university_id,campus_id,course_id")
-      .eq("user_id", user.id)
-      .maybeSingle()
-      .then(({ data }) => setMyProfile(data as MyProfile ?? { university_id: null, campus_id: null, course_id: null }));
-    supabase
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", user.id)
-      .then(({ data }) => setMyRoles((data ?? []).map((r: any) => r.role)));
+
+    loadProfile();
+    loadPosts();
+    loadVibes();
+    loadNews();
+    loadRoles();
   }, [user]);
 
   useEffect(() => {
-    if (!user) return;
-    if (activeTab === "news") loadNews();
-    else loadPosts();
-    // myProfile some no dependency array de propósito: quando ele chega depois
-    // (perfil ainda carregando), o feed já mostrado é reordenado com o afinidade
-    // de universidade/curso, sem precisar de uma tela de espera.
-  }, [user, activeTab, marketView, showSavedOnly, myProfile]);
+    const postId =
+      searchParams.get(
+        "post"
+      );
 
-  // A barra inferior navega para /connect, /connect?tab=market e /connect?tab=news
-  // sem desmontar esta tela. Sem esta sincronização, a aba ficava "presa" na
-  // anterior — era por isso que o Feed aparecia idêntico ao Mercado.
+    if (
+      postId &&
+      posts.length > 0
+    ) {
+      const post =
+        posts.find(
+          (item) =>
+            item.id ===
+            postId
+        );
+
+      if (post) {
+        setSelectedPost(
+          post
+        );
+        setCommentsOpen(
+          true
+        );
+      }
+    }
+  }, [
+    searchParams,
+    posts,
+  ]);
+
   useEffect(() => {
-    const raw = searchParams.get("tab") || "feed";
-    if (raw === "market") { navigate("/marketplace", { replace: true }); return; }
-    const next = LEGACY_FEED_TABS.has(raw) ? "feed" : raw;
-    // Salvos agora vivem só no menu lateral (/connect?saved=1).
-    setShowSavedOnly(searchParams.get("saved") === "1");
-    if (next !== activeTab) {
-      setActiveTab(next);
-      setMarketSearch("");
-      setMarketView("explore");
-    }
-  }, [searchParams]);
+    return () => {
+      previewUrls.forEach(
+        (url) => {
+          if (
+            url.startsWith(
+              "blob:"
+            )
+          ) {
+            URL.revokeObjectURL(
+              url
+            );
+          }
+        }
+      );
 
-  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
-    const files = Array.from(e.target.files || []);
-    if (files.length === 0) return;
-    
-    // Limite de tamanho e quantidade
-    if (files.length > 5) {
-      toast({ title: "Máximo de 5 fotos permitidas", variant: "destructive" });
-      return;
-    }
-    const oversized = files.find(f => f.size > 20 * 1024 * 1024);
-    if (oversized) {
-      toast({ title: "Cada arquivo deve ter no máximo 20MB", variant: "destructive" });
-      return;
-    }
+      if (
+        newsCoverPreview?.startsWith(
+          "blob:"
+        )
+      ) {
+        URL.revokeObjectURL(
+          newsCoverPreview
+        );
+      }
+    };
+  }, [
+    previewUrls,
+    newsCoverPreview,
+  ]);
 
-    if (activeTab === "market" && mediaType === "image") {
-      setSelectedFiles(prev => [...prev, ...files].slice(0, 5));
-      const newPreviews = files.map(f => URL.createObjectURL(f));
-      setPreviewUrls(prev => [...prev, ...newPreviews].slice(0, 5));
-    } else {
-      setSelectedFiles([files[0]]);
-      setPreviewUrls([files[0].type.startsWith("image/") || files[0].type.startsWith("video/") ? URL.createObjectURL(files[0]) : "pdf-preview"]);
+  async function loadProfile() {
+    if (!user) return;
+
+    try {
+      const {
+        data,
+        error,
+      } = await supabase
+        .from("profiles")
+        .select(
+          "id, full_name, avatar_url, course, institution"
+        )
+        .eq(
+          "id",
+          user.id
+        )
+        .maybeSingle();
+
+      if (error)
+        throw error;
+
+      setMyAvatar(
+        data?.avatar_url ??
+          null
+      );
+    } catch (error) {
+      console.error(
+        "Erro ao carregar perfil:",
+        error
+      );
     }
   }
 
-  function removeFile(index: number) {
-    setSelectedFiles(prev => prev.filter((_, i) => i !== index));
-    setPreviewUrls(prev => prev.filter((_, i) => i !== index));
-  }
+  async function loadRoles() {
+    if (!user) return;
 
-  function handleNewsCoverSelect(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setNewsCoverFile(file);
-    setNewsCoverPreview(URL.createObjectURL(file));
+    try {
+      const {
+        data,
+        error,
+      } = await supabase
+        .from(
+          "user_roles"
+        )
+        .select(
+          "role"
+        )
+        .eq(
+          "user_id",
+          user.id
+        );
+
+      if (error)
+        throw error;
+
+      setMyRoles(
+        data?.map(
+          (item) =>
+            item.role
+        ) ?? []
+      );
+    } catch (error) {
+      console.error(
+        "Erro ao carregar permissões:",
+        error
+      );
+    }
   }
 
   async function loadPosts() {
+    if (!user) return;
+
     setLoading(true);
+
     try {
-      if (showSavedOnly) {
-        const { data: saved } = await supabase.from("saved_posts").select("post_id").eq("user_id", user!.id);
-        const ids = (saved ?? []).map((s: any) => s.post_id);
-        if (ids.length === 0) { setPosts([]); return; }
-        const { data } = await supabase.from("posts").select("*").in("id", ids).order("created_at", { ascending: false });
-        if (data) setPosts(await fetchMetricsForPosts(data));
-        return;
-      }
-
-      if (activeTab === "market") {
-        let query = supabase.from("posts").select("*").in("tag", MARKETPLACE_TAGS).order("created_at", { ascending: false }).limit(60);
-        if (marketView === "my_ads") query = query.eq("user_id", user!.id);
-        const { data, error } = await query;
-        if (error) throw error;
-        if (data) setPosts(await fetchMetricsForPosts(data));
-        return;
-      }
-
-      // FEED ÚNICO — as antigas abas (Para Você/Em Alta/Universidade/Curso/Comunidades)
-      // viraram sinais de UM algoritmo só, em vez de 4 listas separadas que o
-      // estudante tinha que escolher manualmente. Busca um lote amplo e recente,
-      // e quem decide a ordem final é rankFeedPosts (recência + engajamento + afinidade).
-      const { data, error } = await supabase
+      const {
+        data,
+        error,
+      } = await supabase
         .from("posts")
-        .select("*")
-        .not("tag", "in", `(${MARKETPLACE_TAGS.join(',')})`)
-        .order("created_at", { ascending: false })
-        .limit(150);
-      if (error) throw error;
-      const withMetrics = await fetchMetricsForPosts(data ?? []);
-      // Vibes ficam na mesma tabela (tag "Vibe") e vivem 24h — filtradas aqui.
-      setVibes(withMetrics.filter((p: Post) => p.tag === VIBE_TAG && isActiveVibe(p.created_at)));
-      setPosts(withMetrics.filter((p: Post) => p.tag !== VIBE_TAG));
-    } catch (e) {
-      toast({ title: "Erro ao atualizar o feed", variant: "destructive" });
+        .select(
+          `
+            *,
+            profiles (
+              id,
+              full_name,
+              avatar_url,
+              course,
+              institution
+            )
+          `
+        )
+        .order(
+          "created_at",
+          {
+            ascending:
+              false,
+          }
+        );
+
+      if (error)
+        throw error;
+
+      const postList =
+        data ?? [];
+
+      const postIds =
+        postList.map(
+          (post) =>
+            post.id
+        );
+
+      let likedIds =
+        new Set<string>();
+
+      let savedIds =
+        new Set<string>();
+
+      if (
+        postIds.length
+      ) {
+        const [
+          likesResult,
+          savesResult,
+        ] =
+          await Promise.all([
+            supabase
+              .from(
+                "post_likes"
+              )
+              .select(
+                "post_id"
+              )
+              .eq(
+                "user_id",
+                user.id
+              )
+              .in(
+                "post_id",
+                postIds
+              ),
+            supabase
+              .from(
+                "saved_posts"
+              )
+              .select(
+                "post_id"
+              )
+              .eq(
+                "user_id",
+                user.id
+              )
+              .in(
+                "post_id",
+                postIds
+              ),
+          ]);
+
+        likedIds =
+          new Set(
+            likesResult.data?.map(
+              (item) =>
+                item.post_id
+            ) ?? []
+          );
+
+        savedIds =
+          new Set(
+            savesResult.data?.map(
+              (item) =>
+                item.post_id
+            ) ?? []
+          );
+      }
+
+      const normalized =
+        postList.map(
+          (post) => ({
+            ...post,
+            user_liked:
+              likedIds.has(
+                post.id
+              ),
+            user_saved:
+              savedIds.has(
+                post.id
+              ),
+          })
+        );
+
+      setPosts(
+        normalized
+      );
+    } catch (error) {
+      console.error(
+        "Erro ao carregar posts:",
+        error
+      );
+
+      toast({
+        title:
+          "Não foi possível carregar o feed",
+        description:
+          "Tente atualizar a página.",
+        variant:
+          "destructive",
+      });
     } finally {
       setLoading(false);
     }
   }
 
-  async function fetchMetricsForPosts(postsData: any[]) {
-    if (!postsData || postsData.length === 0 || !user) return [];
-    const postIds = postsData.map(p => p.id);
-    const userIds = Array.from(new Set(postsData.map(p => p.user_id)));
+  async function loadVibes() {
+    if (!user) return;
 
-    const [likes, comments, saved, profs, roles] = await Promise.all([
-      supabase.from("post_likes").select("post_id,user_id").in("post_id", postIds),
-      supabase.from("post_comments").select("post_id").in("post_id", postIds),
-      supabase.from("saved_posts").select("post_id").eq("user_id", user.id).in("post_id", postIds),
-      supabase.from("profiles").select("user_id,full_name,avatar_url,university_id,course_id").in("user_id", userIds),
-      // Capítulo 6, seção 5 — selos de verificação por autor.
-      supabase.from("user_roles").select("user_id,role").in("user_id", userIds)
-    ]);
+    try {
+      const {
+        data,
+        error,
+      } = await supabase
+        .from("vibes")
+        .select(
+          `
+            *,
+            profiles (
+              id,
+              full_name,
+              avatar_url,
+              course,
+              institution
+            )
+          `
+        )
+        .gt(
+          "expires_at",
+          new Date().toISOString()
+        )
+        .order(
+          "created_at",
+          {
+            ascending:
+              false,
+          }
+        );
 
-    const likesMap: any = {};
-    (likes.data ?? []).forEach((l: any) => {
-      if (!likesMap[l.post_id]) likesMap[l.post_id] = { count: 0, userLiked: false };
-      likesMap[l.post_id].count++;
-      if (l.user_id === user.id) likesMap[l.post_id].userLiked = true;
-    });
+      if (error)
+        throw error;
 
-    const commentsMap: any = {};
-    (comments.data ?? []).forEach((c: any) => { commentsMap[c.post_id] = (commentsMap[c.post_id] || 0) + 1; });
+      setVibes(
+        data ?? []
+      );
+    } catch (error) {
+      console.error(
+        "Erro ao carregar Vibes:",
+        error
+      );
+    }
+  }
 
-    const savedSet = new Set((saved.data ?? []).map((s: any) => s.post_id));
-    const profileMap: Record<string, any> = {};
-    (profs.data ?? []).forEach((p: any) => { profileMap[p.user_id] = p; });
+  function openComposer(
+    vibe = false
+  ) {
+    resetComposer();
 
-    // Um usuário pode ter mais de um papel; prioriza o mais "institucional"
-    // para exibir um único selo no card do post.
-    const badgePriority = ["university_official", "admin", "company", "library", "ru", "professor", "project", "student_verified"];
-    const badgeMap: Record<string, string> = {};
-    (roles.data ?? []).forEach((r: any) => {
-      const current = badgeMap[r.user_id];
-      if (!current || badgePriority.indexOf(r.role) < badgePriority.indexOf(current)) {
-        if (ROLE_BADGES[r.role]) badgeMap[r.user_id] = r.role;
+    setIsVibe(vibe);
+    setComposerOpen(
+      true
+    );
+
+    setTimeout(
+      () =>
+        composerTextareaRef.current?.focus(),
+      150
+    );
+  }
+
+  function handleFileSelect(
+    event: React.ChangeEvent<HTMLInputElement>
+  ) {
+    const files = Array.from(
+      event.target.files ??
+        []
+    );
+
+    if (!files.length)
+      return;
+
+    const allowed =
+      files.filter(
+        (file) => {
+          if (
+            mediaType ===
+            "video"
+          ) {
+            return file.type.startsWith(
+              "video/"
+            );
+          }
+
+          if (
+            mediaType ===
+            "document"
+          ) {
+            return [
+              "application/pdf",
+              "application/msword",
+              "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+              "application/vnd.ms-powerpoint",
+              "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            ].includes(
+              file.type
+            );
+          }
+
+          return file.type.startsWith(
+            "image/"
+          );
+        }
+      );
+
+    if (!allowed.length) {
+      toast({
+        title:
+          "Arquivo não suportado",
+        description:
+          "Selecione um arquivo compatível com o tipo escolhido.",
+        variant:
+          "destructive",
+      });
+
+      return;
+    }
+
+    const newFiles =
+      activeTab ===
+        "market" &&
+      mediaType ===
+        "image"
+        ? [
+            ...selectedFiles,
+            ...allowed,
+          ].slice(
+            0,
+            6
+          )
+        : [
+            allowed[0],
+          ];
+
+    const urls =
+      newFiles.map(
+        (file) =>
+          mediaType ===
+          "document"
+            ? "pdf-preview"
+            : URL.createObjectURL(
+                file
+              )
+      );
+
+    previewUrls.forEach(
+      (url) => {
+        if (
+          url.startsWith(
+            "blob:"
+          )
+        ) {
+          URL.revokeObjectURL(
+            url
+          );
+        }
       }
-    });
+    );
 
-    return postsData.map(p => ({
-      ...p,
-      profiles: profileMap[p.user_id] ?? null,
-      likes_count: likesMap[p.id]?.count || 0,
-      comments_count: commentsMap[p.id] || 0,
-      user_liked: likesMap[p.id]?.userLiked || false,
-      user_saved: savedSet.has(p.id),
-      author_badge: badgeMap[p.user_id] ?? null
-    }));
+    setSelectedFiles(
+      newFiles
+    );
+    setPreviewUrls(
+      urls
+    );
+
+    if (
+      fileInputRef.current
+    ) {
+      fileInputRef.current.value =
+        "";
+    }
+  }
+
+  function removeFile(
+    index: number
+  ) {
+    const url =
+      previewUrls[index];
+
+    if (
+      url?.startsWith(
+        "blob:"
+      )
+    ) {
+      URL.revokeObjectURL(
+        url
+      );
+    }
+
+    setSelectedFiles(
+      (files) =>
+        files.filter(
+          (_, i) =>
+            i !== index
+        )
+    );
+
+    setPreviewUrls(
+      (urls) =>
+        urls.filter(
+          (_, i) =>
+            i !== index
+        )
+    );
+  }
+
+  async function uploadPostFiles() {
+    if (
+      !user ||
+      !selectedFiles.length
+    ) {
+      return [];
+    }
+
+    const urls: string[] =
+      [];
+
+    for (
+      const file of selectedFiles
+    ) {
+      const extension =
+        file.name
+          .split(".")
+          .pop() ||
+        "file";
+
+      const path = `${user.id}/post_${Date.now()}_${Math.random()
+        .toString(36)
+        .slice(
+          2
+        )}.${extension}`;
+
+      const {
+        error,
+      } =
+        await supabase.storage
+          .from(
+            "post-media"
+          )
+          .upload(
+            path,
+            file
+          );
+
+      if (error)
+        throw error;
+
+      const {
+        data,
+      } =
+        supabase.storage
+          .from(
+            "post-media"
+          )
+          .getPublicUrl(
+            path
+          );
+
+      urls.push(
+        data.publicUrl
+      );
+    }
+
+    return urls;
   }
 
   async function handlePost() {
-    if ((!newContent.trim() && selectedFiles.length === 0) || !user) return;
+    if (!user)
+      return;
+
+    if (
+      !newContent.trim() &&
+      selectedFiles.length ===
+        0
+    ) {
+      toast({
+        title:
+          "Sua publicação está vazia",
+        description:
+          "Adicione um texto ou arquivo antes de publicar.",
+        variant:
+          "destructive",
+      });
+
+      return;
+    }
+
     setPosting(true);
+
     try {
-      let uploadedUrls: string[] = [];
-      let documentUrl: string | null = null;
-      let videoUrl: string | null = null;
+      const mediaUrls =
+        await uploadPostFiles();
 
-      if (selectedFiles.length > 0) {
-        for (const file of selectedFiles) {
-          const fileExt = file.name.split(".").pop();
-          const filePath = `${user.id}/${Date.now()}_${Math.random().toString(36).substring(7)}.${fileExt}`;
-          const bucket = mediaType === "document" ? "post-documents" : "post-media";
-          
-          const { error: uploadError } = await supabase.storage.from(bucket).upload(filePath, file);
-          if (uploadError) throw uploadError;
+      if (isVibe) {
+        const {
+          error,
+        } =
+          await supabase
+            .from("vibes")
+            .insert({
+              user_id:
+                user.id,
+              content:
+                newContent.trim(),
+              media_url:
+                mediaUrls[0] ??
+                null,
+              expires_at:
+                new Date(
+                  Date.now() +
+                    24 *
+                      60 *
+                      60 *
+                      1000
+                ).toISOString(),
+            });
 
-          if (bucket === "post-documents") {
-            const { data: signed } = await supabase.storage.from(bucket).createSignedUrl(filePath, 60 * 60 * 24 * 365);
-            documentUrl = signed?.signedUrl ?? null;
-          } else {
-            const { data } = supabase.storage.from(bucket).getPublicUrl(filePath);
-            if (mediaType === "video") videoUrl = data.publicUrl;
-            else uploadedUrls.push(data.publicUrl);
-          }
+        if (error)
+          throw error;
+
+        toast({
+          title:
+            "Vibe publicada!",
+          description:
+            "Seu momento ficará disponível por 24 horas.",
+        });
+
+        closeComposer();
+        loadVibes();
+        return;
+      }
+
+      let price:
+        | number
+        | null = null;
+
+      let originalPrice:
+        | number
+        | null = null;
+
+      if (newPrice.trim()) {
+        const normalized =
+          newPrice
+            .replace(
+              /\./g,
+              ""
+            )
+            .replace(
+              ",",
+              "."
+            );
+
+        price =
+          Number(
+            normalized
+          );
+
+        if (
+          Number.isNaN(
+            price
+          )
+        ) {
+          throw new Error(
+            "Informe um preço válido."
+          );
         }
       }
 
-      const pPrice = newPrice ? parseFloat(newPrice.replace(",", ".")) : null;
-      const pOriginal = newOriginalPrice ? parseFloat(newOriginalPrice.replace(",", ".")) : null;
-      const isEvent = activeTab !== "market" && !isVibe && selectedTag === "Evento";
-      const music = musicRef.trim() ? `\n\n🎵 ${musicRef.trim()}` : "";
+      if (
+        newOriginalPrice.trim()
+      ) {
+        const normalized =
+          newOriginalPrice
+            .replace(
+              /\./g,
+              ""
+            )
+            .replace(
+              ",",
+              "."
+            );
 
-      const { error } = await supabase.from("posts").insert({
-        user_id: user.id, 
-        title: activeTab === "market" ? newTitle.trim() : null,
-        content: newContent.trim() + music, 
-        media_urls: uploadedUrls.length > 0 ? uploadedUrls : null,
-        media_url: uploadedUrls.length === 1 ? uploadedUrls[0] : null, // Fallback legado
-        price: activeTab === "market" ? pPrice : null,
-        original_price: activeTab === "market" ? pOriginal : null,
-        is_sold: false,
-        tag: isVibe ? VIBE_TAG : selectedTag, 
-        category: activeTab !== "market" ? selectedTag : null,
-        event_at: isEvent && eventAt ? new Date(eventAt).toISOString() : null,
-        event_location: isEvent ? (eventLocation.trim() || null) : null,
-        media_type: mediaType, 
-        document_url: documentUrl, 
-        video_url: videoUrl,
-      });
-      if (error) throw error;
+        originalPrice =
+          Number(
+            normalized
+          );
 
-      setNewContent(""); setNewTitle(""); setNewPrice(""); setNewOriginalPrice(""); 
-      setSelectedFiles([]); setPreviewUrls([]); setSelectedTag(null); setMediaType("text"); setComposerOpen(false);
-      setEventAt(""); setEventLocation("");
-      toast({ title: activeTab === "market" ? "Anúncio publicado na loja!" : "Publicação no ar!" });
-      loadPosts();
-    } catch (e: any) {
-      toast({ title: "Falha na postagem", description: e.message, variant: "destructive" });
-    } finally {
-      setPosting(false);
-    }
-  }
-
-  async function loadNews() {
-    setNewsLoading(true);
-    try {
-      const { data } = await supabase.from("news_posts").select("*, news_channels(name, scope)").order("pinned", { ascending: false }).order("published_at", { ascending: false }).limit(50);
-      setNewsItems(data ?? []);
-    } finally { setNewsLoading(false); }
-  }
-
-  async function loadMyChannels() {
-    if (!user) return;
-    const { data: subs } = await supabase.from("news_subscriptions").select("channel_id, news_channels(id, name, scope)").eq("user_id", user.id);
-    const channels = (subs ?? []).map((s: any) => s.news_channels).filter(Boolean);
-    setMyChannels(channels);
-    if (channels[0]?.id) setNewsChannelId(channels[0].id);
-  }
-
-  async function publishNews() {
-    if (!user || !newsChannelId || !newsTitle.trim()) return;
-    setPublishingNews(true);
-    try {
-      let coverUrl = null;
-      if (newsCoverFile) {
-        const fileExt = newsCoverFile.name.split(".").pop();
-        const filePath = `news/${Date.now()}.${fileExt}`;
-        const { error: uploadError } = await supabase.storage.from("post-media").upload(filePath, newsCoverFile);
-        if (uploadError) throw uploadError;
-        const { data } = supabase.storage.from("post-media").getPublicUrl(filePath);
-        coverUrl = data.publicUrl;
+        if (
+          Number.isNaN(
+            originalPrice
+          )
+        ) {
+          throw new Error(
+            "Informe um preço original válido."
+          );
+        }
       }
 
-      const { error } = await supabase.from("news_posts").insert({
-        channel_id: newsChannelId, author_id: user.id, title: newsTitle.trim(), content: newsContent.trim() || newsTitle.trim(), link_url: newsLink.trim() || null, cover_url: coverUrl
+      const payload = {
+        user_id:
+          user.id,
+        content:
+          newContent.trim(),
+        title:
+          newTitle.trim() ||
+          null,
+        tag:
+          selectedTag,
+        media_url:
+          mediaUrls[0] ??
+          null,
+        media_urls:
+          mediaUrls.length
+            ? mediaUrls
+            : null,
+        video_url:
+          mediaType ===
+          "video"
+            ? mediaUrls[0] ??
+              null
+            : null,
+        document_url:
+          mediaType ===
+          "document"
+            ? mediaUrls[0] ??
+              null
+            : null,
+        price,
+        original_price:
+          originalPrice,
+        event_at:
+          eventAt ||
+          null,
+        event_location:
+          eventLocation.trim() ||
+          null,
+        is_sold:
+          false,
+      };
+
+      const {
+        error,
+      } =
+        await supabase
+          .from("posts")
+          .insert(
+            payload
+          );
+
+      if (error)
+        throw error;
+
+      toast({
+        title:
+          "Publicação criada!",
+        description:
+          "Sua publicação foi adicionada ao feed.",
       });
-      
-      if (error) throw error;
-      toast({ title: "Edição publicada no Painel!" });
-      setNewsComposerOpen(false); setNewsTitle(""); setNewsContent(""); setNewsLink(""); setNewsCoverFile(null); setNewsCoverPreview(null);
-      loadNews();
-    } catch (e: any) {
-      toast({ title: "Acesso Negado", description: "Apenas editores autorizados podem publicar neste canal.", variant: "destructive" });
-    } finally { setPublishingNews(false); }
-  }
 
-  async function handleLike(post: Post) {
-    if (!user) return;
-    try {
-      if (post.user_liked) await supabase.from("post_likes").delete().eq("post_id", post.id).eq("user_id", user.id);
-      else await supabase.from("post_likes").insert({ post_id: post.id, user_id: user.id });
-      setPosts(prev => prev.map(p => p.id === post.id ? { ...p, user_liked: !p.user_liked, likes_count: p.user_liked ? p.likes_count - 1 : p.likes_count + 1 } : p));
-    } catch (e) {}
-  }
+      closeComposer();
+      loadPosts();
+    } catch (error: any) {
+      console.error(
+        "Erro ao publicar:",
+        error
+      );
 
-  async function handleSave(post: Post) {
-    if (!user) return;
-    try {
-      if (post.user_saved) await supabase.from("saved_posts").delete().eq("post_id", post.id).eq("user_id", user.id);
-      else await supabase.from("saved_posts").insert({ post_id: post.id, user_id: user.id });
-      setPosts(prev => prev.map(p => p.id === post.id ? { ...p, user_saved: !p.user_saved } : p));
-    } catch {}
-  }
-
-  async function handleDelete(post: Post) {
-    if (!window.confirm("Confirmar exclusão definitiva?")) return;
-    try {
-      const { error } = await supabase.from("posts").delete().eq("id", post.id);
-      if (error) throw error;
-      setPosts(prev => prev.filter(p => p.id !== post.id));
-      toast({ title: "Publicação/Anúncio removido." });
-    } catch (e: any) { toast({ title: "Erro na exclusão", variant: "destructive" }); }
-  }
-
-  async function handleMarkAsSold(post: Post) {
-    if (!user || post.user_id !== user.id) return;
-    try {
-      const { error } = await supabase.from("posts").update({ is_sold: !post.is_sold }).eq("id", post.id);
-      if (error) throw error;
-      setPosts(prev => prev.map(p => p.id === post.id ? { ...p, is_sold: !p.is_sold } : p));
-      toast({ title: !post.is_sold ? "Marcado como Vendido! 🎉" : "Anúncio reativado." });
-    } catch (e: any) { toast({ title: "Erro ao atualizar status", variant: "destructive" }); }
-  }
-
-  // Capítulo 6, seção 8 — ação rápida "Adicionar ao meu calendário" em posts de Evento.
-  async function handleAddToCalendar(post: Post) {
-    if (!user || !post.event_at) return;
-    try {
-      const { error } = await supabase.from("reminders").insert({
-        user_id: user.id,
-        title: post.title?.trim() || post.content.slice(0, 80),
-        due_date: post.event_at,
-        type: "evento",
+      toast({
+        title:
+          "Não foi possível publicar",
+        description:
+          error?.message ||
+          "Tente novamente.",
+        variant:
+          "destructive",
       });
-      if (error) throw error;
-      toast({ title: "Adicionado aos seus lembretes!" });
-    } catch (e: any) {
-      toast({ title: "Erro ao adicionar ao calendário", variant: "destructive" });
-    }
-  }
-
-  async function openComments(post: Post) {
-    setActivePost(post);
-    setCommentModalOpen(true);
-    try {
-      const { data } = await supabase.from("post_comments").select("*").eq("post_id", post.id).order("created_at", { ascending: true });
-      if (data?.length === 0) return setPostComments([]);
-      const ids = Array.from(new Set(data!.map((c) => c.user_id)));
-      const { data: profs } = await supabase.from("profiles").select("user_id,full_name,avatar_url").in("user_id", ids);
-      const map: Record<string, any> = {};
-      (profs ?? []).forEach((p: any) => { map[p.user_id] = p; });
-      setPostComments(data!.map((c) => ({ ...c, profiles: map[c.user_id] ?? null })));
-    } catch { setPostComments([]); }
-  }
-
-  async function sendComment() {
-    if (!user || !activePost || !newComment.trim()) return;
-    setSendingComment(true);
-    try {
-      const { error } = await supabase.from("post_comments").insert({ post_id: activePost.id, user_id: user.id, content: newComment.trim() });
-      if (error) throw error;
-      setNewComment("");
-      openComments(activePost);
-      setPosts(prev => prev.map(p => p.id === activePost.id ? { ...p, comments_count: p.comments_count + 1 } : p));
-    } catch (e: any) { toast({ title: "Erro ao comentar", variant: "destructive" }); } finally { setSendingComment(false); }
-  }
-
-  const feedContext = useMemo<FeedContext>(() => ({
-    universityId: myProfile?.university_id,
-    courseId: myProfile?.course_id,
-    communityIds: new Set(communities.map((c) => c.id)),
-    followingIds: new Set<string>(),
-  }), [myProfile, communities]);
-
-  const visiblePosts = useMemo(() => {
-    let filtered = posts;
-    if (activeTab === "market" && marketSearch.trim() !== "") {
-      const q = marketSearch.toLowerCase();
-      filtered = filtered.filter(p => 
-        (p.title && p.title.toLowerCase().includes(q)) || 
-        p.content.toLowerCase().includes(q) || 
-        (p.tag && p.tag.toLowerCase().includes(q))
+    } finally {
+      setPosting(
+        false
       );
     }
-    if (activeTab === "feed" && !showSavedOnly) filtered = rankDiscovery(filtered as any, feedContext, feedMode) as any;
-    return filtered;
-  }, [posts, activeTab, marketSearch, showSavedOnly, feedContext, feedMode]);
-
-  function openComposer(vibe: boolean) {
-    setIsVibe(vibe); setSelectedTag(null); setMusicRef(""); setComposerOpen(true);
   }
 
-  async function saveEdit() {
-    if (!editingPost) return;
-    setSavingEdit(true);
-    const { error } = await supabase.from("posts").update({ content: editContent.trim() }).eq("id", editingPost.id);
-    setSavingEdit(false);
-    if (error) { toast({ title: "Não foi possível editar", variant: "destructive" }); return; }
-    setPosts(prev => prev.map(p => p.id === editingPost.id ? { ...p, content: editContent.trim() } : p));
-    setEditingPost(null);
-    toast({ title: "Publicação atualizada" });
-  }
+  async function toggleLike(
+    post: Post
+  ) {
+    if (!user)
+      return;
 
-  return (
-    <div className="p-4 md:p-6 max-w-3xl mx-auto space-y-6 pb-28 animate-in fade-in duration-500">
-      
-      {/* HEADER COMPACTO E AÇÃO RÁPIDA — muda conforme a seção aberta */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          {(() => {
-            const info = SECTION_INFO[activeTab] ?? SECTION_INFO.feed;
-            const SectionIcon = info.icon;
-            return (
-              <>
-                <div className="h-11 w-11 bg-primary/10 rounded-full flex items-center justify-center text-primary shadow-inner">
-                  <SectionIcon className="h-6 w-6" />
-                </div>
-                <div>
-                  <h1 className="text-2xl font-black tracking-tight text-foreground">{info.title}</h1>
-                  <p className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest">{info.subtitle}</p>
-                </div>
-              </>
+    const liked =
+      !!post.user_liked;
+
+    setPosts(
+      (current) =>
+        current.map(
+          (item) =>
+            item.id ===
+            post.id
+              ? {
+                  ...item,
+                  user_liked:
+                    !liked,
+                  likes_count:
+                    Math.max(
+                      0,
+                      item.likes_count +
+                        (liked
+                          ? -1
+                          : 1)
+                    ),
+                }
+              : item
+        )
+    );
+
+    try {
+      if (liked) {
+        const {
+          error,
+        } =
+          await supabase
+            .from(
+              "post_likes"
+            )
+            .delete()
+            .eq(
+              "post_id",
+              post.id
+            )
+            .eq(
+              "user_id",
+              user.id
             );
-          })()}
-        </div>
-        
-        <div className="flex items-center gap-2">
-          {showSavedOnly && (
-            <Button variant="outline" className="h-11 rounded-full font-bold" onClick={() => navigate("/connect")}>
-              <X className="h-4 w-4 mr-1" /> Sair dos salvos
-            </Button>
-          )}
-          {activeTab === "news" && (
-            <Button onClick={() => { loadMyChannels(); setNewsComposerOpen(true); }} className="rounded-full shadow-lg text-sm font-black px-5 h-11">
-              <Plus className="h-4 w-4 mr-1.5" /> Escrever
-            </Button>
-          )}
-        </div>
-      </div>
 
-      {activeTab === "feed" && showSavedOnly && (
-        <p className="text-sm font-bold text-muted-foreground">Itens salvos</p>
-      )}
+        if (error)
+          throw error;
+      } else {
+        const {
+          error,
+        } =
+          await supabase
+            .from(
+              "post_likes"
+            )
+            .insert({
+              post_id:
+                post.id,
+              user_id:
+                user.id,
+            });
 
-      {activeTab === "feed" && !showSavedOnly && (
-        <div className="space-y-4">
-          {/* Barra de Vibes */}
-          <div className="-mx-4 flex gap-4 overflow-x-auto px-4 pb-1 scrollbar-none">
-            <button type="button" onClick={() => openComposer(true)} className="flex w-16 shrink-0 flex-col items-center gap-1.5">
-              <span className="relative">
-                <Avatar className="h-16 w-16 ring-2 ring-border"><AvatarImage src={myAvatar ?? undefined} /><AvatarFallback className="bg-muted font-black">Eu</AvatarFallback></Avatar>
-                <span className="absolute -bottom-0.5 -right-0.5 flex h-6 w-6 items-center justify-center rounded-full border-2 border-background bg-primary text-primary-foreground"><Plus className="h-3.5 w-3.5" /></span>
-              </span>
-              <span className="text-[11px] font-bold text-muted-foreground">Sua vibe</span>
+        if (error)
+          throw error;
+      }
+    } catch (error) {
+      console.error(
+        "Erro ao alterar curtida:",
+        error
+      );
+
+      loadPosts();
+
+      toast({
+        title:
+          "Não foi possível atualizar a curtida",
+        variant:
+          "destructive",
+      });
+    }
+  }
+
+  async function handleSave(
+    post: Post
+  ) {
+    if (!user)
+      return;
+
+    const saved =
+      !!post.user_saved;
+
+    setPosts(
+      (current) =>
+        current.map(
+          (item) =>
+            item.id ===
+            post.id
+              ? {
+                  ...item,
+                  user_saved:
+                    !saved,
+                }
+              : item
+        )
+    );
+
+    try {
+      if (saved) {
+        const {
+          error,
+        } =
+          await supabase
+            .from(
+              "saved_posts"
+            )
+            .delete()
+            .eq(
+              "post_id",
+              post.id
+            )
+            .eq(
+              "user_id",
+              user.id
+            );
+
+        if (error)
+          throw error;
+
+        toast({
+          title:
+            "Removido dos salvos",
+        });
+      } else {
+        const {
+          error,
+        } =
+          await supabase
+            .from(
+              "saved_posts"
+            )
+            .insert({
+              post_id:
+                post.id,
+              user_id:
+                user.id,
+            });
+
+        if (error)
+          throw error;
+
+        toast({
+          title:
+            "Publicação salva",
+        });
+      }
+    } catch (error) {
+      console.error(
+        "Erro ao salvar:",
+        error
+      );
+
+      loadPosts();
+
+      toast({
+        title:
+          "Não foi possível salvar a publicação",
+        variant:
+          "destructive",
+      });
+    }
+  }
+
+  async function handleDelete(
+    post: Post
+  ) {
+    if (
+      !user ||
+      post.user_id !==
+        user.id
+    )
+      return;
+
+    const confirmed =
+      window.confirm(
+        "Tem certeza que deseja excluir esta publicação?"
+      );
+
+    if (!confirmed)
+      return;
+
+    try {
+      const {
+        error,
+      } =
+        await supabase
+          .from("posts")
+          .delete()
+          .eq(
+            "id",
+            post.id
+          )
+          .eq(
+            "user_id",
+            user.id
+          );
+
+      if (error)
+        throw error;
+
+      setPosts(
+        (current) =>
+          current.filter(
+            (item) =>
+              item.id !==
+              post.id
+          )
+      );
+
+      toast({
+        title:
+          "Publicação excluída",
+      });
+    } catch (error) {
+      console.error(
+        "Erro ao excluir publicação:",
+        error
+      );
+
+      toast({
+        title:
+          "Não foi possível excluir",
+        variant:
+          "destructive",
+      });
+    }
+  }
+
+  async function handleEdit() {
+    if (
+      !user ||
+      !editingPost
+    )
+      return;
+
+    if (
+      !editContent.trim()
+    ) {
+      toast({
+        title:
+          "A publicação não pode ficar vazia",
+        variant:
+          "destructive",
+      });
+
+      return;
+    }
+
+    try {
+      const {
+        data,
+        error,
+      } =
+        await supabase
+          .from("posts")
+          .update({
+            content:
+              editContent.trim(),
+            updated_at:
+              new Date().toISOString(),
+          })
+          .eq(
+            "id",
+            editingPost.id
+          )
+          .eq(
+            "user_id",
+            user.id
+          )
+          .select()
+          .single();
+
+      if (error)
+        throw error;
+
+      setPosts(
+        (current) =>
+          current.map(
+            (post) =>
+              post.id ===
+              editingPost.id
+                ? {
+                    ...post,
+                    ...data,
+                  }
+                : post
+          )
+      );
+
+      setEditingPost(
+        null
+      );
+      setEditContent("");
+
+      toast({
+        title:
+          "Publicação atualizada",
+      });
+    } catch (error) {
+      console.error(
+        "Erro ao editar:",
+        error
+      );
+
+      toast({
+        title:
+          "Não foi possível editar a publicação",
+        variant:
+          "destructive",
+      });
+    }
+  }
+
+  async function handleMarkAsSold(
+    post: Post
+  ) {
+    if (
+      !user ||
+      post.user_id !==
+        user.id
+    )
+      return;
+
+    try {
+      const {
+        data,
+        error,
+      } =
+        await supabase
+          .from("posts")
+          .update({
+            is_sold:
+              !post.is_sold,
+          })
+          .eq(
+            "id",
+            post.id
+          )
+          .eq(
+            "user_id",
+            user.id
+          )
+          .select()
+          .single();
+
+      if (error)
+        throw error;
+
+      setPosts(
+        (current) =>
+          current.map(
+            (item) =>
+              item.id ===
+              post.id
+                ? {
+                    ...item,
+                    ...data,
+                  }
+                : item
+          )
+      );
+
+      toast({
+        title: post.is_sold
+          ? "Anúncio reativado"
+          : "Anúncio marcado como vendido",
+      });
+    } catch (error) {
+      console.error(
+        "Erro ao alterar anúncio:",
+        error
+      );
+
+      toast({
+        title:
+          "Não foi possível atualizar o anúncio",
+        variant:
+          "destructive",
+      });
+    }
+  }
+
+  async function openComments(
+    post: Post
+  ) {
+    setSelectedPost(
+      post
+    );
+
+    setCommentsOpen(
+      true
+    );
+
+    setCommentsLoading(
+      true
+    );
+
+    try {
+      const {
+        data,
+        error,
+      } =
+        await supabase
+          .from(
+            "comments"
+          )
+          .select(
+            `
+              *,
+              profiles (
+                id,
+                full_name,
+                avatar_url,
+                course,
+                institution
+              )
+            `
+          )
+          .eq(
+            "post_id",
+            post.id
+          )
+          .order(
+            "created_at",
+            {
+              ascending:
+                true,
+            }
+          );
+
+      if (error)
+        throw error;
+
+      setComments(
+        data ?? []
+      );
+    } catch (error) {
+      console.error(
+        "Erro ao carregar comentários:",
+        error
+      );
+
+      toast({
+        title:
+          "Não foi possível carregar os comentários",
+        variant:
+          "destructive",
+      });
+    } finally {
+      setCommentsLoading(
+        false
+      );
+    }
+  }
+
+  async function addComment() {
+    if (
+      !user ||
+      !selectedPost ||
+      !commentText.trim()
+    )
+      return;
+
+    const content =
+      commentText.trim();
+
+    setCommentText("");
+
+    try {
+      const {
+        data,
+        error,
+      } =
+        await supabase
+          .from(
+            "comments"
+          )
+          .insert({
+            post_id:
+              selectedPost.id,
+            user_id:
+              user.id,
+            content,
+          })
+          .select(
+            `
+              *,
+              profiles (
+                id,
+                full_name,
+                avatar_url,
+                course,
+                institution
+              )
+            `
+          )
+          .single();
+
+      if (error)
+        throw error;
+
+      setComments(
+        (current) => [
+          ...current,
+          data,
+        ]
+      );
+
+      setPosts(
+        (current) =>
+          current.map(
+            (post) =>
+              post.id ===
+              selectedPost.id
+                ? {
+                    ...post,
+                    comments_count:
+                      post.comments_count +
+                      1,
+                  }
+                : post
+          )
+      );
+    } catch (error) {
+      console.error(
+        "Erro ao comentar:",
+        error
+      );
+
+      setCommentText(
+        content
+      );
+
+      toast({
+        title:
+          "Não foi possível enviar o comentário",
+        variant:
+          "destructive",
+      });
+    }
+  }
+
+  function handleAddToCalendar(
+    post: Post
+  ) {
+    if (!post.event_at)
+      return;
+
+    const start =
+      new Date(
+        post.event_at
+      );
+
+    const end =
+      new Date(
+        start.getTime() +
+          60 *
+            60 *
+            1000
+      );
+
+    const formatDate =
+      (
+        date: Date
+      ) =>
+        date
+          .toISOString()
+          .replace(
+            /[-:]/g,
+            ""
+          )
+          .replace(
+            /\.\d{3}Z$/,
+            "Z"
+          );
+
+    const url =
+      `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(
+        post.title ||
+          "Evento"
+      )}&dates=${formatDate(
+        start
+      )}/${formatDate(
+        end
+      )}&details=${encodeURIComponent(
+        post.content ||
+          ""
+      )}&location=${encodeURIComponent(
+        post.event_location ||
+          ""
+      )}`;
+
+    window.open(
+      url,
+      "_blank",
+      "noopener,noreferrer"
+    );
+}  async function loadNews() {
+    if (!user) return;
+
+    setNewsLoading(true);
+
+    try {
+      const {
+        data,
+        error,
+      } = await supabase
+        .from("news_channels")
+        .select("*")
+        .eq(
+          "status",
+          "approved"
+        )
+        .order(
+          "created_at",
+          {
+            ascending:
+              false,
+          }
+        );
+
+      if (error)
+        throw error;
+
+      setNewsItems(
+        data ?? []
+      );
+
+      const {
+        data: ownedChannels,
+        error:
+          ownedError,
+      } = await supabase
+        .from(
+          "news_channels"
+        )
+        .select("*")
+        .eq(
+          "owner_id",
+          user.id
+        )
+        .order(
+          "created_at",
+          {
+            ascending:
+              false,
+          }
+        );
+
+      if (
+        ownedError
+      ) {
+        console.error(
+          "Erro ao carregar jornais do usuário:",
+          ownedError
+        );
+      } else {
+        setMyChannels(
+          ownedChannels ??
+            []
+        );
+      }
+    } catch (error) {
+      console.error(
+        "Erro ao carregar jornais:",
+        error
+      );
+    } finally {
+      setNewsLoading(
+        false
+      );
+    }
+  }
+
+  function closeComposer() {
+    setComposerOpen(
+      false
+    );
+
+    resetComposer();
+  }
+
+  function resetComposer() {
+    previewUrls.forEach(
+      (url) => {
+        if (
+          url.startsWith(
+            "blob:"
+          )
+        ) {
+          URL.revokeObjectURL(
+            url
+          );
+        }
+      }
+    );
+
+    setNewContent("");
+    setNewTitle("");
+    setNewPrice("");
+    setNewOriginalPrice("");
+    setSelectedTag(null);
+    setMediaType("text");
+    setSelectedFiles([]);
+    setPreviewUrls([]);
+    setEventAt("");
+    setEventLocation("");
+    setIsVibe(false);
+    setMusicRef("");
+    setEditingPost(
+      null
+    );
+  }
+
+  function openEditComposer(
+    post: Post
+  ) {
+    setEditingPost(
+      post
+    );
+
+    setNewContent(
+      post.content ||
+        ""
+    );
+
+    setNewTitle(
+      post.title ||
+        ""
+    );
+
+    setSelectedTag(
+      post.tag ||
+        null
+    );
+
+    setNewPrice(
+      post.price != null
+        ? String(
+            post.price
+          )
+        : ""
+    );
+
+    setNewOriginalPrice(
+      post.original_price !=
+        null
+        ? String(
+            post.original_price
+          )
+        : ""
+    );
+
+    setEventAt(
+      post.event_at
+        ? new Date(
+            post.event_at
+          )
+            .toISOString()
+            .slice(
+              0,
+              16
+            )
+        : ""
+    );
+
+    setEventLocation(
+      post.event_location ||
+        ""
+    );
+
+    setComposerOpen(
+      true
+    );
+  }
+
+  function handleComposerMediaType(
+    type: MediaType
+  ) {
+    setMediaType(
+      type
+    );
+
+    setSelectedFiles(
+      []
+    );
+
+    previewUrls.forEach(
+      (url) => {
+        if (
+          url.startsWith(
+            "blob:"
+          )
+        ) {
+          URL.revokeObjectURL(
+            url
+          );
+        }
+      }
+    );
+
+    setPreviewUrls(
+      []
+    );
+  }
+
+  function getProfileInitials(
+    profile?: Profile | null
+  ) {
+    if (
+      !profile?.full_name
+    )
+      return "U";
+
+    return profile.full_name
+      .split(" ")
+      .filter(Boolean)
+      .slice(0, 2)
+      .map(
+        (part) =>
+          part[0]
+      )
+      .join("")
+      .toUpperCase();
+  }
+
+  function getRoleBadge(
+    post: Post
+  ) {
+    const badge =
+      post.author_badge;
+
+    if (!badge)
+      return null;
+
+    return (
+      ROLE_BADGES[
+        badge
+      ] ?? null
+    );
+  }
+
+  function formatPostDate(
+    date: string
+  ) {
+    try {
+      return formatDistanceToNow(
+        new Date(date),
+        {
+          addSuffix:
+            true,
+          locale:
+            ptBR,
+        }
+      );
+    } catch {
+      return "";
+    }
+  }
+
+  function formatPrice(
+    value:
+      | number
+      | null
+      | undefined
+  ) {
+    if (
+      value == null
+    )
+      return "";
+
+    return new Intl.NumberFormat(
+      "pt-BR",
+      {
+        style:
+          "currency",
+        currency:
+          "BRL",
+      }
+    ).format(
+      value
+    );
+  }
+
+  function sharePost(
+    post: Post
+  ) {
+    const url =
+      `${window.location.origin}/connect?post=${post.id}`;
+
+    if (
+      navigator.share
+    ) {
+      navigator
+        .share({
+          title:
+            post.title ||
+            "Publicação",
+          text:
+            post.content ||
+            "",
+          url,
+        })
+        .catch(
+          () => {}
+        );
+    } else {
+      navigator.clipboard
+        .writeText(
+          url
+        )
+        .then(
+          () => {
+            toast({
+              title:
+                "Link copiado!",
+              description:
+                "Você pode compartilhar a publicação onde quiser.",
+            });
+          }
+        )
+        .catch(
+          () => {
+            toast({
+              title:
+                "Não foi possível copiar o link",
+              variant:
+                "destructive",
+            });
+          }
+        );
+    }
+  }
+
+  function openProfile(
+    userId: string
+  ) {
+    navigate(
+      `/profile/${userId}`
+    );
+  }
+
+  function handleVibeClick(
+    vibe: Vibe
+  ) {
+    setViewingVibe(
+      vibe
+    );
+  }
+
+  function selectComposerTag(
+    tag: string
+  ) {
+    setSelectedTag(
+      (current) =>
+        current === tag
+          ? null
+          : tag
+    );
+  }
+
+  async function createNewsChannel() {
+    if (!user)
+      return;
+
+    if (
+      !newsChannelId &&
+      !myChannels.length
+    ) {
+      toast({
+        title:
+          "Crie ou solicite um jornal primeiro",
+        description:
+          "O acesso à publicação de notícias depende da aprovação do perfil do jornal.",
+        variant:
+          "destructive",
+      });
+
+      return;
+    }
+
+    const channel =
+      newsChannelId
+        ? myChannels.find(
+            (
+              item
+            ) =>
+              item.id ===
+              newsChannelId
+          )
+        : myChannels.find(
+            (
+              item
+            ) =>
+              item.status ===
+              "approved"
+          );
+
+    if (
+      !channel ||
+      channel.status !==
+        "approved"
+    ) {
+      toast({
+        title:
+          "Jornal ainda não aprovado",
+        description:
+          "Aguarde a aprovação do administrador para publicar notícias.",
+        variant:
+          "destructive",
+      });
+
+      return;
+    }
+
+    if (
+      !newsTitle.trim() ||
+      !newsContent.trim()
+    ) {
+      toast({
+        title:
+          "Preencha os dados da notícia",
+        description:
+          "Informe pelo menos o título e o conteúdo.",
+        variant:
+          "destructive",
+      });
+
+      return;
+    }
+
+    setPublishingNews(
+      true
+    );
+
+    try {
+      let coverUrl:
+        | string
+        | null =
+        null;
+
+      if (
+        newsCoverFile
+      ) {
+        const extension =
+          newsCoverFile.name
+            .split(
+              "."
+            )
+            .pop() ||
+          "jpg";
+
+        const path = `${user.id}/news_${Date.now()}_${Math.random()
+          .toString(36)
+          .slice(
+            2
+          )}.${extension}`;
+
+        const {
+          error:
+            uploadError,
+        } =
+          await supabase.storage
+            .from(
+              "news-media"
+            )
+            .upload(
+              path,
+              newsCoverFile
+            );
+
+        if (
+          uploadError
+        )
+          throw uploadError;
+
+        const {
+          data,
+        } =
+          supabase.storage
+            .from(
+              "news-media"
+            )
+            .getPublicUrl(
+              path
+            );
+
+        coverUrl =
+          data.publicUrl;
+      }
+
+      const {
+        error,
+      } =
+        await supabase
+          .from(
+            "news"
+          )
+          .insert({
+            channel_id:
+              channel.id,
+            author_id:
+              user.id,
+            title:
+              newsTitle.trim(),
+            content:
+              newsContent.trim(),
+            link:
+              newsLink.trim() ||
+              null,
+            cover_url:
+              coverUrl,
+            status:
+              "published",
+          });
+
+      if (error)
+        throw error;
+
+      toast({
+        title:
+          "Notícia publicada!",
+        description:
+          "Sua notícia já está disponível na aba de notícias.",
+      });
+
+      setNewsTitle("");
+      setNewsContent("");
+      setNewsLink("");
+      setNewsCoverFile(
+        null
+      );
+      setNewsCoverPreview(
+        null
+      );
+      setNewsChannelId(
+        null
+      );
+      setNewsComposerOpen(
+        false
+      );
+
+      loadNews();
+    } catch (error: any) {
+      console.error(
+        "Erro ao publicar notícia:",
+        error
+      );
+
+      toast({
+        title:
+          "Não foi possível publicar a notícia",
+        description:
+          error?.message ||
+          "Tente novamente.",
+        variant:
+          "destructive",
+      });
+    } finally {
+      setPublishingNews(
+        false
+      );
+    }
+  }
+
+  function handleNewsCover(
+    event: React.ChangeEvent<HTMLInputElement>
+  ) {
+    const file =
+      event.target.files?.[0];
+
+    if (!file)
+      return;
+
+    if (
+      !file.type.startsWith(
+        "image/"
+      )
+    ) {
+      toast({
+        title:
+          "Imagem inválida",
+        description:
+          "Selecione uma imagem para a capa.",
+        variant:
+          "destructive",
+      });
+
+      return;
+    }
+
+    if (
+      newsCoverPreview?.startsWith(
+        "blob:"
+      )
+    ) {
+      URL.revokeObjectURL(
+        newsCoverPreview
+      );
+    }
+
+    setNewsCoverFile(
+      file
+    );
+
+    setNewsCoverPreview(
+      URL.createObjectURL(
+        file
+      )
+    );
+  }
+
+  function resetNewsComposer() {
+    if (
+      newsCoverPreview?.startsWith(
+        "blob:"
+      )
+    ) {
+      URL.revokeObjectURL(
+        newsCoverPreview
+      );
+    }
+
+    setNewsChannelId(
+      null
+    );
+    setNewsTitle("");
+    setNewsContent("");
+    setNewsLink("");
+    setNewsCoverFile(
+      null
+    );
+    setNewsCoverPreview(
+      null
+    );
+  }
+
+  const approvedMyChannels =
+    useMemo(
+      () =>
+        myChannels.filter(
+          (
+            channel
+          ) =>
+            channel.status ===
+            "approved"
+        ),
+      [
+        myChannels,
+      ]
+    );
+
+  const hasNewsPermission =
+    approvedMyChannels.length >
+    0;
+
+  function renderVibes() {
+    return (
+      <section className="mb-6">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h2 className="text-base font-semibold">
+              Status
+            </h2>
+            <p className="text-xs text-muted-foreground">
+              Compartilhe algo que está acontecendo agora.
+            </p>
+          </div>
+
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() =>
+              openComposer(
+                true
+              )
+            }
+            className="gap-1"
+          >
+            <Plus className="h-4 w-4" />
+            Novo
+          </Button>
+        </div>
+
+        <ScrollArea className="w-full whitespace-nowrap">
+          <div className="flex gap-3 pb-2">
+            <button
+              type="button"
+              onClick={() =>
+                openComposer(
+                  true
+                )
+              }
+              className="w-[76px] shrink-0 text-left"
+            >
+              <div className="h-[76px] rounded-2xl border border-dashed flex items-center justify-center bg-muted/30">
+                <div className="flex flex-col items-center gap-1">
+                  <Plus className="h-6 w-6" />
+                  <span className="text-[10px] font-medium">
+                    Seu status
+                  </span>
+                </div>
+              </div>
             </button>
-            {vibes.map((v) => (
-              <button key={v.id} type="button" onClick={() => setViewingVibe(v)} className="flex w-16 shrink-0 flex-col items-center gap-1.5">
-                <span className="rounded-full bg-gradient-to-tr from-primary to-accent p-[2.5px]">
-                  <Avatar className="h-[58px] w-[58px] border-2 border-background"><AvatarImage src={v.profiles?.avatar_url} /><AvatarFallback className="bg-primary/10 text-primary font-black">{(v.profiles?.full_name || "E").slice(0, 2).toUpperCase()}</AvatarFallback></Avatar>
-                </span>
-                <span className="w-full truncate text-center text-[11px] font-bold">{v.user_id === user?.id ? "Você" : (v.profiles?.full_name || "Estudante").split(" ")[0]}</span>
-              </button>
-            ))}
+
+            {vibes.map(
+              (
+                vibe
+              ) => (
+                <button
+                  type="button"
+                  key={
+                    vibe.id
+                  }
+                  onClick={() =>
+                    handleVibeClick(
+                      vibe
+                    )
+                  }
+                  className="w-[76px] shrink-0 text-left"
+                >
+                  <div className="relative">
+                    <div className="h-[76px] rounded-2xl overflow-hidden border bg-muted">
+                      {vibe.media_url ? (
+                        <img
+                          src={
+                            vibe.media_url
+                          }
+                          alt=""
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <div className="h-full w-full p-2 flex items-center justify-center text-center text-[10px] font-medium">
+                          {vibe.content.slice(
+                            0,
+                            50
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    <Avatar className="absolute -bottom-2 left-1/2 -translate-x-1/2 h-7 w-7 border-2 border-background">
+                      <AvatarImage
+                        src={
+                          vibe.profiles?.avatar_url ??
+                          undefined
+                        }
+                      />
+                      <AvatarFallback>
+                        {getProfileInitials(
+                          vibe.profiles
+                        )}
+                      </AvatarFallback>
+                    </Avatar>
+                  </div>
+
+                  <p className="mt-3 text-[10px] text-center truncate">
+                    {vibe.profiles
+                      ?.full_name ||
+                      "Estudante"}
+                  </p>
+                </button>
+              )
+            )}
           </div>
 
-          {/* Publicação rápida */}
-          <Card className="rounded-[24px] border-border/30 p-4">
-            <button type="button" onClick={() => openComposer(false)} className="flex w-full items-center gap-3 text-left">
-              <Avatar className="h-10 w-10"><AvatarImage src={myAvatar ?? undefined} /><AvatarFallback className="bg-primary/10 text-primary font-black">Eu</AvatarFallback></Avatar>
-              <span className="flex-1 rounded-full bg-muted/60 px-4 py-2.5 text-sm font-medium text-muted-foreground">O que está pensando hoje?</span>
-            </button>
-            <div className="mt-3 grid grid-cols-3 gap-2 border-t border-border/30 pt-3">
-              <Button variant="ghost" className="rounded-xl text-xs font-bold" onClick={() => openComposer(false)}><ImageIcon className="h-4 w-4 mr-1.5 text-primary" /> Foto/vídeo</Button>
-              <Button variant="ghost" className="rounded-xl text-xs font-bold" onClick={() => navigate("/connect?tab=feed")} disabled title="Em breve"><CheckCircle2 className="h-4 w-4 mr-1.5" /> Enquete</Button>
-              <Button variant="ghost" className="rounded-xl text-xs font-bold" onClick={() => openComposer(false)}><PenLine className="h-4 w-4 mr-1.5 text-primary" /> Texto</Button>
-            </div>
-          </Card>
+          <ScrollBar orientation="horizontal" />
+        </ScrollArea>
+      </section>
+    );
+  }
 
-          {/* Filtros de descoberta */}
-          <div className="flex gap-2 overflow-x-auto scrollbar-none">
-            {([["for-you", "Para você"], ["trending", "Em alta"], ["university", "Universidade"], ["course", "Meu curso"]] as const).map(([id, label]) => (
-              <button key={id} type="button" onClick={() => setFeedMode(id)} className={cn("shrink-0 rounded-full border px-4 py-2 text-xs font-bold transition-colors", feedMode === id ? "border-primary bg-primary text-primary-foreground" : "border-border/50 bg-card text-muted-foreground")}>{label}</button>
-            ))}
-          </div>
-        </div>
-      )}
+  function renderComposer() {
+    const isMarket =
+      activeTab ===
+      "market";
 
-      {/* SUB-MENU DO MERCADO (Painel do Vendedor vs Explorar) */}
-      {activeTab === "market" && !showSavedOnly && (
-        <div className="flex flex-col space-y-4 animate-in slide-in-from-top-2">
-          <div className="flex bg-muted/30 p-1 rounded-2xl w-fit mx-auto border border-border/40">
-            <button onClick={() => setMarketView("explore")} className={cn("px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all", marketView === "explore" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground")}>Explorar Loja</button>
-            <button onClick={() => setMarketView("my_ads")} className={cn("px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest transition-all", marketView === "my_ads" ? "bg-background shadow-sm text-primary" : "text-muted-foreground hover:text-foreground")}>Meus Anúncios</button>
-          </div>
-          
-          {marketView === "explore" && (
-            <div className="relative group w-full">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground group-focus-within:text-primary transition-colors" />
-              <Input value={marketSearch} onChange={(e) => setMarketSearch(e.target.value)} placeholder="Busque por livros, cadernos, serviços, estagios..." className="pl-12 h-14 rounded-[20px] bg-card border border-border/40 shadow-sm focus-visible:ring-primary text-base font-medium" />
-            </div>
-          )}
-        </div>
-      )}
+    return (
+      <Dialog
+        open={
+          composerOpen
+        }
+        onOpenChange={(
+          open
+        ) => {
+          if (!open)
+            closeComposer();
+          else
+            setComposerOpen(
+              true
+            );
+        }}
+      >
+        <DialogContent className="max-w-2xl p-0 overflow-hidden">
+          <DialogHeader className="px-6 pt-6 pb-4 border-b">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <DialogTitle className="text-xl">
+                  {isVibe
+                    ? "Criar status"
+                    : editingPost
+                    ? "Editar publicação"
+                    : isMarket
+                    ? "Criar anúncio"
+                    : "Criar publicação"}
+                </DialogTitle>
 
-      {/* MODAL DE COMPOSIÇÃO DE POST (Adaptação Inteligente) */}
-      <Dialog open={composerOpen} onOpenChange={setComposerOpen}>
-        <DialogContent className="rounded-[32px] p-6 sm:max-w-xl border border-white/10 bg-background/95 backdrop-blur-2xl shadow-2xl">
-          <DialogHeader className="mb-4">
-            <DialogTitle className="text-2xl font-black">{activeTab === "market" ? "Anunciar na Loja" : isVibe ? "Nova Vibe" : "Nova Publicação"}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-5">
-            
-            {/* CAMPOS ESPECÍFICOS DO MARKETPLACE */}
-            {activeTab === "market" && (
-              <div className="space-y-4 animate-in slide-in-from-top-2">
-                <div className="space-y-2">
-                  <Label className="text-xs font-bold uppercase text-muted-foreground">O que você está vendendo ou anunciando?</Label>
-                  <Input value={newTitle} onChange={(e) => setNewTitle(e.target.value)} placeholder="Ex: Livro de Anatomia Humana (Seminovo)" className="h-14 rounded-2xl bg-muted/40 border-0 focus-visible:ring-primary font-black text-lg" />
-                </div>
-                
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-2">
-                    <Label className="text-xs font-bold uppercase text-muted-foreground">Preço (R$)</Label>
-                    <Input type="number" value={newPrice} onChange={(e) => setNewPrice(e.target.value)} placeholder="150,00" className="h-14 rounded-2xl bg-muted/40 border-0 focus-visible:ring-primary font-bold text-base" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="text-xs font-bold uppercase text-muted-foreground">Preço Original <span className="text-[10px] opacity-70">(Opcional)</span></Label>
-                    <Input type="number" value={newOriginalPrice} onChange={(e) => setNewOriginalPrice(e.target.value)} placeholder="200,00" className="h-14 rounded-2xl bg-muted/40 border-0 focus-visible:ring-primary font-bold text-base text-muted-foreground line-through decoration-red-500" />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-xs font-bold uppercase text-muted-foreground">Categoria do Anúncio</Label>
-                  <select value={selectedTag || ""} onChange={(e) => setSelectedTag(e.target.value)} className="w-full rounded-2xl bg-muted/40 border-0 h-14 px-4 text-base font-bold focus:ring-2 focus:ring-primary outline-none">
-                    <option value="" disabled>Selecione uma categoria...</option>
-                    {MARKETPLACE_TAGS.map((t) => (<option key={t} value={t}>{t}</option>))}
-                  </select>
-                </div>
+                <DialogDescription className="mt-1">
+                  {isVibe
+                    ? "Compartilhe um momento rápido com a comunidade."
+                    : isMarket
+                    ? "Monte seu anúncio com informações claras e uma apresentação profissional."
+                    : "Compartilhe conhecimento, oportunidades, eventos e ideias com outros estudantes."}
+                </DialogDescription>
               </div>
-            )}
 
-            {/* CAMPOS GERAIS DO CONNECT — em qualquer aba acadêmica (Para Você, Em Alta,
-                Universidade, Curso, Comunidades), nunca no Marketplace/Notícias */}
-            {activeTab !== "market" && activeTab !== "news" && !isVibe && (
-              <div className="flex gap-2 flex-wrap">
-                {ACADEMIC_TAGS
-                  .filter((t) => !RESTRICTED_TAGS.includes(t) || myRoles.some((r) => ["professor", "university_official", "admin"].includes(r)))
-                  .map((t) => {
-                    const TagIcon = POST_CATEGORY_ICONS[t];
-                    return (
-                      <button key={t} type="button" onClick={() => setSelectedTag(selectedTag === t ? null : t)} className={cn("text-[10px] font-bold uppercase tracking-wider px-4 py-2 rounded-full transition-all border flex items-center gap-1.5", selectedTag === t ? "bg-primary text-primary-foreground border-primary shadow-sm" : "bg-card text-muted-foreground border-border/40 hover:bg-muted")}>
-                        {selectedTag === t ? <Check className="h-3 w-3" /> : TagIcon && <TagIcon className="h-3 w-3" />} {t}
-                      </button>
-                    );
-                  })}
-              </div>
-            )}
-
-            {/* Campos extras da categoria Evento (Capítulo 6, seção 4 e 8 — data usada
-                pela IA para "adicionar ao meu calendário") */}
-            {selectedTag === "Evento" && (
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-bold uppercase text-muted-foreground">Data e hora</Label>
-                  <Input type="datetime-local" value={eventAt} onChange={(e) => setEventAt(e.target.value)} className="h-12 rounded-2xl bg-card border border-border/40 text-sm shadow-inner" />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-bold uppercase text-muted-foreground">Local</Label>
-                  <Input value={eventLocation} onChange={(e) => setEventLocation(e.target.value)} placeholder="Ex: Auditório do CTEC" className="h-12 rounded-2xl bg-card border border-border/40 text-sm shadow-inner" />
-                </div>
-              </div>
-            )}
-            
-            <div className="space-y-2">
-              <Label className="text-xs font-bold uppercase text-muted-foreground">{activeTab === "market" ? "Descrição detalhada" : isVibe ? "Sua vibe (some em 24h)" : "Sua mensagem"}</Label>
-              <Textarea value={newContent} onChange={(e) => setNewContent(e.target.value)} placeholder={activeTab === "market" ? "Descreva os detalhes, estado de conservação, onde entregar..." : isVibe ? "Como está o seu dia no campus?" : "Compartilhe suas ideias, resumos ou dúvidas..."} rows={activeTab === "market" ? 3 : isVibe ? 3 : 5} className="rounded-2xl resize-none border border-border/40 bg-card focus-visible:ring-primary text-base p-4 shadow-inner" />
-            </div>
-            {activeTab !== "market" && (
-              <div className="space-y-2">
-                <Label htmlFor="music-ref" className="text-xs font-bold uppercase text-muted-foreground">Música (opcional)</Label>
-                <Input id="music-ref" value={musicRef} maxLength={80} onChange={(e) => setMusicRef(e.target.value)} placeholder="Ex: Trem-Bala — Ana Vilela" className="h-11 rounded-2xl" />
-              </div>
-            )}
-
-            {/* PRÉ-VISUALIZAÇÃO DE MÚLTIPLAS FOTOS */}
-            {previewUrls.length > 0 && previewUrls[0] !== "pdf-preview" && (
-              <div className="flex gap-3 overflow-x-auto pb-2 snap-x">
-                {previewUrls.map((url, i) => (
-                  <div key={i} className="relative shrink-0 snap-center animate-in zoom-in-95">
-                    {mediaType === "video" ? (
-                      <video src={url} className="rounded-2xl h-32 w-32 object-cover shadow-sm border border-border/30" />
-                    ) : (
-                      <img src={url} className="rounded-2xl h-32 w-32 object-cover shadow-sm border border-border/30" />
-                    )}
-                    {mediaType === "image" && (
-                      <Button size="sm" variant="secondary" className="absolute bottom-2 left-2 h-7 rounded-full px-2 text-[11px] font-bold" onClick={() => setEditingFileIndex(i)}><Sparkles className="h-3 w-3 mr-1" /> Editar</Button>
-                    )}
-                    <Button size="icon" variant="destructive" className="absolute -top-2 -right-2 h-7 w-7 rounded-full shadow-lg border-2 border-background" onClick={() => removeFile(i)}><X className="h-3.5 w-3.5" /></Button>
-                  </div>
-                ))}
-              </div>
-            )}
-            
-            {previewUrls[0] === "pdf-preview" && selectedFiles[0] && (
-              <div className="flex items-center justify-between bg-card rounded-2xl p-3 border border-border/40 shadow-sm">
-                <div className="flex items-center gap-3 overflow-hidden">
-                  <div className="h-10 w-10 bg-primary/10 text-primary rounded-xl flex items-center justify-center shrink-0"><FileText className="h-5 w-5" /></div>
-                  <span className="text-sm font-bold truncate">{selectedFiles[0].name}</span>
-                </div>
-                <Button size="icon" variant="ghost" className="h-8 w-8 rounded-full text-muted-foreground hover:bg-destructive/10 hover:text-destructive" onClick={() => removeFile(0)}><X className="h-4 w-4" /></Button>
-              </div>
-            )}
-
-            {/* BOTÕES DE AÇÃO DO MODAL */}
-            <div className="flex items-center justify-between pt-4 border-t border-border/30 mt-2">
-              <div className="flex items-center gap-2">
-                <label className="cursor-pointer group">
-                  <input type="file" multiple={activeTab === "market"} accept="image/*,video/*" className="hidden" onChange={(e) => { setMediaType(e.target.files?.[0]?.type.startsWith('video') ? "video" : "image"); handleFileSelect(e); }} />
-                  <div className="h-12 w-12 rounded-full bg-card border border-border/40 shadow-sm flex items-center justify-center text-muted-foreground group-hover:bg-primary group-hover:text-primary-foreground group-hover:border-primary transition-all"><ImageIcon className="h-5 w-5" /></div>
-                </label>
-                {activeTab !== "market" && (
-                  <label className="cursor-pointer group">
-                    <input type="file" accept="application/pdf" className="hidden" onChange={(e) => { setMediaType("document"); handleFileSelect(e); }} />
-                    <div className="h-12 w-12 rounded-full bg-card border border-border/40 shadow-sm flex items-center justify-center text-muted-foreground group-hover:bg-primary group-hover:text-primary-foreground group-hover:border-primary transition-all"><FileText className="h-5 w-5" /></div>
-                  </label>
-                )}
-                {activeTab === "market" && <span className="text-[10px] font-bold text-muted-foreground ml-2">Máx 5 fotos</span>}
-              </div>
-              <Button onClick={handlePost} disabled={posting || (!newContent.trim() && selectedFiles.length === 0)} className="rounded-full font-black h-12 px-8 text-sm shadow-md">
-                {posting ? <Loader2 className="h-5 w-5 animate-spin" /> : activeTab === "market" ? "Publicar Anúncio" : "Postar"}
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={
+                  closeComposer
+                }
+                aria-label="Fechar"
+              >
+                <X className="h-5 w-5" />
               </Button>
             </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+          </DialogHeader>
 
-      {/* EDITOR DE NOTÍCIAS RESTANTE MANTIDO IDÊNTICO AO ANTERIOR... */}
-      <Dialog open={newsComposerOpen} onOpenChange={setNewsComposerOpen}>
-        <DialogContent className="rounded-[32px] max-w-lg p-0 overflow-hidden border-0 shadow-2xl bg-background">
-          <div className="p-6 border-b border-border/40 bg-muted/20">
-            <h2 className="font-black text-2xl flex items-center gap-2"><Newspaper className="h-6 w-6 text-primary"/> Redação Oficial</h2>
-            <p className="text-sm text-muted-foreground font-semibold mt-1">Publique comunicados para o campus digital.</p>
-          </div>
-          <ScrollArea className="max-h-[65vh] p-6 space-y-6">
-            {myChannels.length === 0 ? (
-              <div className="text-center p-8 bg-card rounded-3xl border-2 border-dashed border-border/50">
-                <p className="text-base font-bold text-muted-foreground">Você não tem permissão de editor em canais oficiais.</p>
-              </div>
-            ) : (
-              <div className="space-y-6 pb-4">
-                <div className="space-y-2">
-                  <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Canal de Publicação</Label>
-                  <select value={newsChannelId} onChange={(e) => setNewsChannelId(e.target.value)} className="w-full rounded-2xl bg-card border border-border/50 h-14 px-4 text-base font-bold shadow-sm outline-none focus:border-primary">
-                    {myChannels.map((c) => (<option key={c.id} value={c.id}>{c.name}</option>))}
-                  </select>
+          <div className="max-h-[75vh] overflow-y-auto px-6 py-5">
+            <div className="flex gap-3">
+              <Avatar className="h-10 w-10 shrink-0">
+                <AvatarImage
+                  src={
+                    myAvatar ??
+                    undefined
+                  }
+                />
+                <AvatarFallback>
+                  {getProfileInitials(
+                    {
+                      id:
+                        user?.id ||
+                        "",
+                      full_name:
+                        user?.user_metadata
+                          ?.full_name ??
+                        null,
+                      avatar_url:
+                        myAvatar,
+                      course:
+                        null,
+                      institution:
+                        null,
+                    }
+                  )}
+                </AvatarFallback>
+              </Avatar>
+
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="font-semibold text-sm">
+                    {user
+                      ?.user_metadata
+                      ?.full_name ||
+                      "Você"}
+                  </span>
+
+                  <Badge
+                    variant="secondary"
+                    className="text-[10px] h-5"
+                  >
+                    <Globe className="h-3 w-3 mr-1" />
+                    Público
+                  </Badge>
                 </div>
-                
-                <div className="space-y-2">
-                  <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Capa da Notícia</Label>
-                  {newsCoverPreview ? (
-                    <div className="relative rounded-3xl overflow-hidden shadow-sm group border border-border/30">
-                      <img src={newsCoverPreview} className="w-full h-48 object-cover" />
-                      <div className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-sm">
-                        <Button size="sm" variant="destructive" className="rounded-full font-bold h-10 px-4" onClick={() => {setNewsCoverFile(null); setNewsCoverPreview(null);}}><Trash2 className="h-4 w-4 mr-2"/>Remover Capa</Button>
+
+                {isVibe ? (
+                  <Textarea
+                    ref={
+                      composerTextareaRef
+                    }
+                    value={
+                      newContent
+                    }
+                    onChange={(
+                      event
+                    ) =>
+                      setNewContent(
+                        event
+                          .target
+                          .value
+                      )
+                    }
+                    placeholder="O que está acontecendo?"
+                    className="min-h-[150px] resize-none border-0 px-0 focus-visible:ring-0 text-base"
+                    maxLength={
+                      500
+                    }
+                  />
+                ) : (
+                  <>
+                    <Input
+                      value={
+                        newTitle
+                      }
+                      onChange={(
+                        event
+                      ) =>
+                        setNewTitle(
+                          event
+                            .target
+                            .value
+                        )
+                      }
+                      placeholder={
+                        isMarket
+                          ? "Título do anúncio"
+                          : "Título (opcional)"
+                      }
+                      className="mb-3"
+                      maxLength={
+                        120
+                      }
+                    />
+
+                    <Textarea
+                      ref={
+                        composerTextareaRef
+                      }
+                      value={
+                        newContent
+                      }
+                      onChange={(
+                        event
+                      ) =>
+                        setNewContent(
+                          event
+                            .target
+                            .value
+                        )
+                      }
+                      placeholder={
+                        isMarket
+                          ? "Descreva o produto ou serviço..."
+                          : "O que você quer compartilhar com a comunidade?"
+                      }
+                      className="min-h-[160px] resize-none text-base"
+                      maxLength={
+                        5000
+                      }
+                    />
+                  </>
+                )}
+
+                <div className="flex justify-end mt-1">
+                  <span className="text-[11px] text-muted-foreground">
+                    {newContent.length}/
+                    {isVibe
+                      ? 500
+                      : 5000}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {!isVibe && (
+              <div className="mt-5 space-y-5">
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <Label className="text-sm font-semibold">
+                      Categoria
+                    </Label>
+
+                    {selectedTag && (
+                      <button
+                        type="button"
+                        className="text-xs text-muted-foreground hover:text-foreground"
+                        onClick={() =>
+                          setSelectedTag(
+                            null
+                          )
+                        }
+                      >
+                        Limpar
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    {(
+                      isMarket
+                        ? [
+                            "Venda",
+                            "Compra",
+                            "Serviço",
+                            "Troca",
+                            "Doação",
+                          ]
+                        : ACADEMIC_TAGS
+                    ).map(
+                      (
+                        tag
+                      ) => {
+                        const Icon =
+                          POST_CATEGORY_ICONS[
+                            tag
+                          ] ??
+                          Tag;
+
+                        return (
+                          <button
+                            key={
+                              tag
+                            }
+                            type="button"
+                            onClick={() =>
+                              selectComposerTag(
+                                tag
+                              )
+                            }
+                            className={cn(
+                              "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs transition-colors",
+                              selectedTag ===
+                                tag
+                                ? "bg-primary text-primary-foreground border-primary"
+                                : "bg-background hover:bg-muted"
+                            )}
+                          >
+                            <Icon className="h-3.5 w-3.5" />
+                            {
+                              tag
+                            }
+                          </button>
+                        );
+                      }
+                    )}
+                  </div>
+                </div>
+
+                {isMarket && (
+                  <div className="rounded-xl border p-4 bg-muted/20">
+                    <div className="flex items-center gap-2 mb-3">
+                      <ShoppingBag className="h-4 w-4" />
+                      <div>
+                        <p className="text-sm font-semibold">
+                          Informações do anúncio
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Facilite a negociação para quem encontrar seu anúncio.
+                        </p>
                       </div>
                     </div>
-                  ) : (
-                    <label className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed border-border/60 rounded-3xl cursor-pointer bg-card hover:bg-muted/50 transition-colors shadow-sm">
-                      <div className="flex flex-col items-center justify-center">
-                        <div className="h-12 w-12 bg-primary/10 rounded-full flex items-center justify-center mb-3"><UploadCloud className="h-6 w-6 text-primary" /></div>
-                        <p className="text-sm font-black text-foreground">Upload da imagem de capa</p>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <Label className="text-xs">
+                          Preço
+                        </Label>
+                        <Input
+                          value={
+                            newPrice
+                          }
+                          onChange={(
+                            event
+                          ) =>
+                            setNewPrice(
+                              event
+                                .target
+                                .value
+                            )
+                          }
+                          placeholder="R$ 0,00"
+                          className="mt-1.5"
+                        />
                       </div>
-                      <input type="file" accept="image/*" className="hidden" onChange={handleNewsCoverSelect} />
-                    </label>
+
+                      <div>
+                        <Label className="text-xs">
+                          Preço original
+                        </Label>
+                        <Input
+                          value={
+                            newOriginalPrice
+                          }
+                          onChange={(
+                            event
+                          ) =>
+                            setNewOriginalPrice(
+                              event
+                                .target
+                                .value
+                            )
+                          }
+                          placeholder="R$ 0,00"
+                          className="mt-1.5"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {selectedTag ===
+                  "Evento" && (
+                  <div className="rounded-xl border p-4 bg-muted/20">
+                    <div className="flex items-center gap-2 mb-3">
+                      <CalendarDays className="h-4 w-4" />
+                      <div>
+                        <p className="text-sm font-semibold">
+                          Dados do evento
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Adicione data, horário e local.
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <Label className="text-xs">
+                          Data e horário
+                        </Label>
+                        <Input
+                          type="datetime-local"
+                          value={
+                            eventAt
+                          }
+                          onChange={(
+                            event
+                          ) =>
+                            setEventAt(
+                              event
+                                .target
+                                .value
+                            )
+                          }
+                          className="mt-1.5"
+                        />
+                      </div>
+
+                      <div>
+                        <Label className="text-xs">
+                          Local
+                        </Label>
+                        <Input
+                          value={
+                            eventLocation
+                          }
+                          onChange={(
+                            event
+                          ) =>
+                            setEventLocation(
+                              event
+                                .target
+                                .value
+                            )
+                          }
+                          placeholder="Ex.: UFAL — Auditório..."
+                          className="mt-1.5"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div>
+                  <Label className="text-sm font-semibold">
+                    Adicionar ao post
+                  </Label>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-2">
+                    <Button
+                      type="button"
+                      variant={
+                        mediaType ===
+                        "image"
+                          ? "secondary"
+                          : "outline"
+                      }
+                      className="justify-start gap-2"
+                      onClick={() =>
+                        handleComposerMediaType(
+                          "image"
+                        )
+                      }
+                    >
+                      <ImageIcon className="h-4 w-4" />
+                      Foto
+                    </Button>
+
+                    <Button
+                      type="button"
+                      variant={
+                        mediaType ===
+                        "video"
+                          ? "secondary"
+                          : "outline"
+                      }
+                      className="justify-start gap-2"
+                      onClick={() =>
+                        handleComposerMediaType(
+                          "video"
+                        )
+                      }
+                    >
+                      <Video className="h-4 w-4" />
+                      Vídeo
+                    </Button>
+
+                    <Button
+                      type="button"
+                      variant={
+                        mediaType ===
+                        "document"
+                          ? "secondary"
+                          : "outline"
+                      }
+                      className="justify-start gap-2"
+                      onClick={() =>
+                        handleComposerMediaType(
+                          "document"
+                        )
+                      }
+                    >
+                      <FileText className="h-4 w-4" />
+                      Arquivo
+                    </Button>
+
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="justify-start gap-2"
+                      onClick={() =>
+                        toast({
+                          title:
+                            "Enquetes",
+                          description:
+                            "A estrutura visual está preparada; a votação pode ser conectada à tabela de enquetes.",
+                        })
+                      }
+                    >
+                      <BarChart3 className="h-4 w-4" />
+                      Enquete
+                    </Button>
+                  </div>
+
+                  {mediaType !==
+                    "text" && (
+                    <div className="mt-3">
+                      <input
+                        ref={
+                          fileInputRef
+                        }
+                        type="file"
+                        accept={
+                          mediaType ===
+                          "image"
+                            ? "image/*"
+                            : mediaType ===
+                            "video"
+                            ? "video/*"
+                            : ".pdf,.doc,.docx,.ppt,.pptx"
+                        }
+                        multiple={
+                          mediaType ===
+                          "image"
+                        }
+                        onChange={
+                          handleFileSelect
+                        }
+                        className="hidden"
+                      />
+
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="w-full h-24 border-dashed flex flex-col gap-1"
+                        onClick={() =>
+                          fileInputRef.current?.click()
+                        }
+                      >
+                        <UploadCloud className="h-6 w-6" />
+                        <span className="text-sm font-medium">
+                          {mediaType ===
+                          "image"
+                            ? "Escolher fotos"
+                            : mediaType ===
+                              "video"
+                            ? "Escolher vídeo"
+                            : "Escolher arquivo"}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          Clique para selecionar do dispositivo
+                        </span>
+                      </Button>
+                    </div>
+                  )}
+
+                  {previewUrls.length >
+                    0 && (
+                    <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 gap-2">
+                      {previewUrls.map(
+                        (
+                          url,
+                          index
+                        ) => (
+                          <div
+                            key={`${url}-${index}`}
+                            className="relative rounded-xl overflow-hidden border bg-muted aspect-square"
+                          >
+                            {mediaType ===
+                            "image" ? (
+                              <img
+                                src={
+                                  url
+                                }
+                                alt=""
+                                className="h-full w-full object-cover"
+                              />
+                            ) : mediaType ===
+                              "video" ? (
+                              <video
+                                src={
+                                  url
+                                }
+                                controls
+                                className="h-full w-full object-cover"
+                              />
+                            ) : (
+                              <div className="h-full w-full flex flex-col items-center justify-center gap-2 p-3 text-center">
+                                <FileText className="h-8 w-8" />
+                                <span className="text-xs break-all">
+                                  {
+                                    selectedFiles[
+                                      index
+                                    ]
+                                      ?.name
+                                  }
+                                </span>
+                              </div>
+                            )}
+
+                            <button
+                              type="button"
+                              onClick={() =>
+                                removeFile(
+                                  index
+                                )
+                              }
+                              className="absolute top-2 right-2 h-7 w-7 rounded-full bg-black/70 text-white flex items-center justify-center"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          </div>
+                        )
+                      )}
+                    </div>
                   )}
                 </div>
 
-                <div className="space-y-2">
-                  <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Manchete (Título)</Label>
-                  <Input value={newsTitle} onChange={(e) => setNewsTitle(e.target.value)} placeholder="Ex: Nova biblioteca inaugurada..." className="h-14 rounded-2xl bg-card border border-border/50 font-black text-lg shadow-sm focus-visible:ring-primary" />
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Corpo da Notícia</Label>
-                  <Textarea value={newsContent} onChange={(e) => setNewsContent(e.target.value)} placeholder="Escreva os detalhes da notícia..." rows={8} className="rounded-2xl bg-card border border-border/50 text-base p-5 resize-none shadow-sm focus-visible:ring-primary" />
+                <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                  <div className="flex items-center gap-1">
+                    <ShieldCheck className="h-3.5 w-3.5" />
+                    Respeite a comunidade
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Info className="h-3.5 w-3.5" />
+                    Evite divulgar dados pessoais
+                  </div>
                 </div>
               </div>
             )}
-          </ScrollArea>
-          {myChannels.length > 0 && (
-            <div className="p-5 border-t border-border/40 bg-background">
-              <Button onClick={publishNews} disabled={publishingNews || !newsTitle.trim()} className="w-full h-14 rounded-2xl font-black text-lg shadow-lg">
-                {publishingNews ? <Loader2 className="h-5 w-5 mr-2 animate-spin" /> : "Publicar Edição no Portal"}
+
+            {isVibe && (
+              <div className="mt-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Music className="h-4 w-4" />
+                  <Label className="text-sm">
+                    Música
+                  </Label>
+                  <span className="text-xs text-muted-foreground">
+                    opcional
+                  </span>
+                </div>
+
+                <Input
+                  value={
+                    musicRef
+                  }
+                  onChange={(
+                    event
+                  ) =>
+                    setMusicRef(
+                      event
+                        .target
+                        .value
+                    )
+                  }
+                  placeholder="Cole um link de música, se quiser"
+                />
+
+                <div className="mt-3">
+                  <input
+                    ref={
+                      fileInputRef
+                    }
+                    type="file"
+                    accept="image/*"
+                    onChange={
+                      handleFileSelect
+                    }
+                    className="hidden"
+                  />
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="gap-2"
+                    onClick={() =>
+                      fileInputRef.current?.click()
+                    }
+                  >
+                    <ImagePlus className="h-4 w-4" />
+                    Adicionar imagem
+                  </Button>
+                </div>
+
+                {previewUrls[0] && (
+                  <div className="relative mt-3 overflow-hidden rounded-xl border aspect-video">
+                    <img
+                      src={
+                        previewUrls[0]
+                      }
+                      alt=""
+                      className="h-full w-full object-cover"
+                    />
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        removeFile(
+                          0
+                        )
+                      }
+                      className="absolute top-2 right-2 h-8 w-8 rounded-full bg-black/70 text-white flex items-center justify-center"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="border-t px-6 py-4 flex items-center justify-between gap-3">
+            <div className="text-xs text-muted-foreground hidden sm:block">
+              {isVibe
+                ? "Seu status desaparecerá após 24 horas."
+                : "Revise as informações antes de publicar."}
+            </div>
+
+            <div className="flex items-center gap-2 ml-auto">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={
+                  closeComposer
+                }
+              >
+                Cancelar
+              </Button>
+
+              <Button
+                type="button"
+                onClick={
+                  handlePost
+                }
+                disabled={
+                  posting ||
+                  (!newContent.trim() &&
+                    !selectedFiles.length)
+                }
+                className="gap-2 min-w-[120px]"
+              >
+                {posting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Publicando...
+                  </>
+                ) : (
+                  <>
+                    <Send className="h-4 w-4" />
+                    Publicar
+                  </>
+                )}
               </Button>
             </div>
-          )}
+          </div>
         </DialogContent>
       </Dialog>
+    );
+  }
 
-      <ImageEditor
-        file={editingFileIndex !== null ? selectedFiles[editingFileIndex] ?? null : null}
-        onClose={() => setEditingFileIndex(null)}
-        onApply={(file) => {
-          const i = editingFileIndex;
-          if (i === null) return;
-          setSelectedFiles(prev => prev.map((f, idx) => idx === i ? file : f));
-          setPreviewUrls(prev => prev.map((u, idx) => idx === i ? URL.createObjectURL(file) : u));
+  function renderNewsComposer() {
+    return (
+      <Dialog
+        open={
+          newsComposerOpen
+        }
+        onOpenChange={(
+          open
+        ) => {
+          if (!open)
+            resetNewsComposer();
+
+          setNewsComposerOpen(
+            open
+          );
         }}
-      />
+      >
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>
+              Publicar notícia
+            </DialogTitle>
 
-      {/* Visualizador de Vibe */}
-      <Dialog open={!!viewingVibe} onOpenChange={(o) => !o && setViewingVibe(null)}>
-        <DialogContent className="max-w-sm overflow-hidden rounded-[28px] p-0">
-          {viewingVibe && (
-            <div className="relative">
-              <div className="flex items-center gap-2 p-4">
-                <Avatar className="h-9 w-9"><AvatarImage src={viewingVibe.profiles?.avatar_url} /><AvatarFallback className="bg-primary/10 text-primary font-black">{viewingVibe.profiles?.full_name?.charAt(0) || "U"}</AvatarFallback></Avatar>
-                <div><p className="text-sm font-black">{viewingVibe.profiles?.full_name || "Estudante"}</p><p className="text-xs text-muted-foreground">{formatDistanceToNow(new Date(viewingVibe.created_at), { locale: ptBR, addSuffix: true })}</p></div>
-              </div>
-              {(viewingVibe.media_urls?.[0] || viewingVibe.media_url) ? (
-                <img src={viewingVibe.media_urls?.[0] || viewingVibe.media_url!} alt="Vibe" className="max-h-[60dvh] w-full object-cover" />
-              ) : null}
-              {viewingVibe.content && <p className="whitespace-pre-wrap p-4 text-base font-semibold">{viewingVibe.content}</p>}
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* Edição de publicação */}
-      <Dialog open={!!editingPost} onOpenChange={(o) => !o && setEditingPost(null)}>
-        <DialogContent className="rounded-[28px] sm:max-w-lg">
-          <DialogHeader><DialogTitle>Editar publicação</DialogTitle></DialogHeader>
-          <Textarea value={editContent} onChange={(e) => setEditContent(e.target.value)} rows={6} className="rounded-2xl text-base" />
-          <Button onClick={saveEdit} disabled={savingEdit || !editContent.trim()} className="rounded-full font-black">
-            {savingEdit ? <Loader2 className="h-4 w-4 animate-spin" /> : "Salvar alterações"}
-          </Button>
-        </DialogContent>
-      </Dialog>
-
-      {/* RENDERIZAÇÃO DO FEED — feed único (algoritmo) ou Mercado.
-          "news" tem seu próprio bloco abaixo, pois usa a tabela news_posts, não posts. */}
-      {activeTab !== "news" && (
-        loading ? (
-          <div className="flex justify-center py-20"><Loader2 className="h-10 w-10 animate-spin text-primary" /></div>
-        ) : visiblePosts.length === 0 ? (
-          <div className="p-12 text-center rounded-[32px] bg-card border border-border/30 shadow-sm animate-in fade-in mt-6">
-            {activeTab === "market" ? <Store className="h-16 w-16 mx-auto mb-4 text-muted-foreground/30" /> : <Globe className="h-16 w-16 mx-auto mb-4 text-muted-foreground/30" />}
-            <p className="text-xl font-black text-foreground">Nada por aqui.</p>
-            <p className="text-sm font-medium text-muted-foreground mt-2">
-              {showSavedOnly ? "Você ainda não salvou nenhuma publicação."
-                : activeTab === "market" ? "Não há produtos ou serviços listados agora."
-                : "Seja o primeiro a postar no campus."}
-            </p>
-          </div>
-        ) : (
-          <div className={cn("mt-4", activeTab === "market" ? "grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4" : "space-y-6")}>
-            {visiblePosts.map((p) => (
-              activeTab === "market" ? (
-                <MarketCard
-                  key={p.id}
-                  post={p}
-                  isOwner={p.user_id === user?.id}
-                  navigate={navigate}
-                  onSave={() => handleSave(p)}
-                  onDelete={() => handleDelete(p)}
-                  onMarkAsSold={() => handleMarkAsSold(p)}
-                />
-              ) : (
-                <PostCard
-                  key={p.id}
-                  post={p}
-                  isOwner={p.user_id === user?.id}
-                  navigate={navigate}
-                  onLike={() => handleLike(p)}
-                  onSave={() => handleSave(p)}
-                  onComment={() => openComments(p)}
-                  onDelete={() => handleDelete(p)}
-                  onEdit={() => { setEditingPost(p); setEditContent(p.content); }}
-                  reason={showSavedOnly ? null : explainPost(p as any, feedContext)}
-                  onMarkAsSold={() => handleMarkAsSold(p)}
-                  onAddToCalendar={() => handleAddToCalendar(p)}
-                />
-              )
-            ))}
-          </div>
-        )
-      )}
-
-      {/* RENDERIZAÇÃO DA ABA NOTÍCIAS (news_posts via news_channels) */}
-      {activeTab === "news" && (
-        newsLoading ? (
-          <div className="flex justify-center py-20"><Loader2 className="h-10 w-10 animate-spin text-primary" /></div>
-        ) : newsItems.length === 0 ? (
-          <div className="p-12 text-center rounded-[32px] bg-card border border-border/30 shadow-sm animate-in fade-in mt-6">
-            <Newspaper className="h-16 w-16 mx-auto mb-4 text-muted-foreground/30" />
-            <p className="text-xl font-black text-foreground">Nenhuma notícia publicada ainda.</p>
-            <p className="text-sm font-medium text-muted-foreground mt-2">Os canais oficiais (universidade, campus, cursos) aparecerão aqui.</p>
-          </div>
-        ) : (
-          <div className="space-y-5 mt-4">
-            {newsItems.map((n) => (
-              <Card
-                key={n.id}
-                onClick={() => setActiveNews(n)}
-                className="rounded-[32px] border border-border/20 bg-card shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden cursor-pointer hover:shadow-lg transition-all"
-              >
-                {n.cover_url && <img src={n.cover_url} className="w-full h-44 object-cover" />}
-                <CardContent className="p-5 space-y-2">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {n.pinned && (
-                      <Badge className="bg-primary/10 text-primary border-0 text-[10px] font-black gap-1"><Pin className="h-3 w-3" /> Fixado</Badge>
-                    )}
-                    <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">{n.news_channels?.name ?? "Painel Oficial"}</span>
-                  </div>
-                  <h3 className="font-black text-lg leading-snug text-foreground">{n.title}</h3>
-                  <p className="text-sm text-muted-foreground line-clamp-2">{n.content}</p>
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">{formatDistanceToNow(new Date(n.published_at), { locale: ptBR, addSuffix: true })}</p>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        )
-      )}
-
-      {/* MODAL DE LEITURA DE NOTÍCIA */}
-      <Dialog open={!!activeNews} onOpenChange={(open) => !open && setActiveNews(null)}>
-        <DialogContent className="rounded-[32px] max-w-lg p-0 overflow-hidden border-0 shadow-2xl bg-background max-h-[85vh] flex flex-col">
-          {activeNews && (
-            <>
-              {activeNews.cover_url && <img src={activeNews.cover_url} className="w-full h-52 object-cover shrink-0" />}
-              <ScrollArea className="p-6 overflow-y-auto">
-                <DialogHeader className="text-left space-y-2">
-                  <span className="text-[10px] font-black uppercase tracking-widest text-primary">{activeNews.news_channels?.name ?? "Painel Oficial"}</span>
-                  <DialogTitle className="text-2xl font-black leading-tight">{activeNews.title}</DialogTitle>
-                  <DialogDescription className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
-                    {formatDistanceToNow(new Date(activeNews.published_at), { locale: ptBR, addSuffix: true })}
-                  </DialogDescription>
-                </DialogHeader>
-                <p className="text-base text-foreground/90 whitespace-pre-wrap leading-relaxed mt-4">{activeNews.content}</p>
-                {activeNews.link_url && (
-                  <a href={activeNews.link_url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 mt-4 text-sm font-black text-primary hover:underline">
-                    Saiba mais <ExternalLink className="h-3.5 w-3.5" />
-                  </a>
-                )}
-              </ScrollArea>
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* MODAL DE COMENTÁRIOS — antes existia só o estado (commentModalOpen/postComments),
-          sem nenhuma Dialog renderizando; usuários não conseguiam ver nem escrever comentários. */}
-      <Dialog open={commentModalOpen} onOpenChange={setCommentModalOpen}>
-        <DialogContent className="rounded-[32px] max-w-lg p-0 overflow-hidden border-0 shadow-2xl bg-background max-h-[85vh] flex flex-col">
-          <DialogHeader className="p-6 pb-4 border-b border-border/40 bg-muted/20 shrink-0">
-            <DialogTitle className="text-xl font-black">Comentários</DialogTitle>
-            {activePost && <DialogDescription className="text-sm line-clamp-2">{activePost.content}</DialogDescription>}
+            <DialogDescription>
+              Publique uma notícia em um dos jornais aprovados pela administração.
+            </DialogDescription>
           </DialogHeader>
 
-          <ScrollArea className="flex-1 p-6">
-            {postComments.length === 0 ? (
-              <div className="text-center py-10">
-                <MessageSquare className="h-10 w-10 mx-auto mb-3 text-muted-foreground/30" />
-                <p className="text-sm font-bold text-muted-foreground">Seja o primeiro a comentar.</p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {postComments.map((c) => (
-                  <div key={c.id} className="flex gap-3">
-                    <Avatar className="h-9 w-9 shrink-0 border border-border/30">
-                      <AvatarImage src={c.profiles?.avatar_url} />
-                      <AvatarFallback className="bg-primary/10 text-primary font-black text-xs">{c.profiles?.full_name?.charAt(0) || "U"}</AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1 bg-muted/40 rounded-2xl rounded-tl-sm px-4 py-2.5">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-black text-foreground">{c.profiles?.full_name || "Estudante"}</span>
-                        <span className="text-[10px] font-bold text-muted-foreground">{formatDistanceToNow(new Date(c.created_at), { locale: ptBR, addSuffix: true })}</span>
-                      </div>
-                      <p className="text-sm text-foreground/90 mt-0.5 whitespace-pre-wrap">{c.content}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </ScrollArea>
+          <div className="space-y-5">
+            <div>
+              <Label>
+                Jornal
+              </Label>
 
-          <div className="p-4 border-t border-border/40 bg-background flex items-center gap-2 shrink-0">
-            <Input
-              value={newComment}
-              onChange={(e) => setNewComment(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter" && !sendingComment) sendComment(); }}
-              placeholder="Escreva um comentário..."
-              className="h-12 rounded-full bg-muted/40 border-0 px-5 text-sm focus-visible:ring-primary"
-            />
+              <select
+                value={
+                  newsChannelId ??
+                  ""
+                }
+                onChange={(
+                  event
+                ) =>
+                  setNewsChannelId(
+                    event
+                      .target
+                      .value ||
+                      null
+                  )
+                }
+                className="mt-1.5 w-full h-10 rounded-md border bg-background px-3 text-sm"
+              >
+                <option value="">
+                  Selecione o jornal
+                </option>
+
+                {approvedMyChannels.map(
+                  (
+                    channel
+                  ) => (
+                    <option
+                      key={
+                        channel.id
+                      }
+                      value={
+                        channel.id
+                      }
+                    >
+                      {
+                        channel.name
+                      }
+                    </option>
+                  )
+                )}
+              </select>
+            </div>
+
+            <div>
+              <Label>
+                Título
+              </Label>
+
+              <Input
+                value={
+                  newsTitle
+                }
+                onChange={(
+                  event
+                ) =>
+                  setNewsTitle(
+                    event
+                      .target
+                      .value
+                  )
+                }
+                placeholder="Título da notícia"
+                className="mt-1.5"
+              />
+            </div>
+
+            <div>
+              <Label>
+                Conteúdo
+              </Label>
+
+              <Textarea
+                value={
+                  newsContent
+                }
+                onChange={(
+                  event
+                ) =>
+                  setNewsContent(
+                    event
+                      .target
+                      .value
+                  )
+                }
+                placeholder="Escreva a notícia..."
+                className="mt-1.5 min-h-[220px] resize-none"
+              />
+            </div>
+
+            <div>
+              <Label>
+                Link externo
+                <span className="ml-1 text-muted-foreground font-normal">
+                  opcional
+                </span>
+              </Label>
+
+              <Input
+                value={
+                  newsLink
+                }
+                onChange={(
+                  event
+                ) =>
+                  setNewsLink(
+                    event
+                      .target
+                      .value
+                  )
+                }
+                placeholder="https://..."
+                className="mt-1.5"
+              />
+            </div>
+
+            <div>
+              <Label>
+                Capa
+                <span className="ml-1 text-muted-foreground font-normal">
+                  opcional
+                </span>
+              </Label>
+
+              <input
+                type="file"
+                accept="image/*"
+                onChange={
+                  handleNewsCover
+                }
+                className="mt-1.5 block w-full text-sm"
+              />
+
+              {newsCoverPreview && (
+                <div className="relative mt-3 rounded-xl overflow-hidden border aspect-video">
+                  <img
+                    src={
+                      newsCoverPreview
+                    }
+                    alt=""
+                    className="h-full w-full object-cover"
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (
+                        newsCoverPreview.startsWith(
+                          "blob:"
+                        )
+                      ) {
+                        URL.revokeObjectURL(
+                          newsCoverPreview
+                        );
+                      }
+
+                      setNewsCoverPreview(
+                        null
+                      );
+                      setNewsCoverFile(
+                        null
+                      );
+                    }}
+                    className="absolute top-2 right-2 h-8 w-8 rounded-full bg-black/70 text-white flex items-center justify-center"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 mt-2">
             <Button
-              size="icon"
-              onClick={sendComment}
-              disabled={sendingComment || !newComment.trim()}
-              className="h-12 w-12 rounded-full shrink-0 shadow-md"
+              variant="ghost"
+              onClick={() => {
+                resetNewsComposer();
+                setNewsComposerOpen(
+                  false
+                );
+              }}
             >
-              {sendingComment ? <Loader2 className="h-5 w-5 animate-spin" /> : <Send className="h-5 w-5" />}
+              Cancelar
+            </Button>
+
+            <Button
+              onClick={
+                createNewsChannel
+              }
+              disabled={
+                publishingNews ||
+                !hasNewsPermission
+              }
+              className="gap-2"
+            >
+              {publishingNews ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Publicando...
+                </>
+              ) : (
+                <>
+                  <Send className="h-4 w-4" />
+                  Publicar notícia
+                </>
+              )}
             </Button>
           </div>
         </DialogContent>
       </Dialog>
-
-    </div>
-  );
-}
-
-// VITRINE DO MERCADO — card de produto em formato de loja: foto grande,
-// preço em destaque, sem avatar/curtidas (aquilo é do Feed, não da vitrine).
-function MarketCard({ post, isOwner, navigate, onSave, onDelete, onMarkAsSold }: any) {
-  const mediaList = post.media_urls && post.media_urls.length > 0 ? post.media_urls : (post.media_url ? [post.media_url] : []);
-  const cover = mediaList[0];
-
-  return (
-    <Card className={cn(
-      "group relative flex flex-col overflow-hidden rounded-[24px] border shadow-sm transition-all",
-      post.is_sold ? "border-border/40 bg-muted/20 opacity-75" : "border-border/20 bg-card hover:shadow-lg",
-    )}>
-      {/* Foto — o produto é o protagonista */}
-      <button
-        type="button"
-        onClick={() => navigate(`/profile/${post.user_id}`)}
-        className="relative block aspect-square w-full overflow-hidden bg-muted/30"
-      >
-        {cover ? (
-          <img src={cover} className="h-full w-full object-cover transition-transform group-hover:scale-105" />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center text-muted-foreground/30">
-            <Store className="h-10 w-10" />
-          </div>
-        )}
-
-        {post.is_sold && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/50">
-            <span className="rounded-full bg-zinc-900 px-4 py-1.5 text-[10px] font-black uppercase tracking-widest text-white shadow-lg">
-              Vendido
-            </span>
-          </div>
-        )}
-
-        {mediaList.length > 1 && !post.is_sold && (
-          <Badge variant="secondary" className="absolute right-2 top-2 border-0 bg-black/50 text-[9px] text-white backdrop-blur-md">
-            {mediaList.length} fotos
-          </Badge>
-        )}
-
-        <button
-          type="button"
-          onClick={(e) => { e.stopPropagation(); onSave(); }}
-          className={cn(
-            "absolute right-2 bottom-2 flex h-9 w-9 items-center justify-center rounded-full backdrop-blur-md transition-all",
-            post.user_saved ? "bg-amber-500 text-white" : "bg-black/40 text-white hover:bg-black/60",
-          )}
-        >
-          <Bookmark className={cn("h-4 w-4", post.user_saved && "fill-current")} />
-        </button>
-      </button>
-
-      {/* Preço + título */}
-      <div className="flex flex-1 flex-col gap-1 p-3">
-        <div className="flex items-baseline gap-1.5">
-          {post.price !== null && (
-            <span className="text-base font-black leading-none text-emerald-600">
-              R$ {post.price.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-            </span>
-          )}
-          {post.original_price && (
-            <span className="text-[10px] font-bold leading-none text-muted-foreground line-through decoration-destructive">
-              R$ {post.original_price.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-            </span>
-          )}
-        </div>
-
-        {post.title && <p className="line-clamp-2 text-[13px] font-bold leading-snug text-foreground">{post.title}</p>}
-
-        {post.tag && (
-          <Badge variant="secondary" className="w-fit rounded-md border-0 bg-muted/80 px-2 py-0.5 text-[8px] font-black uppercase tracking-wider text-muted-foreground">
-            {post.tag}
-          </Badge>
-        )}
-
-        {/* Vendedor — discreto, é a assinatura da loja, não o autor de um post */}
-        <button
-          type="button"
-          onClick={() => navigate(`/profile/${post.user_id}`)}
-          className="mt-1 flex items-center gap-1 text-[10px] font-semibold text-muted-foreground hover:text-primary"
-        >
-          <span className="truncate">{post.profiles?.full_name || "Estudante"}</span>
-          {post.author_badge && ROLE_BADGES[post.author_badge] && (() => {
-            const BadgeIcon = ROLE_BADGES[post.author_badge].icon;
-            return <BadgeIcon className="h-3 w-3 shrink-0 text-primary" />;
-          })()}
-          {isOwner && <Badge variant="secondary" className="ml-auto shrink-0 border-0 bg-primary/10 px-1.5 py-0 text-[8px] text-primary">Seu</Badge>}
-        </button>
-      </div>
-
-      {/* Ação — comprador negocia por chat, dono gerencia o anúncio */}
-      <div className="border-t border-border/20 p-2">
-        {isOwner ? (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="h-9 w-full rounded-xl text-[11px] font-black text-muted-foreground hover:bg-muted/80">
-                <MoreHorizontal className="mr-1.5 h-4 w-4" /> Gerenciar
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="min-w-[190px] rounded-2xl border border-border/20 bg-background/95 p-2 shadow-xl backdrop-blur-xl">
-              <DropdownMenuItem onClick={onMarkAsSold} className="mb-1 cursor-pointer rounded-xl py-2.5 font-bold focus:bg-primary/10 focus:text-primary">
-                <CheckCircle2 className="mr-2 h-4 w-4" /> {post.is_sold ? "Reativar Anúncio" : "Marcar como Vendido"}
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={onDelete} className="cursor-pointer rounded-xl py-2.5 font-bold text-destructive focus:bg-destructive/10">
-                <Trash2 className="mr-2 h-4 w-4" /> Excluir Anúncio
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        ) : post.is_sold ? (
-          <Button disabled className="h-9 w-full rounded-xl bg-muted text-[11px] font-black text-muted-foreground">
-            Indisponível
-          </Button>
-        ) : (
-          <Button
-            onClick={() => navigate(`/messages?user=${post.user_id}`)}
-            className="h-9 w-full rounded-xl bg-foreground text-[11px] font-black text-background hover:bg-foreground/90"
-          >
-            <ShoppingBag className="mr-1.5 h-3.5 w-3.5" /> Tenho Interesse
-          </Button>
-        )}
-      </div>
-    </Card>
-  );
-}
-
-/**
- * Vídeo do feed, no estilo Instagram/TikTok: toca sozinho (mudo, por exigência
- * dos navegadores) assim que pelo menos 60% dele aparece na tela ao rolar, e
- * pausa quando sai de vista — sem precisar tocar em "play". Um toque no vídeo
- * liga/desliga o som; o ícone de alto-falante no canto mostra o estado atual.
- */
-function AutoplayVideo({ src }: { src: string }) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const [inView, setInView] = useState(false);
-  const [muted, setMuted] = useState(true);
-
-  useEffect(() => {
-    const el = videoRef.current;
-    if (!el) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => setInView(entry.isIntersecting && entry.intersectionRatio >= 0.6),
-      { threshold: [0, 0.6, 1] },
     );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
+    }  function renderPostCard(
+    post: Post
+  ) {
+    const roleBadge =
+      getRoleBadge(
+        post
+      );
 
-  useEffect(() => {
-    const el = videoRef.current;
-    if (!el) return;
-    if (inView) {
-      // O navegador pode recusar o autoplay com som antes do primeiro toque do
-      // usuário na página inteira — por isso o vídeo já nasce mudo (muted=true
-      // no <video>) e falha silenciosamente se mesmo assim for bloqueado.
-      el.play().catch(() => {});
-    } else {
-      el.pause();
-    }
-  }, [inView]);
+    const CategoryIcon =
+      post.tag
+        ? POST_CATEGORY_ICONS[
+            post.tag
+          ] ?? Tag
+        : Globe;
 
-  return (
-    <div className="relative rounded-[24px] overflow-hidden bg-black shadow-sm">
-      <video
-        ref={videoRef}
-        src={src}
-        muted={muted}
-        loop
-        playsInline
-        preload="metadata"
-        onClick={() => setMuted((m) => !m)}
-        className="w-full max-h-[520px] object-cover bg-black cursor-pointer"
-      />
-      <button
-        type="button"
-        onClick={(e) => { e.stopPropagation(); setMuted((m) => !m); }}
-        className="absolute bottom-3 right-3 h-9 w-9 rounded-full bg-black/50 backdrop-blur-md flex items-center justify-center text-white transition-transform active:scale-90"
-        title={muted ? "Ativar som" : "Silenciar"}
+    return (
+      <Card
+        key={
+          post.id
+        }
+        className="overflow-hidden border-border/70 shadow-sm hover:shadow-md transition-shadow"
       >
-        {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
-      </button>
-      {!inView && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/10 pointer-events-none">
-          <div className="h-14 w-14 rounded-full bg-black/40 backdrop-blur-md flex items-center justify-center">
-            <Play className="h-6 w-6 text-white/90 fill-white/90 ml-0.5" />
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
+        <CardHeader className="pb-3">
+          <div className="flex items-start gap-3">
+            <button
+              type="button"
+              onClick={() =>
+                openProfile(
+                  post.user_id
+                )
+              }
+              className="shrink-0"
+            >
+              <Avatar className="h-10 w-10">
+                <AvatarImage
+                  src={
+                    post.profiles
+                      ?.avatar_url ??
+                    undefined
+                  }
+                />
+                <AvatarFallback>
+                  {getProfileInitials(
+                    post.profiles
+                  )}
+                </AvatarFallback>
+              </Avatar>
+            </button>
 
-// POST CARD DO FEED — usado no feed único e nas Notícias. O Mercado tem seu
-// próprio card (MarketCard, acima).
-function PostCard({ post, onLike, onSave, onComment, isOwner, onDelete, onEdit, navigate, onAddToCalendar, reason }: any) {
-  const isVideo = post.media_url?.match(/\.(mp4|webm|mov)$/i);
-  const isPdf = post.media_url?.match(/\.pdf$/i) || post.document_url;
-  
-  // Tratamento para nova estrutura de array ou legado
-  const mediaList = post.media_urls && post.media_urls.length > 0 ? post.media_urls : (post.media_url ? [post.media_url] : []);
-  const mediaSource = post.document_url || post.video_url || mediaList[0];
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() =>
+                    openProfile(
+                      post.user_id
+                    )
+                  }
+                  className="font-semibold text-sm hover:underline truncate"
+                >
+                  {post.profiles
+                    ?.full_name ||
+                    "Estudante"}
+                </button>
 
-  return (
-    <Card className="rounded-[28px] border border-border/10 bg-card shadow-[0_1px_3px_rgba(0,0,0,0.04),0_8px_24px_rgba(0,0,0,0.03)] overflow-hidden transition-shadow duration-300 relative hover:shadow-[0_4px_16px_rgba(0,0,0,0.06),0_16px_36px_rgba(0,0,0,0.05)]">
-
-      <CardHeader className="p-5 pb-3 flex flex-row items-center justify-between">
-        <div className="flex gap-3 items-center group cursor-pointer" onClick={() => navigate(`/profile/${post.user_id}`)}>
-          <Avatar className="h-11 w-11 ring-1 ring-border/40 group-hover:scale-105 transition-transform">
-            <AvatarImage src={post.profiles?.avatar_url} />
-            <AvatarFallback className="bg-primary/10 text-primary font-black text-sm">{post.profiles?.full_name?.charAt(0) || "U"}</AvatarFallback>
-          </Avatar>
-          <div className="flex flex-col">
-            <p className="font-bold text-[15px] text-foreground leading-tight group-hover:text-primary transition-colors flex items-center gap-1">
-              {post.profiles?.full_name || "Estudante"}
-              {post.author_badge && ROLE_BADGES[post.author_badge] && (() => {
-                const BadgeIcon = ROLE_BADGES[post.author_badge].icon;
-                return (
-                  <span title={ROLE_BADGES[post.author_badge].label}>
-                    <BadgeIcon className="h-3.5 w-3.5 text-primary shrink-0" />
-                  </span>
-                );
-              })()}
-            </p>
-            <p className="text-[12.5px] font-medium text-muted-foreground/70 mt-0.5">{formatDistanceToNow(new Date(post.created_at), { locale: ptBR, addSuffix: true })}{reason && <span title="Por que estou vendo isso?"> · {reason}</span>}</p>
-          </div>
-        </div>
-
-        {/* Gerenciamento do Autor */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-9 w-9 rounded-full text-muted-foreground hover:bg-muted/80"><MoreHorizontal className="h-5 w-5"/></Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="rounded-2xl border border-border/20 shadow-xl bg-background/95 backdrop-blur-xl p-2 min-w-[200px]">
-            {isOwner && (
-              <DropdownMenuItem onClick={onEdit} className="font-bold rounded-xl py-3 cursor-pointer">
-                <PenLine className="h-4 w-4 mr-2"/> Editar publicação
-              </DropdownMenuItem>
-            )}
-            {isOwner && (
-              <DropdownMenuItem onClick={onDelete} className="text-destructive font-bold rounded-xl focus:bg-destructive/10 py-3 cursor-pointer">
-                <Trash2 className="h-4 w-4 mr-2"/> Apagar Publicação
-              </DropdownMenuItem>
-            )}
-            <DropdownMenuItem onClick={() => navigator.clipboard.writeText(window.location.href)} className="font-bold rounded-xl py-3 cursor-pointer">
-              <Share2 className="h-4 w-4 mr-2"/> Copiar Link
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </CardHeader>
-      
-      <CardContent className="p-5 pt-1">
-        {post.tag && (() => {
-          const CatIcon = POST_CATEGORY_ICONS[post.tag];
-          return (
-            <Badge variant="secondary" className="mb-3 rounded-full text-[10.5px] font-bold tracking-wide px-3 py-1 bg-primary/[0.07] text-primary border-0 gap-1">
-              {CatIcon && <CatIcon className="h-3 w-3" />} {post.tag}
-            </Badge>
-          );
-        })()}
-        
-        <p className="whitespace-pre-wrap text-[15px] leading-relaxed text-foreground/90">{post.content}</p>
-
-        {/* Capítulo 6, seção 8 — post do tipo Evento mostra data/local e ação de calendário */}
-        {post.tag === "Evento" && post.event_at && (
-          <div className="mt-3 flex items-center justify-between gap-3 bg-primary/5 border border-primary/20 rounded-2xl px-4 py-3">
-            <div className="text-xs font-bold text-foreground">
-              <p>{new Date(post.event_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</p>
-              {post.event_location && <p className="text-muted-foreground font-semibold mt-0.5">{post.event_location}</p>}
-            </div>
-            <Button size="sm" variant="secondary" className="rounded-full text-[11px] font-black h-9 shrink-0" onClick={onAddToCalendar}>
-              Adicionar ao calendário
-            </Button>
-          </div>
-        )}
-        
-        {/* Renderização de Múltiplas Imagens (Carrossel Horizontal) */}
-        {mediaList.length > 0 && !isPdf && !isVideo && (
-          <div className="mt-5 flex overflow-x-auto snap-x snap-mandatory rounded-[24px] gap-2 pb-2 scrollbar-none">
-            {mediaList.map((url: string, idx: number) => (
-              <div key={idx} className="shrink-0 w-full snap-center relative border border-border/10 rounded-[24px] overflow-hidden bg-muted/10">
-                <img src={url} className="w-full max-h-[400px] object-cover" />
-                {mediaList.length > 1 && (
-                  <Badge variant="secondary" className="absolute top-3 right-3 bg-black/50 text-white border-0 backdrop-blur-md">
-                    {idx + 1}/{mediaList.length}
+                {roleBadge && (
+                  <Badge
+                    variant="secondary"
+                    className="h-5 gap-1 text-[10px] shrink-0"
+                  >
+                    <roleBadge.icon className="h-3 w-3" />
+                    {
+                      roleBadge.label
+                    }
                   </Badge>
                 )}
               </div>
-            ))}
-          </div>
-        )}
 
-        {/* Documento anexo */}
-        {isPdf && mediaSource && (
-          <div className="mt-4 rounded-[24px] overflow-hidden border border-border/20 shadow-sm bg-muted/10">
-            <div className="flex items-center justify-between p-5">
-              <div className="flex items-center gap-3">
-                <div className="h-12 w-12 bg-primary/10 rounded-2xl flex items-center justify-center text-primary"><FileText className="h-6 w-6" /></div>
-                <div><span className="text-sm font-black text-foreground block">Documento Anexo</span><span className="text-xs font-semibold text-muted-foreground">Toque para baixar</span></div>
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <span>
+                  {formatPostDate(
+                    post.created_at
+                  )}
+                </span>
+
+                {post.profiles
+                    ?.course && (
+                  <>
+                    <span>
+                      ·
+                    </span>
+                    <span className="truncate max-w-[180px]">
+                      {
+                        post
+                          .profiles
+                          .course
+                      }
+                    </span>
+                  </>
+                )}
               </div>
-              <Button size="sm" className="h-10 rounded-xl font-bold px-4 shadow-sm" onClick={() => window.open(mediaSource)}><Download className="h-4 w-4 mr-1.5"/>Baixar</Button>
+            </div>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger
+                asChild
+              >
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8 shrink-0"
+                >
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+
+              <DropdownMenuContent align="end">
+                {post.user_id ===
+                  user?.id && (
+                  <>
+                    <DropdownMenuItem
+                      onClick={() =>
+                        openEditComposer(
+                          post
+                        )
+                      }
+                    >
+                      <Edit3 className="h-4 w-4 mr-2" />
+                      Editar
+                    </DropdownMenuItem>
+
+                    {post.tag ===
+                      "Venda" && (
+                      <DropdownMenuItem
+                        onClick={() =>
+                          handleMarkAsSold(
+                            post
+                          )
+                        }
+                      >
+                        <CheckCircle2 className="h-4 w-4 mr-2" />
+                        {post.is_sold
+                          ? "Reativar anúncio"
+                          : "Marcar como vendido"}
+                      </DropdownMenuItem>
+                    )}
+
+                    <DropdownMenuItem
+                      onClick={() =>
+                        handleDelete(
+                          post
+                        )
+                      }
+                      className="text-destructive focus:text-destructive"
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Excluir
+                    </DropdownMenuItem>
+                  </>
+                )}
+
+                <DropdownMenuItem
+                  onClick={() =>
+                    sharePost(
+                      post
+                    )
+                  }
+                >
+                  <Share2 className="h-4 w-4 mr-2" />
+                  Compartilhar
+                </DropdownMenuItem>
+
+                <DropdownMenuItem
+                  onClick={() =>
+                    toast({
+                      title:
+                        "Obrigado pelo aviso",
+                      description:
+                        "A publicação será analisada pela equipe.",
+                    })
+                  }
+                >
+                  <Flag className="h-4 w-4 mr-2" />
+                  Denunciar
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+
+          {(post.tag ||
+            post.title) && (
+            <div className="mt-2 flex items-center gap-2">
+              {post.tag && (
+                <Badge
+                  variant="outline"
+                  className="gap-1 text-xs"
+                >
+                  <CategoryIcon className="h-3 w-3" />
+                  {
+                    post.tag
+                  }
+                </Badge>
+              )}
+
+              {post.is_sold && (
+                <Badge
+                  variant="secondary"
+                  className="text-xs"
+                >
+                  Vendido
+                </Badge>
+              )}
+            </div>
+          )}
+        </CardHeader>
+
+        <CardContent className="pb-3">
+          {post.title && (
+            <h3 className="font-semibold text-lg mb-2 leading-snug">
+              {post.title}
+            </h3>
+          )}
+
+          <p className="text-sm leading-6 whitespace-pre-wrap break-words">
+            {
+              post.content
+            }
+          </p>
+
+          {post.media_urls &&
+            post.media_urls.length >
+              0 && (
+              <div
+                className={cn(
+                  "grid gap-2 mt-4",
+                  post.media_urls.length ===
+                    1
+                    ? "grid-cols-1"
+                    : post.media_urls.length ===
+                      2
+                    ? "grid-cols-2"
+                    : "grid-cols-2"
+                )}
+              >
+                {post.media_urls.map(
+                  (
+                    url,
+                    index
+                  ) => (
+                    <div
+                      key={`${url}-${index}`}
+                      className={cn(
+                        "overflow-hidden rounded-xl border bg-muted",
+                        post.media_urls
+                          ?.length ===
+                          1
+                          ? "max-h-[520px]"
+                          : "aspect-square"
+                      )}
+                    >
+                      <img
+                        src={
+                          url
+                        }
+                        alt=""
+                        className="h-full w-full object-cover"
+                      />
+                    </div>
+                  )
+                )}
+              </div>
+            )}
+
+          {!post.media_urls &&
+            post.media_url &&
+            !post.video_url &&
+            !post.document_url && (
+              <div className="mt-4 rounded-xl overflow-hidden border bg-muted max-h-[520px]">
+                <img
+                  src={
+                    post.media_url
+                  }
+                  alt=""
+                  className="w-full object-cover"
+                />
+              </div>
+            )}
+
+          {post.video_url && (
+            <div className="mt-4 rounded-xl overflow-hidden border bg-black">
+              <video
+                src={
+                  post.video_url
+                }
+                controls
+                playsInline
+                className="w-full max-h-[520px]"
+              />
+            </div>
+          )}
+
+          {post.document_url && (
+            <a
+              href={
+                post.document_url
+              }
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-4 flex items-center gap-3 rounded-xl border p-4 hover:bg-muted transition-colors"
+            >
+              <div className="h-11 w-11 rounded-lg bg-primary/10 flex items-center justify-center">
+                <FileText className="h-5 w-5 text-primary" />
+              </div>
+
+              <div className="min-w-0 flex-1">
+                <p className="font-medium text-sm">
+                  Documento anexado
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Clique para abrir o arquivo
+                </p>
+              </div>
+
+              <ExternalLink className="h-4 w-4 text-muted-foreground" />
+            </a>
+          )}
+
+          {post.price !=
+            null && (
+            <div className="mt-4 rounded-xl border p-4 bg-muted/20">
+              <div className="flex items-end justify-between gap-3">
+                <div>
+                  <p className="text-xs text-muted-foreground">
+                    Preço
+                  </p>
+
+                  <p className="text-xl font-bold">
+                    {formatPrice(
+                      post.price
+                    )}
+                  </p>
+
+                  {post.original_price !=
+                    null &&
+                    post.original_price >
+                      post.price && (
+                      <p className="text-xs text-muted-foreground line-through">
+                        {formatPrice(
+                          post.original_price
+                        )}
+                      </p>
+                    )}
+                </div>
+
+                {post.is_sold ? (
+                  <Badge variant="secondary">
+                    Vendido
+                  </Badge>
+                ) : (
+                  <Badge>
+                    Disponível
+                  </Badge>
+                )}
+              </div>
+            </div>
+          )}
+
+          {post.event_at && (
+            <div className="mt-4 rounded-xl border p-4">
+              <div className="flex items-start gap-3">
+                <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                  <CalendarDays className="h-5 w-5 text-primary" />
+                </div>
+
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium text-sm">
+                    Evento
+                  </p>
+
+                  <p className="text-sm mt-1">
+                    {new Intl.DateTimeFormat(
+                      "pt-BR",
+                      {
+                        dateStyle:
+                          "full",
+                        timeStyle:
+                          "short",
+                      }
+                    ).format(
+                      new Date(
+                        post.event_at
+                      )
+                    )}
+                  </p>
+
+                  {post.event_location && (
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-1">
+                      <MapPin className="h-3.5 w-3.5" />
+                      {
+                        post.event_location
+                      }
+                    </div>
+                  )}
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-3 gap-2"
+                    onClick={() =>
+                      handleAddToCalendar(
+                        post
+                      )
+                    }
+                  >
+                    <CalendarDays className="h-4 w-4" />
+                    Adicionar ao calendário
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+        </CardContent>
+
+        <CardFooter className="pt-0 flex-col items-stretch">
+          <div className="flex items-center justify-between border-t pt-3 text-xs text-muted-foreground">
+            <span>
+              {post.likes_count}{" "}
+              curtida
+              {post.likes_count !==
+                1
+                ? "s"
+                : ""}
+            </span>
+
+            <span>
+              {post.comments_count}{" "}
+              comentário
+              {post.comments_count !==
+                1
+                ? "s"
+                : ""}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-4 gap-1 mt-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() =>
+                toggleLike(
+                  post
+                )
+              }
+              className={cn(
+                "gap-2",
+                post.user_liked &&
+                  "text-primary"
+              )}
+            >
+              <Heart
+                className={cn(
+                  "h-4 w-4",
+                  post.user_liked &&
+                    "fill-current"
+                )}
+              />
+              <span className="hidden sm:inline">
+                Curtir
+              </span>
+            </Button>
+
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() =>
+                openComments(
+                  post
+                )
+              }
+              className="gap-2"
+            >
+              <MessageSquare className="h-4 w-4" />
+              <span className="hidden sm:inline">
+                Comentar
+              </span>
+            </Button>
+
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() =>
+                handleSave(
+                  post
+                )
+              }
+              className={cn(
+                "gap-2",
+                post.user_saved &&
+                  "text-primary"
+              )}
+            >
+              <Bookmark
+                className={cn(
+                  "h-4 w-4",
+                  post.user_saved &&
+                    "fill-current"
+                )}
+              />
+              <span className="hidden sm:inline">
+                Salvar
+              </span>
+            </Button>
+
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() =>
+                sharePost(
+                  post
+                )
+              }
+              className="gap-2"
+            >
+              <Share2 className="h-4 w-4" />
+              <span className="hidden sm:inline">
+                Compartilhar
+              </span>
+            </Button>
+          </div>
+        </CardFooter>
+      </Card>
+    );
+  }
+
+  function renderFeedHeader() {
+    return (
+      <div className="space-y-4 mb-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">
+              Feed
+            </h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              Acompanhe o que está acontecendo na comunidade acadêmica.
+            </p>
+          </div>
+
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              className="gap-2"
+              onClick={() =>
+                loadPosts()
+              }
+            >
+              <RefreshCw className="h-4 w-4" />
+              Atualizar
+            </Button>
+
+            <Button
+              className="gap-2"
+              onClick={() =>
+                openComposer(
+                  false
+                )
+              }
+            >
+              <Plus className="h-4 w-4" />
+              Publicar
+            </Button>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border bg-card p-3 sm:p-4 shadow-sm">
+          <div className="flex gap-3">
+            <Avatar className="h-10 w-10">
+              <AvatarImage
+                src={
+                  myAvatar ??
+                  undefined
+                }
+              />
+              <AvatarFallback>
+                {getProfileInitials(
+                  {
+                    id:
+                      user?.id ||
+                      "",
+                    full_name:
+                      user
+                        ?.user_metadata
+                        ?.full_name ??
+                      null,
+                    avatar_url:
+                      myAvatar,
+                    course:
+                      null,
+                    institution:
+                      null,
+                  }
+                )}
+              </AvatarFallback>
+            </Avatar>
+
+            <button
+              type="button"
+              onClick={() =>
+                openComposer(
+                  false
+                )
+              }
+              className="flex-1 rounded-xl border bg-muted/30 hover:bg-muted/60 transition-colors text-left px-4 py-3 text-sm text-muted-foreground"
+            >
+              O que você quer compartilhar hoje?
+            </button>
+          </div>
+
+          <div className="flex items-center gap-1 mt-3 overflow-x-auto">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() =>
+                openComposer(
+                  false
+                )
+              }
+              className="gap-2 shrink-0"
+            >
+              <ImageIcon className="h-4 w-4" />
+              Foto
+            </Button>
+
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() =>
+                openComposer(
+                  false
+                )
+              }
+              className="gap-2 shrink-0"
+            >
+              <Video className="h-4 w-4" />
+              Vídeo
+            </Button>
+
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() =>
+                openComposer(
+                  false
+                )
+              }
+              className="gap-2 shrink-0"
+            >
+              <CalendarDays className="h-4 w-4" />
+              Evento
+            </Button>
+
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() =>
+                openComposer(
+                  false
+                )
+              }
+              className="gap-2 shrink-0"
+            >
+              <FileText className="h-4 w-4" />
+              Arquivo
+            </Button>
+          </div>
+        </div>
+
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+
+            <Input
+              value={
+                searchTerm
+              }
+              onChange={(
+                event
+              ) =>
+                setSearchTerm(
+                  event
+                    .target
+                    .value
+                )
+              }
+              placeholder="Pesquisar no feed..."
+              className="pl-9"
+            />
+          </div>
+
+          <div className="flex items-center gap-1 rounded-lg border p-1 overflow-x-auto">
+            <Button
+              size="sm"
+              variant={
+                feedMode ===
+                "for-you"
+                  ? "secondary"
+                  : "ghost"
+              }
+              onClick={() =>
+                setFeedMode(
+                  "for-you"
+                )
+              }
+              className="shrink-0"
+            >
+              Para você
+            </Button>
+
+            <Button
+              size="sm"
+              variant={
+                feedMode ===
+                "trending"
+                  ? "secondary"
+                  : "ghost"
+              }
+              onClick={() =>
+                setFeedMode(
+                  "trending"
+                )
+              }
+              className="shrink-0"
+            >
+              Em alta
+            </Button>
+
+            <Button
+              size="sm"
+              variant={
+                feedMode ===
+                "university"
+                  ? "secondary"
+                  : "ghost"
+              }
+              onClick={() =>
+                setFeedMode(
+                  "university"
+                )
+              }
+              className="shrink-0"
+            >
+              Universidade
+            </Button>
+
+            <Button
+              size="sm"
+              variant={
+                feedMode ===
+                "course"
+                  ? "secondary"
+                  : "ghost"
+              }
+              onClick={() =>
+                setFeedMode(
+                  "course"
+                )
+              }
+              className="shrink-0"
+            >
+              Meu curso
+            </Button>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <Button
+            variant={
+              showSavedOnly
+                ? "secondary"
+                : "outline"
+            }
+            size="sm"
+            className="gap-2"
+            onClick={() =>
+              setShowSavedOnly(
+                (value) =>
+                  !value
+              )
+            }
+          >
+            <Bookmark
+              className={cn(
+                "h-4 w-4",
+                showSavedOnly &&
+                  "fill-current"
+              )}
+            />
+            Salvos
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-2"
+            onClick={() =>
+              toast({
+                title:
+                  "Filtros",
+                description:
+                  "Mais filtros podem ser adicionados conforme as categorias do feed evoluírem.",
+              })
+            }
+          >
+            <SlidersHorizontal className="h-4 w-4" />
+            Filtros
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  function renderNewsTab() {
+    return (
+      <div className="space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold">
+              Notícias
+            </h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              Acompanhe notícias publicadas pelos jornais da comunidade.
+            </p>
+          </div>
+
+          {hasNewsPermission ? (
+            <Button
+              className="gap-2"
+              onClick={() =>
+                setNewsComposerOpen(
+                  true
+                )
+              }
+            >
+              <PenLine className="h-4 w-4" />
+              Publicar notícia
+            </Button>
+          ) : (
+            <Button
+              variant="outline"
+              className="gap-2"
+              onClick={() =>
+                toast({
+                  title:
+                    "Publicação restrita",
+                  description:
+                    "Você precisa ter um jornal aprovado para publicar notícias.",
+                })
+              }
+            >
+              <Info className="h-4 w-4" />
+              Como publicar?
+            </Button>
+          )}
+        </div>
+
+        {hasNewsPermission && (
+          <div className="rounded-2xl border bg-primary/5 p-4">
+            <div className="flex items-start gap-3">
+              <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                <Newspaper className="h-5 w-5 text-primary" />
+              </div>
+
+              <div className="min-w-0">
+                <p className="font-semibold text-sm">
+                  Você tem acesso à publicação
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {approvedMyChannels.length ===
+                  1
+                    ? `O jornal "${approvedMyChannels[0].name}" está aprovado.`
+                    : `Você possui ${approvedMyChannels.length} jornais aprovados.`}
+                </p>
+              </div>
             </div>
           </div>
         )}
 
-        {/* Vídeo — toca sozinho ao rolar até ele, como no Instagram (ver AutoplayVideo) */}
-        {isVideo && mediaSource && (
-          <div className="mt-4">
-            <AutoplayVideo src={mediaSource} />
+        {newsLoading ? (
+          <div className="flex justify-center py-16">
+            <Loader2 className="h-7 w-7 animate-spin text-muted-foreground" />
+          </div>
+        ) : newsItems.length ===
+          0 ? (
+          <Card>
+            <CardContent className="py-16 text-center">
+              <Newspaper className="h-10 w-10 mx-auto text-muted-foreground mb-3" />
+              <h2 className="font-semibold">
+                Nenhuma notícia publicada
+              </h2>
+              <p className="text-sm text-muted-foreground mt-1">
+                Quando os jornais da comunidade publicarem, as notícias aparecerão aqui.
+              </p>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {newsItems.map(
+              (
+                channel
+              ) => (
+                <Card
+                  key={
+                    channel.id
+                  }
+                  className="overflow-hidden"
+                >
+                  <CardHeader>
+                    <div className="flex items-center gap-3">
+                      <Avatar className="h-11 w-11">
+                        <AvatarImage
+                          src={
+                            channel.logo_url ??
+                            undefined
+                          }
+                        />
+                        <AvatarFallback>
+                          <Newspaper className="h-5 w-5" />
+                        </AvatarFallback>
+                      </Avatar>
+
+                      <div className="min-w-0">
+                        <h3 className="font-semibold truncate">
+                          {
+                            channel.name
+                          }
+                        </h3>
+
+                        <p className="text-xs text-muted-foreground">
+                          Jornal aprovado
+                        </p>
+                      </div>
+
+                      <CheckCircle2 className="h-5 w-5 text-primary ml-auto shrink-0" />
+                    </div>
+                  </CardHeader>
+
+                  <CardContent>
+                    <p className="text-sm text-muted-foreground">
+                      {channel.description ||
+                        "Jornal da comunidade acadêmica."}
+                    </p>
+                  </CardContent>
+
+                  <CardFooter>
+                    <Button
+                      variant="outline"
+                      className="w-full gap-2"
+                      onClick={() =>
+                        toast({
+                          title:
+                            "Jornal selecionado",
+                          description:
+                            "A visualização das notícias deste jornal será conectada à listagem de matérias.",
+                        })
+                      }
+                    >
+                      Ver notícias
+                      <ArrowUpRight className="h-4 w-4" />
+                    </Button>
+                  </CardFooter>
+                </Card>
+              )
+            )}
           </div>
         )}
-      </CardContent>
+      </div>
+    );
+  }
 
-      <CardFooter className="px-5 py-3 flex flex-col gap-3 border-t border-border/10">
-        <div className="flex justify-between items-center w-full">
-          <div className="flex items-center gap-1">
-            <Button variant="ghost" onClick={onLike} className={cn("h-10 rounded-full px-3 text-[13px] font-bold transition-colors", post.user_liked ? "text-red-500 hover:text-red-600 hover:bg-red-500/10" : "text-muted-foreground hover:text-foreground hover:bg-muted/60")}>
-              <Heart className={cn("h-[18px] w-[18px]", post.likes_count > 0 && "mr-1.5", post.user_liked && "fill-current")} /> {post.likes_count > 0 && post.likes_count}
-            </Button>
-            <Button variant="ghost" onClick={onComment} className="h-10 rounded-full px-3 text-[13px] font-bold text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors">
-              <MessageSquare className={cn("h-[18px] w-[18px]", post.comments_count > 0 && "mr-1.5")} /> {post.comments_count > 0 && post.comments_count}
-            </Button>
-          </div>
-          <div className="flex items-center gap-1">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-10 w-10 rounded-full text-primary hover:bg-primary/10" title="Perguntar à IA sobre este post">
-                  <Sparkles className="h-[18px] w-[18px]" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="rounded-2xl border border-border/20 shadow-xl bg-background/95 backdrop-blur-xl p-2 min-w-[220px]">
-                <DropdownMenuItem className="rounded-xl font-bold text-sm gap-2 py-2.5" onClick={() => navigate("/assistant", { state: { initialPrompt: `Explique este conteúdo de forma clara e didática:\n\n"${post.content}"` } })}>
-                  <Sparkles className="h-4 w-4 text-primary" /> Explicar este conteúdo
-                </DropdownMenuItem>
-                <DropdownMenuItem className="rounded-xl font-bold text-sm gap-2 py-2.5" onClick={() => navigate("/assistant", { state: { initialPrompt: `Gere flashcards (pergunta e resposta) a partir deste conteúdo:\n\n"${post.content}"` } })}>
-                  <Brain className="h-4 w-4 text-primary" /> Gerar flashcards
-                </DropdownMenuItem>
-                <DropdownMenuItem className="rounded-xl font-bold text-sm gap-2 py-2.5" onClick={() => navigate("/assistant", { state: { initialPrompt: `Resuma em 5 tópicos objetivos:\n\n"${post.content}"` } })}>
-                  <FileText className="h-4 w-4 text-primary" /> Resumir em 5 tópicos
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <Button variant="ghost" size="icon" onClick={onSave} aria-label={post.user_saved ? "Remover dos salvos" : "Salvar"} className={cn("h-10 w-10 rounded-full transition-colors", post.user_saved ? "text-primary hover:bg-primary/10" : "text-muted-foreground hover:text-foreground hover:bg-muted/60")}>
-              <Bookmark className={cn("h-[18px] w-[18px]", post.user_saved && "fill-current")} />
-            </Button>
-          </div>
+  function renderFeed() {
+    if (loading) {
+      return (
+        <div className="flex justify-center py-20">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
-      </CardFooter>
-    </Card>
+      );
+    }
+
+    if (
+      filteredPosts.length ===
+      0
+    ) {
+      return (
+        <Card>
+          <CardContent className="py-16 text-center">
+            <div className="mx-auto h-14 w-14 rounded-2xl bg-muted flex items-center justify-center mb-4">
+              <MessageCircle className="h-7 w-7 text-muted-foreground" />
+            </div>
+
+            <h2 className="font-semibold text-lg">
+              Nenhuma publicação encontrada
+            </h2>
+
+            <p className="text-sm text-muted-foreground max-w-md mx-auto mt-1">
+              {showSavedOnly
+                ? "Você ainda não salvou publicações."
+                : searchTerm
+                ? "Tente pesquisar por outro termo."
+                : "Seja o primeiro a compartilhar algo com a comunidade."}
+            </p>
+
+            {!showSavedOnly &&
+              !searchTerm && (
+                <Button
+                  className="mt-5 gap-2"
+                  onClick={() =>
+                    openComposer(
+                      false
+                    )
+                  }
+                >
+                  <Plus className="h-4 w-4" />
+                  Criar publicação
+                </Button>
+              )}
+          </CardContent>
+        </Card>
+      );
+    }
+
+    return (
+      <div className="space-y-4">
+        {filteredPosts.map(
+          (
+            post
+          ) =>
+            renderPostCard(
+              post
+            )
+        )}
+      </div>
+    );
+  }
+
+  function renderCommentsDialog() {
+    return (
+      <Dialog
+        open={
+          commentsOpen
+        }
+        onOpenChange={
+          setCommentsOpen
+        }
+      >
+        <DialogContent className="max-w-lg p-0 overflow-hidden">
+          <DialogHeader className="px-5 py-4 border-b">
+            <DialogTitle>
+              Comentários
+            </DialogTitle>
+
+            <DialogDescription>
+              Participe da conversa.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="max-h-[55vh] overflow-y-auto px-5 py-4">
+            {commentsLoading ? (
+              <div className="flex justify-center py-10">
+                <Loader2 className="h-6 w-6 animate-spin" />
+              </div>
+            ) : comments.length ===
+              0 ? (
+              <div className="py-10 text-center">
+                <MessageSquare className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
+                <p className="font-medium text-sm">
+                  Ainda não há comentários
+                </p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Seja o primeiro a comentar.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-5">
+                {comments.map(
+                  (
+                    comment
+                  ) => (
+                    <div
+                      key={
+                        comment.id
+                      }
+                      className="flex gap-3"
+                    >
+                      <Avatar className="h-8 w-8 shrink-0">
+                        <AvatarImage
+                          src={
+                            comment
+                              .profiles
+                              ?.avatar_url ??
+                            undefined
+                          }
+                        />
+                        <AvatarFallback>
+                          {getProfileInitials(
+                            comment.profiles
+                          )}
+                        </AvatarFallback>
+                      </Avatar>
+
+                      <div className="min-w-0 flex-1">
+                        <div className="rounded-xl bg-muted px-3 py-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="font-semibold text-xs">
+                              {comment
+                                .profiles
+                                ?.full_name ||
+                                "Estudante"}
+                            </span>
+
+                            <span className="text-[10px] text-muted-foreground">
+                              {formatPostDate(
+                                comment.created_at
+                              )}
+                            </span>
+                          </div>
+
+                          <p className="text-sm mt-1 whitespace-pre-wrap break-words">
+                            {
+                              comment.content
+                            }
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="border-t p-4">
+            <div className="flex gap-2">
+              <Input
+                value={
+                  commentText
+                }
+                onChange={(
+                  event
+                ) =>
+                  setCommentText(
+                    event
+                      .target
+                      .value
+                  )
+                }
+                onKeyDown={(
+                  event
+                ) => {
+                  if (
+                    event.key ===
+                      "Enter" &&
+                    !event.shiftKey
+                  ) {
+                    event.preventDefault();
+                    addComment();
+                  }
+                }}
+                placeholder="Escreva um comentário..."
+              />
+
+              <Button
+                size="icon"
+                onClick={
+                  addComment
+                }
+                disabled={
+                  !commentText.trim()
+                }
+              >
+                <Send className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
+  function renderVibeDialog() {
+    if (!viewingVibe)
+      return null;
+
+    return (
+      <Dialog
+        open={
+          !!viewingVibe
+        }
+        onOpenChange={(
+          open
+        ) => {
+          if (!open)
+            setViewingVibe(
+              null
+            );
+        }}
+      >
+        <DialogContent className="max-w-lg p-0 overflow-hidden">
+          <div className="relative">
+            {viewingVibe.media_url ? (
+              <img
+                src={
+                  viewingVibe.media_url
+                }
+                alt=""
+                className="w-full max-h-[65vh] object-cover"
+              />
+            ) : (
+              <div className="min-h-[350px] flex items-center justify-center p-10 bg-muted">
+                <p className="text-center text-lg font-medium whitespace-pre-wrap">
+                  {
+                    viewingVibe.content
+                  }
+                </p>
+              </div>
+            )}
+
+            <Button
+              variant="secondary"
+              size="icon"
+              className="absolute top-3 right-3 rounded-full"
+              onClick={() =>
+                setViewingVibe(
+                  null
+                )
+              }
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+
+          <div className="p-5">
+            <div className="flex items-center gap-3">
+              <Avatar className="h-9 w-9">
+                <AvatarImage
+                  src={
+                    viewingVibe
+                      .profiles
+                      ?.avatar_url ??
+                    undefined
+                  }
+                />
+                <AvatarFallback>
+                  {getProfileInitials(
+                    viewingVibe.profiles
+                  )}
+                </AvatarFallback>
+              </Avatar>
+
+              <div>
+                <p className="font-semibold text-sm">
+                  {viewingVibe
+                    .profiles
+                    ?.full_name ||
+                    "Estudante"}
+                </p>
+
+                <p className="text-xs text-muted-foreground">
+                  {formatPostDate(
+                    viewingVibe.created_at
+                  )}
+                </p>
+              </div>
+            </div>
+
+            {viewingVibe.media_url &&
+              viewingVibe.content && (
+                <p className="text-sm whitespace-pre-wrap mt-4">
+                  {
+                    viewingVibe.content
+                  }
+                </p>
+              )}
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-background">
+      <div className="container max-w-5xl mx-auto px-4 py-6">
+        <div className="flex items-center gap-1 rounded-xl border bg-card p-1 mb-6 shadow-sm">
+          <Button
+            variant={
+              activeTab ===
+              "feed"
+                ? "secondary"
+                : "ghost"
+            }
+            className="flex-1 gap-2"
+            onClick={() =>
+              setActiveTab(
+                "feed"
+              )
+            }
+          >
+            <MessageCircle className="h-4 w-4" />
+            Feed
+          </Button>
+
+          <Button
+            variant={
+              activeTab ===
+              "news"
+                ? "secondary"
+                : "ghost"
+            }
+            className="flex-1 gap-2"
+            onClick={() =>
+              setActiveTab(
+                "news"
+              )
+            }
+          >
+            <Newspaper className="h-4 w-4" />
+            Notícias
+          </Button>
+
+          <Button
+            variant={
+              activeTab ===
+              "market"
+                ? "secondary"
+                : "ghost"
+            }
+            className="flex-1 gap-2"
+            onClick={() =>
+              setActiveTab(
+                "market"
+              )
+            }
+          >
+            <ShoppingBag className="h-4 w-4" />
+            Mercado
+          </Button>
+        </div>
+
+        {activeTab ===
+          "feed" && (
+          <>
+            {renderVibes()}
+            {renderFeedHeader()}
+            {renderFeed()}
+          </>
+        )}
+
+        {activeTab ===
+          "market" && (
+          <>
+            {renderVibes()}
+            {renderFeedHeader()}
+            {renderFeed()}
+          </>
+        )}
+
+        {activeTab ===
+          "news" &&
+          renderNewsTab()}
+      </div>
+
+      {renderComposer()}
+      {renderNewsComposer()}
+      {renderCommentsDialog()}
+      {renderVibeDialog()}
+
+      <Dialog
+        open={
+          !!editingPost
+        }
+        onOpenChange={(
+          open
+        ) => {
+          if (!open) {
+            setEditingPost(
+              null
+            );
+            setEditContent("");
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Editar publicação
+            </DialogTitle>
+
+            <DialogDescription>
+              Altere o texto da sua publicação.
+            </DialogDescription>
+          </DialogHeader>
+
+          <Textarea
+            value={
+              editContent
+            }
+            onChange={(
+              event
+            ) =>
+              setEditContent(
+                event
+                  .target
+                  .value
+              )
+            }
+            className="min-h-[180px]"
+          />
+
+          <div className="flex justify-end gap-2">
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setEditingPost(
+                  null
+                );
+                setEditContent("");
+              }}
+            >
+              Cancelar
+            </Button>
+
+            <Button
+              onClick={
+                handleEdit
+              }
+              disabled={
+                !editContent.trim()
+              }
+              className="gap-2"
+            >
+              <Save className="h-4 w-4" />
+              Salvar alterações
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
-      }
+              }
