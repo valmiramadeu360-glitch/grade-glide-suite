@@ -65,7 +65,10 @@ async function compress(file: File, max = 1600): Promise<Blob> {
   const canvas = document.createElement("canvas");
   canvas.width = Math.round(bmp.width * scale);
   canvas.height = Math.round(bmp.height * scale);
-  canvas.getContext("2d")!.drawImage(bmp, 0, 0, canvas.width, canvas.height);
+  const context = canvas.getContext("2d");
+  if (!context) { bmp.close(); throw new Error("Não foi possível preparar a imagem."); }
+  context.drawImage(bmp, 0, 0, canvas.width, canvas.height);
+  bmp.close();
   return await new Promise((res) => canvas.toBlob((b) => res(b ?? file), "image/webp", 0.85));
 }
 
@@ -160,10 +163,11 @@ export interface ChannelMember {
 
 /** Jornal(is) em que o usuário é fundador ou faz parte da equipe (qualquer status). */
 export async function fetchMyJournals(userId: string): Promise<Journal[]> {
-  const { data: memberships } = await (supabase as any)
+  const { data: memberships, error: membershipsError } = await (supabase as any)
     .from("news_channel_members")
     .select("channel_id")
     .eq("user_id", userId);
+  if (membershipsError) throw membershipsError;
 
   const memberChannelIds = (((memberships as any[]) ?? []).map((m: any) => m.channel_id));
 
@@ -175,7 +179,8 @@ export async function fetchMyJournals(userId: string): Promise<Journal[]> {
     query = query.eq("created_by", userId);
   }
 
-  const { data } = await query.order("created_at", { ascending: false });
+  const { data, error } = await query.order("created_at", { ascending: false });
+  if (error) throw error;
   return (data ?? []) as Journal[];
 }
 

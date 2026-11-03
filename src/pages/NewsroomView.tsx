@@ -19,6 +19,7 @@ import {
   inviteWriter, plainExcerpt, uploadNewsImage, type ChannelMember,
 } from "@/lib/news";
 import { ArticleEditor } from "@/components/news/ArticleEditor";
+import { JournalApplyDialog } from "@/components/news/JournalApplyDialog";
 import { cn } from "@/lib/utils";
 
 const db = supabase as any;
@@ -37,6 +38,7 @@ export default function NewsroomView() {
   const [editingArticle, setEditingArticle] = useState<Article | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [applyOpen, setApplyOpen] = useState(false);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -207,12 +209,13 @@ export default function NewsroomView() {
           </p>
         )}
 
-        {journal.status === "rejected" &&
-          journal.review_note && (
-            <p className="border-t border-border/30 px-4 py-3 text-xs leading-relaxed text-destructive">
-              Motivo da recusa: {journal.review_note}
-            </p>
-          )}
+        {journal.status === "rejected" && (
+          <div className="space-y-3 border-t border-border px-4 py-3">
+            <p className="whitespace-pre-wrap break-words text-sm text-destructive">Motivo da recusa: {journal.review_note || "Não informado pelo administrador."}</p>
+            <p className="text-sm text-muted-foreground">Esta proposta foi encerrada. A recusa não impede você ou sua equipe de enviar uma nova proposta.</p>
+            {isEditor && <Button onClick={() => setApplyOpen(true)} className="gap-2"><Plus className="h-4 w-4" /> Criar nova proposta</Button>}
+          </div>
+        )}
       </div>
 
       {/* Números */}
@@ -395,6 +398,8 @@ export default function NewsroomView() {
           onSaved={load}
         />
       )}
+
+      <JournalApplyDialog open={applyOpen} onOpenChange={setApplyOpen} onCreated={() => navigate("/news")} />
 
       <JournalSettingsDialog
         open={settingsOpen}

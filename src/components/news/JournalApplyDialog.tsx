@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
@@ -32,6 +32,14 @@ export function JournalApplyDialog({ open, onOpenChange, onCreated }: Props) {
   const [logo, setLogo] = useState<File | null>(null);
   const [accepted, setAccepted] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [logoPreview, setLogoPreview] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!logo) { setLogoPreview(null); return; }
+    const url = URL.createObjectURL(logo);
+    setLogoPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [logo]);
 
   const step1Ok = name.trim().length >= 3 && handle.length >= 3 && description.trim().length >= 10;
   const step2Ok = editorial.trim().length >= 20 && purpose.trim().length >= 20 && team.trim().length >= 3;
@@ -40,6 +48,7 @@ export function JournalApplyDialog({ open, onOpenChange, onCreated }: Props) {
     setStep(1);
     setName("");
     setHandle("");
+    setCategory("curso");
     setDescription("");
     setEditorial("");
     setPurpose("");
@@ -49,7 +58,7 @@ export function JournalApplyDialog({ open, onOpenChange, onCreated }: Props) {
   }
 
   async function submit() {
-    if (!user || !accepted) return;
+    if (!user || !accepted || !step1Ok || !step2Ok || saving) return;
     setSaving(true);
     try {
       const logo_url = logo ? await uploadNewsImage(user.id, logo) : null;
@@ -112,8 +121,8 @@ export function JournalApplyDialog({ open, onOpenChange, onCreated }: Props) {
           <div className="space-y-4">
             <label className="flex items-center gap-4 cursor-pointer">
               <div className="h-20 w-20 rounded-2xl bg-muted flex items-center justify-center overflow-hidden border border-dashed">
-                {logo ? (
-                  <img src={URL.createObjectURL(logo)} className="h-full w-full object-cover" alt="" />
+                {logoPreview ? (
+                  <img src={logoPreview} className="h-full w-full object-cover" alt="Logotipo selecionado" />
                 ) : (
                   <ImagePlus className="h-6 w-6 text-muted-foreground" />
                 )}
@@ -157,7 +166,7 @@ export function JournalApplyDialog({ open, onOpenChange, onCreated }: Props) {
               <Label>Tipo de veículo</Label>
               <div className="flex flex-wrap gap-2">
                 {JOURNAL_CATEGORIES.map((c) => (
-                  <button
+                  <Button
                     key={c.value}
                     type="button"
                     onClick={() => setCategory(c.value)}
@@ -167,7 +176,7 @@ export function JournalApplyDialog({ open, onOpenChange, onCreated }: Props) {
                     )}
                   >
                     {c.label}
-                  </button>
+                  </Button>
                 ))}
               </div>
             </div>

@@ -14,17 +14,24 @@ import {
 import { ArticleBody } from "@/components/news/ArticleBody";
 import { JournalApplyDialog } from "@/components/news/JournalApplyDialog";
 import { cn } from "@/lib/utils";
+import { fetchMyJournals, JOURNAL_STATUS_LABEL } from "@/lib/news";
+import { canSubmitJournalProposal, splitJournalProposals } from "@/lib/journalProposals";
+import { useToast } from "@/hooks/use-toast";
 
 const db = supabase as any;
 
 export default function News() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { toast } = useToast();
 
   const [loading, setLoading] = useState(true);
   const [articles, setArticles] = useState<Article[]>([]);
   const [journals, setJournals] = useState<Journal[]>([]);
   const [myJournalId, setMyJournalId] = useState<string | null>(null);
+  const [myJournals, setMyJournals] = useState<Journal[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const [followingIds, setFollowingIds] = useState<Set<string>>(new Set());
   const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
   const [category, setCategory] = useState<string | null>(null);
@@ -35,12 +42,14 @@ export default function News() {
     if (!user) return;
 
     setLoading(true);
+    setLoadError(false);
+
+    try {
 
     const [
       { data: posts },
       { data: chans },
-      { data: memberships },
-      { data: ownedJournals },
+      myRows,
       { data: subs },
       { data: likes },
     ] = await Promise.all([
@@ -57,17 +66,7 @@ export default function News() {
         .eq("status", "approved")
         .order("member_count", { ascending: false }),
 
-      db
-        .from("news_channel_members")
-        .select("channel_id")
-        .eq("user_id", user.id),
-
-      db
-        .from("news_channels")
-        .select("id, status")
-        .eq("created_by", user.id)
-        .in("status", ["pending", "approved", "suspended"])
-        .order("created_at", { ascending: false }),
+      fetchMyJournals(user.id),
 
       db
         .from("news_subscriptions")
@@ -90,19 +89,8 @@ export default function News() {
      * Isso é importante para compatibilidade com redações criadas/aprovadas
      * antes da correção definitiva feita na migration.
      */
-    const memberIds = new Set(
-      (memberships ?? []).map((m: any) => m.channel_id),
-    );
-
-    const approvedOwned = (ownedJournals ?? []).find(
-      (j: any) => j.status === "approved",
-    );
-
-    setMyJournalId(
-      approvedOwned?.id ??
-      [...memberIds][0] ??
-      null,
-    );
+    setMyJournals(myRows);
+    setMyJournalId(myRows.find((j) => j.status === "approved")?.id ?? myRows.find((j) => j.status === "pending")?.id ?? myRows.find((j) => j.status === "suspended")?.id ?? null);
 
     setFollowingIds(
       new Set((subs ?? []).map((s: any) => s.channel_id)),
@@ -112,12 +100,20 @@ export default function News() {
       new Set((likes ?? []).map((l: any) => l.post_id)),
     );
 
-    setLoading(false);
+    } catch {
+      setLoadError(true);
+      toast({ title: "Não foi possível carregar suas redações", description: "Tente novamente para consultar as propostas.", variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
   }, [user]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  const proposals = splitJournalProposals(myJournals);
+  const canApply = canSubmitJournalProposal(myJournals.filter((j) => j.created_by === user?.id));
 
   const headline =
     articles.find((a) => a.pinned) ??
@@ -220,6 +216,40 @@ export default function News() {
           )}
         </Button>
       </div>
+
+      {!loading && loadError && <Button variant="outline" onClick={load}>Tentar novamente</Button>}
+      {!loading && !loadError && myJournals.length > 0 && (
+        <section className="space-y-3 border-y border-border py-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="font-bold">Minhas redações e propostas</h2>
+            <Button size="sm" variant="outline" disabled={!canApply} onClick={() => setApplyOpen(true)}>
+              <Plus className="mr-1 h-4 w-4" /> Nova proposta
+            </Button>
+          </div>
+          {!canApply && <p className="text-sm text-muted-foreground">Você tem duas propostas em análise. Aguarde uma decisão.</p>}
+          {proposals.current.map((j) => (
+            <Button key={j.id} variant="outline" className="h-auto w-full justify-between gap-3 whitespace-normal py-3 text-left" onClick={() => navigate(`/newsroom/${j.id}`)}>
+              <span className="min-w-0 break-words">{j.name}</span>
+              <span className="shrink-0 text-xs text-muted-foreground">{JOURNAL_STATUS_LABEL[j.status]}</span>
+            </Button>
+          ))}
+          {proposals.rejected.length > 0 && (
+            <>
+              <Button variant="ghost" size="sm" onClick={() => setShowHistory(!showHistory)} aria-expanded={showHistory}>
+                {showHistory ? "Ocultar decisões anteriores" : `Propostas recusadas (${proposals.rejected.length})`}
+              </Button>
+              {(showHistory || proposals.current.length === 0) && proposals.rejected.map((j) => (
+                <div key={j.id} className="space-y-2 rounded-lg border border-border p-3">
+                  <p className="break-words font-semibold">{j.name} <span className="text-xs text-destructive">· Proposta recusada</span></p>
+                  <p className="whitespace-pre-wrap break-words text-sm text-muted-foreground">{j.review_note || "O administrador não informou um motivo."}</p>
+                  <p className="text-sm text-muted-foreground">A decisão se refere a esta proposta. Você pode enviar uma nova para análise.</p>
+                  <Button variant="link" className="h-auto p-0" onClick={() => navigate(`/newsroom/${j.id}`)}>Ver proposta</Button>
+                </div>
+              ))}
+            </>
+          )}
+        </section>
+      )}
 
       {loading ? (
         <div className="flex justify-center py-16">

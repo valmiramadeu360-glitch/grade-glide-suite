@@ -1,2 +1,3 @@
 - Keep Vibes in the existing posts table with the Vibe tag and filter their 24-hour lifetime at query time; this reuses post ownership, moderation, storage, and university isolation without adding another security surface.
 - Keep recommendation scoring in a pure library module and image processing in a client-side editor; this makes ranking testable and media edits inexpensive without changing storage providers.
+- Keep rejected journal applications as historical records and create a separate pending channel for each new submission; this preserves moderation decisions without blocking future proposals.
