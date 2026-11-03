@@ -10,10 +10,89 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5"
+    PostgrestVersion: "14.1"
   }
   public: {
     Tables: {
+      academic_cohorts: {
+        Row: {
+          class_section: string | null
+          course_id: string
+          created_at: string
+          description: string | null
+          entry_semester: string | null
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          class_section?: string | null
+          course_id: string
+          created_at?: string
+          description?: string | null
+          entry_semester?: string | null
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          class_section?: string | null
+          course_id?: string
+          created_at?: string
+          description?: string | null
+          entry_semester?: string | null
+          id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "academic_cohorts_course_id_fkey"
+            columns: ["course_id"]
+            isOneToOne: false
+            referencedRelation: "courses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      academic_units: {
+        Row: {
+          acronym: string | null
+          campus_id: string
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          acronym?: string | null
+          campus_id: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          acronym?: string | null
+          campus_id?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "academic_units_campus_id_fkey"
+            columns: ["campus_id"]
+            isOneToOne: false
+            referencedRelation: "campuses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       admin_announcements: {
         Row: {
           active: boolean
@@ -435,14 +514,20 @@ export type Database = {
       }
       communities: {
         Row: {
+          academic_unit_id: string | null
+          allow_member_discussions: boolean
+          allow_member_posts: boolean
           archived_at: string | null
           campus_id: string | null
           class_section: string | null
+          cohort_id: string | null
           course_id: string | null
           created_at: string
           description: string | null
           discipline_id: string | null
           id: string
+          is_official: boolean
+          is_verified: boolean
           member_count: number
           name: string
           period_number: number | null
@@ -453,14 +538,20 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          academic_unit_id?: string | null
+          allow_member_discussions?: boolean
+          allow_member_posts?: boolean
           archived_at?: string | null
           campus_id?: string | null
           class_section?: string | null
+          cohort_id?: string | null
           course_id?: string | null
           created_at?: string
           description?: string | null
           discipline_id?: string | null
           id?: string
+          is_official?: boolean
+          is_verified?: boolean
           member_count?: number
           name: string
           period_number?: number | null
@@ -471,14 +562,20 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          academic_unit_id?: string | null
+          allow_member_discussions?: boolean
+          allow_member_posts?: boolean
           archived_at?: string | null
           campus_id?: string | null
           class_section?: string | null
+          cohort_id?: string | null
           course_id?: string | null
           created_at?: string
           description?: string | null
           discipline_id?: string | null
           id?: string
+          is_official?: boolean
+          is_verified?: boolean
           member_count?: number
           name?: string
           period_number?: number | null
@@ -490,10 +587,24 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "communities_academic_unit_id_fkey"
+            columns: ["academic_unit_id"]
+            isOneToOne: false
+            referencedRelation: "academic_units"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "communities_campus_id_fkey"
             columns: ["campus_id"]
             isOneToOne: false
             referencedRelation: "campuses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "communities_cohort_id_fkey"
+            columns: ["cohort_id"]
+            isOneToOne: false
+            referencedRelation: "academic_cohorts"
             referencedColumns: ["id"]
           },
           {
@@ -515,6 +626,38 @@ export type Database = {
             columns: ["university_id"]
             isOneToOne: false
             referencedRelation: "universities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      community_admins: {
+        Row: {
+          community_id: string
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["community_admin_role"]
+          user_id: string
+        }
+        Insert: {
+          community_id: string
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["community_admin_role"]
+          user_id: string
+        }
+        Update: {
+          community_id?: string
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["community_admin_role"]
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_admins_community_id_fkey"
+            columns: ["community_id"]
+            isOneToOne: false
+            referencedRelation: "communities"
             referencedColumns: ["id"]
           },
         ]
@@ -583,6 +726,44 @@ export type Database = {
           },
         ]
       }
+      community_settings: {
+        Row: {
+          announcements_enabled: boolean
+          chat_enabled: boolean
+          community_id: string
+          discussions_enabled: boolean
+          events_enabled: boolean
+          news_enabled: boolean
+          updated_at: string
+        }
+        Insert: {
+          announcements_enabled?: boolean
+          chat_enabled?: boolean
+          community_id: string
+          discussions_enabled?: boolean
+          events_enabled?: boolean
+          news_enabled?: boolean
+          updated_at?: string
+        }
+        Update: {
+          announcements_enabled?: boolean
+          chat_enabled?: boolean
+          community_id?: string
+          discussions_enabled?: boolean
+          events_enabled?: boolean
+          news_enabled?: boolean
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "community_settings_community_id_fkey"
+            columns: ["community_id"]
+            isOneToOne: true
+            referencedRelation: "communities"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       course_periods: {
         Row: {
           course_id: string
@@ -617,6 +798,7 @@ export type Database = {
       }
       courses: {
         Row: {
+          academic_unit_id: string | null
           area: string | null
           campus_id: string
           created_at: string
@@ -629,6 +811,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          academic_unit_id?: string | null
           area?: string | null
           campus_id: string
           created_at?: string
@@ -641,6 +824,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          academic_unit_id?: string | null
           area?: string | null
           campus_id?: string
           created_at?: string
@@ -653,6 +837,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "courses_academic_unit_id_fkey"
+            columns: ["academic_unit_id"]
+            isOneToOne: false
+            referencedRelation: "academic_units"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "courses_campus_id_fkey"
             columns: ["campus_id"]
@@ -1955,18 +2146,22 @@ export type Database = {
       }
       profiles: {
         Row: {
+          academic_unit_id: string | null
           avatar_url: string | null
           bio: string | null
           campus_id: string | null
           career_goal: string | null
+          class_section: string | null
           codename: string | null
           codename_updated_at: string | null
+          cohort_id: string | null
           course: string | null
           course_id: string | null
           created_at: string
           current_period: number | null
           current_semester_label: string | null
           display_name: string | null
+          entry_semester: string | null
           full_name: string | null
           hide_name: boolean
           id: string
@@ -1994,18 +2189,22 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          academic_unit_id?: string | null
           avatar_url?: string | null
           bio?: string | null
           campus_id?: string | null
           career_goal?: string | null
+          class_section?: string | null
           codename?: string | null
           codename_updated_at?: string | null
+          cohort_id?: string | null
           course?: string | null
           course_id?: string | null
           created_at?: string
           current_period?: number | null
           current_semester_label?: string | null
           display_name?: string | null
+          entry_semester?: string | null
           full_name?: string | null
           hide_name?: boolean
           id?: string
@@ -2033,18 +2232,22 @@ export type Database = {
           user_id: string
         }
         Update: {
+          academic_unit_id?: string | null
           avatar_url?: string | null
           bio?: string | null
           campus_id?: string | null
           career_goal?: string | null
+          class_section?: string | null
           codename?: string | null
           codename_updated_at?: string | null
+          cohort_id?: string | null
           course?: string | null
           course_id?: string | null
           created_at?: string
           current_period?: number | null
           current_semester_label?: string | null
           display_name?: string | null
+          entry_semester?: string | null
           full_name?: string | null
           hide_name?: boolean
           id?: string
@@ -2073,10 +2276,24 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "profiles_academic_unit_id_fkey"
+            columns: ["academic_unit_id"]
+            isOneToOne: false
+            referencedRelation: "academic_units"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "profiles_campus_id_fkey"
             columns: ["campus_id"]
             isOneToOne: false
             referencedRelation: "campuses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "profiles_cohort_id_fkey"
+            columns: ["cohort_id"]
+            isOneToOne: false
+            referencedRelation: "academic_cohorts"
             referencedColumns: ["id"]
           },
           {
@@ -3034,6 +3251,10 @@ export type Database = {
           community_name: string
         }[]
       }
+      assign_course_to_academic_unit: {
+        Args: { _academic_unit_id: string; _course_id: string }
+        Returns: boolean
+      }
       campus_in_my_university: { Args: { _campus: string }; Returns: boolean }
       can_dm_user: {
         Args: { _receiver: string; _sender: string }
@@ -3048,6 +3269,15 @@ export type Database = {
       }
       course_in_my_university: { Args: { _course: string }; Returns: boolean }
       edu_norm: { Args: { _t: string }; Returns: string }
+      find_or_create_academic_unit: {
+        Args: {
+          _acronym?: string
+          _campus_id: string
+          _description?: string
+          _name: string
+        }
+        Returns: string
+      }
       find_or_create_campus: {
         Args: { _city?: string; _name: string; _university_id: string }
         Returns: string
@@ -3083,11 +3313,44 @@ export type Database = {
         }
         Returns: string
       }
+      get_academic_units_by_campus: {
+        Args: { _campus_id: string }
+        Returns: {
+          acronym: string
+          campus_id: string
+          id: string
+          name: string
+        }[]
+      }
       get_announcement_poll_totals: {
         Args: { _announcement_id: string }
         Returns: {
           option_index: number
           votes: number
+        }[]
+      }
+      get_course_academic_context: {
+        Args: { _course_id: string }
+        Returns: {
+          academic_unit_id: string
+          academic_unit_name: string
+          campus_id: string
+          campus_name: string
+          course_id: string
+          course_name: string
+          university_acronym: string
+          university_id: string
+          university_name: string
+        }[]
+      }
+      get_courses_by_academic_unit: {
+        Args: { _academic_unit_id: string }
+        Returns: {
+          academic_unit_id: string
+          campus_id: string
+          degree: string
+          id: string
+          name: string
         }[]
       }
       get_post_poll_totals: {
@@ -3230,6 +3493,7 @@ export type Database = {
         | "library"
         | "ru"
         | "project"
+      community_admin_role: "owner" | "admin" | "moderator" | "editor"
       community_role: "member" | "moderator" | "admin"
       community_type:
         | "university"
@@ -3238,6 +3502,7 @@ export type Database = {
         | "period"
         | "class"
         | "discipline"
+        | "academic_unit"
       news_channel_scope: "global" | "university" | "campus" | "course"
       report_status: "pending" | "reviewed" | "resolved" | "dismissed"
       ru_meal: "lunch" | "dinner"
@@ -3382,6 +3647,7 @@ export const Constants = {
         "ru",
         "project",
       ],
+      community_admin_role: ["owner", "admin", "moderator", "editor"],
       community_role: ["member", "moderator", "admin"],
       community_type: [
         "university",
@@ -3390,6 +3656,7 @@ export const Constants = {
         "period",
         "class",
         "discipline",
+        "academic_unit",
       ],
       news_channel_scope: ["global", "university", "campus", "course"],
       report_status: ["pending", "reviewed", "resolved", "dismissed"],
