@@ -65,6 +65,7 @@ interface Post {
   user_liked?: boolean;
   user_saved?: boolean;
   author_badge?: string | null;
+  university_id?: string | null;
   profiles?: Profile | null;
 }
 
@@ -124,7 +125,6 @@ export default function Connect() {
   const [searchParams] = useSearchParams();
 
   const [activeTab, setActiveTab] = useState<"feed" | "news" | "market">("feed");
-  const [feedMode, setFeedMode] = useState<FeedMode>("for-you");
 
   const [posts, setPosts] = useState<Post[]>([]);
   const [vibes, setVibes] = useState<Vibe[]>([]);
