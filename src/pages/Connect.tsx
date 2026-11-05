@@ -280,6 +280,7 @@ export default function Connect() {
   async function loadPosts() {
     if (!user) return;
     setLoading(true);
+    let profilesById = new Map<string, Profile>();
     try {
       const { data, error } = await supabase
         .from("posts")
@@ -345,23 +346,19 @@ export default function Connect() {
   async function loadVibes() {
     if (!user) return;
     try {
+      const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
       const { data, error } = await supabase
-        .from("vibes")
-        .select(`
-            *,
-            profiles (
-              id,
-              full_name,
-              avatar_url,
-              course,
-              institution
-            )
-          `)
-        .gt("expires_at", new Date().toISOString())
+        .from("posts")
+        .select("*")
+        .eq("tag", "Vibe")
+        .gte("created_at", since)
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      setVibes(data ?? []);
+
+      const vibeList = data ?? [];
+      const profiles = await fetchProfilesByIds(vibeList.map((vibe) => vibe.user_id));
+      setVibes(vibeList.map((vibe) => ({ ...vibe, profiles: profiles.get(vibe.user_id) ?? null })));
     } catch (error) {
       console.error("Erro ao carregar Vibes:", error);
     }
