@@ -39,7 +39,8 @@ interface Profile {
   full_name: string | null;
   avatar_url: string | null;
   course: string | null;
-  institution: string | null;
+  course_id?: string | null;
+  university_id?: string | null;
 }
 
 interface Post {
@@ -73,18 +74,7 @@ interface Vibe {
   content: string;
   media_url?: string | null;
   created_at: string;
-  expires_at?: string | null;
   profiles?: Profile | null;
-}
-
-interface NewsChannel {
-  id: string;
-  name: string;
-  description?: string | null;
-  logo_url?: string | null;
-  owner_id: string;
-  status: string;
-  created_at: string;
 }
 
 interface Comment {
