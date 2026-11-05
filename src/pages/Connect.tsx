@@ -479,8 +479,6 @@ export default function Connect() {
         media_urls: mediaUrls.length ? mediaUrls : null,
         video_url: mediaType === "video" ? mediaUrls[0] ?? null : null,
         document_url: mediaType === "document" ? mediaUrls[0] ?? null : null,
-        price,
-        original_price: originalPrice,
         event_at: eventAt || null,
         event_location: eventLocation.trim() || null,
         is_sold: false,
@@ -639,22 +637,16 @@ export default function Connect() {
 
     try {
       const { data, error } = await supabase
-        .from("comments")
-        .select(`
-            *,
-            profiles (
-              id,
-              full_name,
-              avatar_url,
-              course,
-              institution
-            )
-          `)
+        .from("post_comments")
+        .select("*")
         .eq("post_id", post.id)
         .order("created_at", { ascending: true });
 
       if (error) throw error;
-      setComments(data ?? []);
+
+      const commentList = data ?? [];
+      const profiles = await fetchProfilesByIds(commentList.map((comment) => comment.user_id));
+      setComments(commentList.map((comment) => ({ ...comment, profiles: profiles.get(comment.user_id) ?? null })));
     } catch (error) {
       console.error("Erro ao carregar comentários:", error);
       toast({ title: "Não foi possível carregar os comentários", variant: "destructive" });
@@ -670,23 +662,15 @@ export default function Connect() {
 
     try {
       const { data, error } = await supabase
-        .from("comments")
+        .from("post_comments")
         .insert({ post_id: selectedPost.id, user_id: user.id, content })
-        .select(`
-            *,
-            profiles (
-              id,
-              full_name,
-              avatar_url,
-              course,
-              institution
-            )
-          `)
+        .select("*")
         .single();
 
       if (error) throw error;
 
-      setComments((current) => [...current, data]);
+      const profile = myProfile ?? (await fetchProfilesByIds([user.id])).get(user.id) ?? null;
+      setComments((current) => [...current, { ...data, profiles: profile }]);
       setPosts((current) =>
         current.map((post) =>
           post.id === selectedPost.id ? { ...post, comments_count: post.comments_count + 1 } : post
