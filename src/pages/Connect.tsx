@@ -124,22 +124,17 @@ export default function Connect() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
-  const [activeTab, setActiveTab] = useState<"feed" | "news" | "market">("feed");
+  const [feedMode, setFeedMode] = useState<FeedMode>("for-you");
 
   const [posts, setPosts] = useState<Post[]>([]);
   const [vibes, setVibes] = useState<Vibe[]>([]);
-  const [newsItems, setNewsItems] = useState<NewsChannel[]>([]);
-  const [myChannels, setMyChannels] = useState<NewsChannel[]>([]);
   const [comments, setComments] = useState<Comment[]>([]);
 
   const [loading, setLoading] = useState(true);
-  const [newsLoading, setNewsLoading] = useState(false);
   const [commentsLoading, setCommentsLoading] = useState(false);
   const [posting, setPosting] = useState(false);
-  const [publishingNews, setPublishingNews] = useState(false);
 
   const [composerOpen, setComposerOpen] = useState(false);
-  const [newsComposerOpen, setNewsComposerOpen] = useState(false);
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [editingPost, setEditingPost] = useState<Post | null>(null);
   const [viewingVibe, setViewingVibe] = useState<Vibe | null>(null);
@@ -147,8 +142,6 @@ export default function Connect() {
 
   const [newContent, setNewContent] = useState("");
   const [newTitle, setNewTitle] = useState("");
-  const [newPrice, setNewPrice] = useState("");
-  const [newOriginalPrice, setNewOriginalPrice] = useState("");
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [mediaType, setMediaType] = useState<MediaType>("text");
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
@@ -162,15 +155,9 @@ export default function Connect() {
   const [showSavedOnly, setShowSavedOnly] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
 
-  const [newsChannelId, setNewsChannelId] = useState<string | null>(null);
-  const [newsTitle, setNewsTitle] = useState("");
-  const [newsContent, setNewsContent] = useState("");
-  const [newsLink, setNewsLink] = useState("");
-  const [newsCoverFile, setNewsCoverFile] = useState<File | null>(null);
-  const [newsCoverPreview, setNewsCoverPreview] = useState<string | null>(null);
-
   const [myRoles, setMyRoles] = useState<string[]>([]);
   const [myAvatar, setMyAvatar] = useState<string | null>(null);
+  const [myProfile, setMyProfile] = useState<Profile | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const composerTextareaRef = useRef<HTMLTextAreaElement | null>(null);
