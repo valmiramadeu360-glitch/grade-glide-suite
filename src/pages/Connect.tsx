@@ -228,17 +228,35 @@ export default function Connect() {
     };
   }, [previewUrls]);
 
+  async function fetchProfilesByIds(ids: string[]) {
+    const uniqueIds = [...new Set(ids)].filter(Boolean);
+    if (!uniqueIds.length) return new Map<string, Profile>();
+
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("id, full_name, avatar_url, course, course_id, university_id")
+      .in("id", uniqueIds);
+
+    if (error) {
+      console.error("Erro ao carregar autores:", error);
+      return new Map<string, Profile>();
+    }
+
+    return new Map<string, Profile>((data ?? []).map((profile) => [profile.id, profile]));
+  }
+
   async function loadProfile() {
     if (!user) return;
     try {
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, full_name, avatar_url, course, institution")
+        .select("id, full_name, avatar_url, course, course_id, university_id")
         .eq("id", user.id)
         .maybeSingle();
 
       if (error) throw error;
       setMyAvatar(data?.avatar_url ?? null);
+      setMyProfile(data ?? null);
     } catch (error) {
       console.error("Erro ao carregar perfil:", error);
     }
@@ -265,16 +283,8 @@ export default function Connect() {
     try {
       const { data, error } = await supabase
         .from("posts")
-        .select(`
-            *,
-            profiles (
-              id,
-              full_name,
-              avatar_url,
-              course,
-              institution
-            )
-          `)
+        .select("*")
+        .or("tag.neq.Vibe,tag.is.null")
         .order("created_at", { ascending: false });
 
       if (error) throw error;
@@ -284,21 +294,39 @@ export default function Connect() {
 
       let likedIds = new Set<string>();
       let savedIds = new Set<string>();
+      const likesByPost = new Map<string, number>();
+      const commentsByPost = new Map<string, number>();
 
       if (postIds.length) {
-        const [likesResult, savesResult] = await Promise.all([
-          supabase.from("post_likes").select("post_id").eq("user_id", user.id).in("post_id", postIds),
-          supabase.from("saved_posts").select("post_id").eq("user_id", user.id).in("post_id", postIds),
-        ]);
+        const [likesResult, savesResult, likesCountResult, commentsCountResult, profilesResult] =
+          await Promise.all([
+            supabase.from("post_likes").select("post_id").eq("user_id", user.id).in("post_id", postIds),
+            supabase.from("saved_posts").select("post_id").eq("user_id", user.id).in("post_id", postIds),
+            supabase.from("post_likes").select("post_id").in("post_id", postIds),
+            supabase.from("post_comments").select("post_id").in("post_id", postIds),
+            fetchProfilesByIds(postList.map((post) => post.user_id)),
+          ]);
 
         likedIds = new Set(likesResult.data?.map((item) => item.post_id) ?? []);
         savedIds = new Set(savesResult.data?.map((item) => item.post_id) ?? []);
+
+        (likesCountResult.data ?? []).forEach((item) => {
+          likesByPost.set(item.post_id, (likesByPost.get(item.post_id) ?? 0) + 1);
+        });
+        (commentsCountResult.data ?? []).forEach((item) => {
+          commentsByPost.set(item.post_id, (commentsByPost.get(item.post_id) ?? 0) + 1);
+        });
+
+        profilesById = profilesResult;
       }
 
       const normalized = postList.map((post) => ({
         ...post,
+        likes_count: likesByPost.get(post.id) ?? 0,
+        comments_count: commentsByPost.get(post.id) ?? 0,
         user_liked: likedIds.has(post.id),
         user_saved: savedIds.has(post.id),
+        profiles: profilesById.get(post.user_id) ?? null,
       }));
 
       setPosts(normalized);
