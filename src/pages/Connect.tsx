@@ -39,7 +39,8 @@ interface Profile {
   full_name: string | null;
   avatar_url: string | null;
   course: string | null;
-  institution: string | null;
+  course_id?: string | null;
+  university_id?: string | null;
 }
 
 interface Post {
@@ -64,6 +65,7 @@ interface Post {
   user_liked?: boolean;
   user_saved?: boolean;
   author_badge?: string | null;
+  university_id?: string | null;
   profiles?: Profile | null;
 }
 
@@ -73,18 +75,7 @@ interface Vibe {
   content: string;
   media_url?: string | null;
   created_at: string;
-  expires_at?: string | null;
   profiles?: Profile | null;
-}
-
-interface NewsChannel {
-  id: string;
-  name: string;
-  description?: string | null;
-  logo_url?: string | null;
-  owner_id: string;
-  status: string;
-  created_at: string;
 }
 
 interface Comment {
@@ -133,23 +124,17 @@ export default function Connect() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
-  const [activeTab, setActiveTab] = useState<"feed" | "news" | "market">("feed");
   const [feedMode, setFeedMode] = useState<FeedMode>("for-you");
 
   const [posts, setPosts] = useState<Post[]>([]);
   const [vibes, setVibes] = useState<Vibe[]>([]);
-  const [newsItems, setNewsItems] = useState<NewsChannel[]>([]);
-  const [myChannels, setMyChannels] = useState<NewsChannel[]>([]);
   const [comments, setComments] = useState<Comment[]>([]);
 
   const [loading, setLoading] = useState(true);
-  const [newsLoading, setNewsLoading] = useState(false);
   const [commentsLoading, setCommentsLoading] = useState(false);
   const [posting, setPosting] = useState(false);
-  const [publishingNews, setPublishingNews] = useState(false);
 
   const [composerOpen, setComposerOpen] = useState(false);
-  const [newsComposerOpen, setNewsComposerOpen] = useState(false);
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [editingPost, setEditingPost] = useState<Post | null>(null);
   const [viewingVibe, setViewingVibe] = useState<Vibe | null>(null);
@@ -157,8 +142,6 @@ export default function Connect() {
 
   const [newContent, setNewContent] = useState("");
   const [newTitle, setNewTitle] = useState("");
-  const [newPrice, setNewPrice] = useState("");
-  const [newOriginalPrice, setNewOriginalPrice] = useState("");
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [mediaType, setMediaType] = useState<MediaType>("text");
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
@@ -172,30 +155,15 @@ export default function Connect() {
   const [showSavedOnly, setShowSavedOnly] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
 
-  const [newsChannelId, setNewsChannelId] = useState<string | null>(null);
-  const [newsTitle, setNewsTitle] = useState("");
-  const [newsContent, setNewsContent] = useState("");
-  const [newsLink, setNewsLink] = useState("");
-  const [newsCoverFile, setNewsCoverFile] = useState<File | null>(null);
-  const [newsCoverPreview, setNewsCoverPreview] = useState<string | null>(null);
-
   const [myRoles, setMyRoles] = useState<string[]>([]);
   const [myAvatar, setMyAvatar] = useState<string | null>(null);
+  const [myProfile, setMyProfile] = useState<Profile | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const composerTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const filteredPosts = useMemo(() => {
     let result = [...posts];
-
-    // Se estiver na aba Market, filtra automaticamente por posts de mercado/com preço ou tags de mercado
-    if (activeTab === "market") {
-      result = result.filter(
-        (post) =>
-          post.price != null ||
-          MARKET_TAGS.includes(post.tag || "")
-      );
-    }
 
     if (showSavedOnly) {
       result = result.filter((post) => post.user_saved);
@@ -218,15 +186,26 @@ export default function Connect() {
       );
     }
 
+    if (feedMode === "university" && myProfile?.university_id) {
+      result = result.filter(
+        (post) => !post.university_id || post.university_id === myProfile.university_id
+      );
+    }
+
+    if (feedMode === "course" && myProfile?.course_id) {
+      result = result.filter(
+        (post) => !post.profiles?.course_id || post.profiles.course_id === myProfile.course_id
+      );
+    }
+
     return result;
-  }, [posts, showSavedOnly, searchTerm, feedMode, activeTab]);
+  }, [posts, showSavedOnly, searchTerm, feedMode, myProfile]);
 
   useEffect(() => {
     if (!user) return;
     loadProfile();
     loadPosts();
     loadVibes();
-    loadNews();
     loadRoles();
   }, [user]);
 
@@ -246,23 +225,38 @@ export default function Connect() {
       previewUrls.forEach((url) => {
         if (url.startsWith("blob:")) URL.revokeObjectURL(url);
       });
-      if (newsCoverPreview?.startsWith("blob:")) {
-        URL.revokeObjectURL(newsCoverPreview);
-      }
     };
-  }, [previewUrls, newsCoverPreview]);
+  }, [previewUrls]);
+
+  async function fetchProfilesByIds(ids: string[]) {
+    const uniqueIds = [...new Set(ids)].filter(Boolean);
+    if (!uniqueIds.length) return new Map<string, Profile>();
+
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("id, full_name, avatar_url, course, course_id, university_id")
+      .in("id", uniqueIds);
+
+    if (error) {
+      console.error("Erro ao carregar autores:", error);
+      return new Map<string, Profile>();
+    }
+
+    return new Map<string, Profile>((data ?? []).map((profile) => [profile.id, profile]));
+  }
 
   async function loadProfile() {
     if (!user) return;
     try {
       const { data, error } = await supabase
         .from("profiles")
-        .select("id, full_name, avatar_url, course, institution")
+        .select("id, full_name, avatar_url, course, course_id, university_id")
         .eq("id", user.id)
         .maybeSingle();
 
       if (error) throw error;
       setMyAvatar(data?.avatar_url ?? null);
+      setMyProfile(data ?? null);
     } catch (error) {
       console.error("Erro ao carregar perfil:", error);
     }
@@ -286,19 +280,12 @@ export default function Connect() {
   async function loadPosts() {
     if (!user) return;
     setLoading(true);
+    let profilesById = new Map<string, Profile>();
     try {
       const { data, error } = await supabase
         .from("posts")
-        .select(`
-            *,
-            profiles (
-              id,
-              full_name,
-              avatar_url,
-              course,
-              institution
-            )
-          `)
+        .select("*")
+        .or("tag.neq.Vibe,tag.is.null")
         .order("created_at", { ascending: false });
 
       if (error) throw error;
@@ -308,21 +295,39 @@ export default function Connect() {
 
       let likedIds = new Set<string>();
       let savedIds = new Set<string>();
+      const likesByPost = new Map<string, number>();
+      const commentsByPost = new Map<string, number>();
 
       if (postIds.length) {
-        const [likesResult, savesResult] = await Promise.all([
-          supabase.from("post_likes").select("post_id").eq("user_id", user.id).in("post_id", postIds),
-          supabase.from("saved_posts").select("post_id").eq("user_id", user.id).in("post_id", postIds),
-        ]);
+        const [likesResult, savesResult, likesCountResult, commentsCountResult, profilesResult] =
+          await Promise.all([
+            supabase.from("post_likes").select("post_id").eq("user_id", user.id).in("post_id", postIds),
+            supabase.from("saved_posts").select("post_id").eq("user_id", user.id).in("post_id", postIds),
+            supabase.from("post_likes").select("post_id").in("post_id", postIds),
+            supabase.from("post_comments").select("post_id").in("post_id", postIds),
+            fetchProfilesByIds(postList.map((post) => post.user_id)),
+          ]);
 
         likedIds = new Set(likesResult.data?.map((item) => item.post_id) ?? []);
         savedIds = new Set(savesResult.data?.map((item) => item.post_id) ?? []);
+
+        (likesCountResult.data ?? []).forEach((item) => {
+          likesByPost.set(item.post_id, (likesByPost.get(item.post_id) ?? 0) + 1);
+        });
+        (commentsCountResult.data ?? []).forEach((item) => {
+          commentsByPost.set(item.post_id, (commentsByPost.get(item.post_id) ?? 0) + 1);
+        });
+
+        profilesById = profilesResult;
       }
 
       const normalized = postList.map((post) => ({
         ...post,
+        likes_count: likesByPost.get(post.id) ?? 0,
+        comments_count: commentsByPost.get(post.id) ?? 0,
         user_liked: likedIds.has(post.id),
         user_saved: savedIds.has(post.id),
+        profiles: profilesById.get(post.user_id) ?? null,
       }));
 
       setPosts(normalized);
@@ -341,23 +346,19 @@ export default function Connect() {
   async function loadVibes() {
     if (!user) return;
     try {
+      const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
       const { data, error } = await supabase
-        .from("vibes")
-        .select(`
-            *,
-            profiles (
-              id,
-              full_name,
-              avatar_url,
-              course,
-              institution
-            )
-          `)
-        .gt("expires_at", new Date().toISOString())
+        .from("posts")
+        .select("*")
+        .eq("tag", "Vibe")
+        .gte("created_at", since)
         .order("created_at", { ascending: false });
 
       if (error) throw error;
-      setVibes(data ?? []);
+
+      const vibeList = data ?? [];
+      const profiles = await fetchProfilesByIds(vibeList.map((vibe) => vibe.user_id));
+      setVibes(vibeList.map((vibe) => ({ ...vibe, profiles: profiles.get(vibe.user_id) ?? null })));
     } catch (error) {
       console.error("Erro ao carregar Vibes:", error);
     }
@@ -398,9 +399,7 @@ export default function Connect() {
     }
 
     const newFiles =
-      activeTab === "market" && mediaType === "image"
-        ? [...selectedFiles, ...allowed].slice(0, 6)
-        : [allowed[0]];
+      mediaType === "image" ? [...selectedFiles, ...allowed].slice(0, 6) : [allowed[0]];
 
     const urls = newFiles.map((file) =>
       mediaType === "document" ? "pdf-preview" : URL.createObjectURL(file)
@@ -457,11 +456,11 @@ export default function Connect() {
       const mediaUrls = await uploadPostFiles();
 
       if (isVibe) {
-        const { error } = await supabase.from("vibes").insert({
+        const { error } = await supabase.from("posts").insert({
           user_id: user.id,
           content: newContent.trim(),
+          tag: "Vibe",
           media_url: mediaUrls[0] ?? null,
-          expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
         });
 
         if (error) throw error;
@@ -471,32 +470,15 @@ export default function Connect() {
         return;
       }
 
-      let price: number | null = null;
-      let originalPrice: number | null = null;
-
-      if (newPrice.trim()) {
-        const normalized = newPrice.replace(/\./g, "").replace(",", ".");
-        price = Number(normalized);
-        if (Number.isNaN(price)) throw new Error("Informe um preço válido.");
-      }
-
-      if (newOriginalPrice.trim()) {
-        const normalized = newOriginalPrice.replace(/\./g, "").replace(",", ".");
-        originalPrice = Number(normalized);
-        if (Number.isNaN(originalPrice)) throw new Error("Informe um preço original válido.");
-      }
-
       const payload = {
         user_id: user.id,
         content: newContent.trim(),
         title: newTitle.trim() || null,
-        tag: selectedTag || (activeTab === "market" ? "Venda" : null),
+        tag: selectedTag || null,
         media_url: mediaUrls[0] ?? null,
         media_urls: mediaUrls.length ? mediaUrls : null,
         video_url: mediaType === "video" ? mediaUrls[0] ?? null : null,
         document_url: mediaType === "document" ? mediaUrls[0] ?? null : null,
-        price,
-        original_price: originalPrice,
         event_at: eventAt || null,
         event_location: eventLocation.trim() || null,
         is_sold: false,
@@ -655,22 +637,16 @@ export default function Connect() {
 
     try {
       const { data, error } = await supabase
-        .from("comments")
-        .select(`
-            *,
-            profiles (
-              id,
-              full_name,
-              avatar_url,
-              course,
-              institution
-            )
-          `)
+        .from("post_comments")
+        .select("*")
         .eq("post_id", post.id)
         .order("created_at", { ascending: true });
 
       if (error) throw error;
-      setComments(data ?? []);
+
+      const commentList = data ?? [];
+      const profiles = await fetchProfilesByIds(commentList.map((comment) => comment.user_id));
+      setComments(commentList.map((comment) => ({ ...comment, profiles: profiles.get(comment.user_id) ?? null })));
     } catch (error) {
       console.error("Erro ao carregar comentários:", error);
       toast({ title: "Não foi possível carregar os comentários", variant: "destructive" });
@@ -686,23 +662,15 @@ export default function Connect() {
 
     try {
       const { data, error } = await supabase
-        .from("comments")
+        .from("post_comments")
         .insert({ post_id: selectedPost.id, user_id: user.id, content })
-        .select(`
-            *,
-            profiles (
-              id,
-              full_name,
-              avatar_url,
-              course,
-              institution
-            )
-          `)
+        .select("*")
         .single();
 
       if (error) throw error;
 
-      setComments((current) => [...current, data]);
+      const profile = myProfile ?? (await fetchProfilesByIds([user.id])).get(user.id) ?? null;
+      setComments((current) => [...current, { ...data, profiles: profile }]);
       setPosts((current) =>
         current.map((post) =>
           post.id === selectedPost.id ? { ...post, comments_count: post.comments_count + 1 } : post
@@ -728,35 +696,6 @@ export default function Connect() {
     )}&location=${encodeURIComponent(post.event_location || "")}`;
 
     window.open(url, "_blank", "noopener,noreferrer");
-  }
-
-  async function loadNews() {
-    if (!user) return;
-    setNewsLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from("news_channels")
-        .select("*")
-        .eq("status", "approved")
-        .order("created_at", { ascending: false });
-
-      if (error) throw error;
-      setNewsItems(data ?? []);
-
-      const { data: ownedChannels, error: ownedError } = await supabase
-        .from("news_channels")
-        .select("*")
-        .eq("owner_id", user.id)
-        .order("created_at", { ascending: false });
-
-      if (!ownedError) {
-        setMyChannels(ownedChannels ?? []);
-      }
-    } catch (error) {
-      console.error("Erro ao carregar jornais:", error);
-    } finally {
-      setNewsLoading(false);
-    }
   }
 
   function closeComposer() {
@@ -859,116 +798,6 @@ export default function Connect() {
   function selectComposerTag(tag: string) {
     setSelectedTag((current) => (current === tag ? null : tag));
   }
-
-  async function createNewsChannel() {
-    if (!user) return;
-    if (!newsChannelId && !myChannels.length) {
-      toast({
-        title: "Crie ou solicite um jornal primeiro",
-        description: "O acesso à publicação de notícias depende da aprovação do perfil do jornal.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const channel = newsChannelId
-      ? myChannels.find((item) => item.id === newsChannelId)
-      : myChannels.find((item) => item.status === "approved");
-
-    if (!channel || channel.status !== "approved") {
-      toast({
-        title: "Jornal ainda não aprovado",
-        description: "Aguarde a aprovação do administrador para publicar notícias.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    if (!newsTitle.trim() || !newsContent.trim()) {
-      toast({
-        title: "Preencha os dados da notícia",
-        description: "Informe pelo menos o título e o conteúdo.",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setPublishingNews(true);
-    try {
-      let coverUrl: string | null = null;
-      if (newsCoverFile) {
-        const extension = newsCoverFile.name.split(".").pop() || "jpg";
-        const path = `${user.id}/news_${Date.now()}_${Math.random().toString(36).slice(2)}.${extension}`;
-        const { error: uploadError } = await supabase.storage.from("news-media").upload(path, newsCoverFile);
-        if (uploadError) throw uploadError;
-
-        const { data } = supabase.storage.from("news-media").getPublicUrl(path);
-        coverUrl = data.publicUrl;
-      }
-
-      const { error } = await supabase.from("news").insert({
-        channel_id: channel.id,
-        author_id: user.id,
-        title: newsTitle.trim(),
-        content: newsContent.trim(),
-        link: newsLink.trim() || null,
-        cover_url: coverUrl,
-        status: "published",
-      });
-
-      if (error) throw error;
-
-      toast({ title: "Notícia publicada!", description: "Sua notícia já está disponível na aba de notícias." });
-      setNewsTitle("");
-      setNewsContent("");
-      setNewsLink("");
-      setNewsCoverFile(null);
-      setNewsCoverPreview(null);
-      setNewsChannelId(null);
-      setNewsComposerOpen(false);
-      loadNews();
-    } catch (error: any) {
-      console.error("Erro ao publicar notícia:", error);
-      toast({ title: "Não foi possível publicar a notícia", description: error?.message || "Tente novamente.", variant: "destructive" });
-    } finally {
-      setPublishingNews(false);
-    }
-  }
-
-  function handleNewsCover(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    if (!file.type.startsWith("image/")) {
-      toast({ title: "Imagem inválida", description: "Selecione uma imagem para a capa.", variant: "destructive" });
-      return;
-    }
-
-    if (newsCoverPreview?.startsWith("blob:")) {
-      URL.revokeObjectURL(newsCoverPreview);
-    }
-
-    setNewsCoverFile(file);
-    setNewsCoverPreview(URL.createObjectURL(file));
-  }
-
-  function resetNewsComposer() {
-    if (newsCoverPreview?.startsWith("blob:")) {
-      URL.revokeObjectURL(newsCoverPreview);
-    }
-    setNewsChannelId(null);
-    setNewsTitle("");
-    setNewsContent("");
-    setNewsLink("");
-    setNewsCoverFile(null);
-    setNewsCoverPreview(null);
-  }
-
-  const approvedMyChannels = useMemo(
-    () => myChannels.filter((channel) => channel.status === "approved"),
-    [myChannels]
-  );
-  const hasNewsPermission = approvedMyChannels.length > 0;
 
   function renderVibes() {
     return (
