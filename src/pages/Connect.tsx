@@ -399,9 +399,7 @@ export default function Connect() {
     }
 
     const newFiles =
-      activeTab === "market" && mediaType === "image"
-        ? [...selectedFiles, ...allowed].slice(0, 6)
-        : [allowed[0]];
+      mediaType === "image" ? [...selectedFiles, ...allowed].slice(0, 6) : [allowed[0]];
 
     const urls = newFiles.map((file) =>
       mediaType === "document" ? "pdf-preview" : URL.createObjectURL(file)
@@ -458,11 +456,11 @@ export default function Connect() {
       const mediaUrls = await uploadPostFiles();
 
       if (isVibe) {
-        const { error } = await supabase.from("vibes").insert({
+        const { error } = await supabase.from("posts").insert({
           user_id: user.id,
           content: newContent.trim(),
+          tag: "Vibe",
           media_url: mediaUrls[0] ?? null,
-          expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
         });
 
         if (error) throw error;
@@ -472,26 +470,11 @@ export default function Connect() {
         return;
       }
 
-      let price: number | null = null;
-      let originalPrice: number | null = null;
-
-      if (newPrice.trim()) {
-        const normalized = newPrice.replace(/\./g, "").replace(",", ".");
-        price = Number(normalized);
-        if (Number.isNaN(price)) throw new Error("Informe um preço válido.");
-      }
-
-      if (newOriginalPrice.trim()) {
-        const normalized = newOriginalPrice.replace(/\./g, "").replace(",", ".");
-        originalPrice = Number(normalized);
-        if (Number.isNaN(originalPrice)) throw new Error("Informe um preço original válido.");
-      }
-
       const payload = {
         user_id: user.id,
         content: newContent.trim(),
         title: newTitle.trim() || null,
-        tag: selectedTag || (activeTab === "market" ? "Venda" : null),
+        tag: selectedTag || null,
         media_url: mediaUrls[0] ?? null,
         media_urls: mediaUrls.length ? mediaUrls : null,
         video_url: mediaType === "video" ? mediaUrls[0] ?? null : null,
