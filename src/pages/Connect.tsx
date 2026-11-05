@@ -165,15 +165,6 @@ export default function Connect() {
   const filteredPosts = useMemo(() => {
     let result = [...posts];
 
-    // Se estiver na aba Market, filtra automaticamente por posts de mercado/com preço ou tags de mercado
-    if (activeTab === "market") {
-      result = result.filter(
-        (post) =>
-          post.price != null ||
-          MARKET_TAGS.includes(post.tag || "")
-      );
-    }
-
     if (showSavedOnly) {
       result = result.filter((post) => post.user_saved);
     }
@@ -195,15 +186,26 @@ export default function Connect() {
       );
     }
 
+    if (feedMode === "university" && myProfile?.university_id) {
+      result = result.filter(
+        (post) => !post.university_id || post.university_id === myProfile.university_id
+      );
+    }
+
+    if (feedMode === "course" && myProfile?.course_id) {
+      result = result.filter(
+        (post) => !post.profiles?.course_id || post.profiles.course_id === myProfile.course_id
+      );
+    }
+
     return result;
-  }, [posts, showSavedOnly, searchTerm, feedMode, activeTab]);
+  }, [posts, showSavedOnly, searchTerm, feedMode, myProfile]);
 
   useEffect(() => {
     if (!user) return;
     loadProfile();
     loadPosts();
     loadVibes();
-    loadNews();
     loadRoles();
   }, [user]);
 
@@ -223,11 +225,8 @@ export default function Connect() {
       previewUrls.forEach((url) => {
         if (url.startsWith("blob:")) URL.revokeObjectURL(url);
       });
-      if (newsCoverPreview?.startsWith("blob:")) {
-        URL.revokeObjectURL(newsCoverPreview);
-      }
     };
-  }, [previewUrls, newsCoverPreview]);
+  }, [previewUrls]);
 
   async function loadProfile() {
     if (!user) return;
