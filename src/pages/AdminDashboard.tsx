@@ -514,8 +514,8 @@ export default function AdminDashboard() {
         name: blockName.trim(),
         category: blockCategory,
         description: blockDescription.trim() || null,
-        pin_x: pendingPin.x,
-        pin_y: pendingPin.y,
+        x_percent: pendingPin.x,
+        y_percent: pendingPin.y,
       }).select().single();
       if (error) throw error;
       setCampusBlocks((prev) => [...prev, data]);
@@ -542,7 +542,7 @@ export default function AdminDashboard() {
 
   async function handleToggleCommunityArchive(comm: any) {
     const nextArchived = !comm.is_archived;
-    const { error } = await supabase.from("communities").update({ is_archived: nextArchived }).eq("id", comm.id);
+    const { error } = await supabase.from("communities").update({ archived_at: nextArchived ? new Date().toISOString() : null }).eq("id", comm.id);
     if (error) {
       toast({ title: "Erro ao alterar status", description: error.message, variant: "destructive" });
       return;
@@ -576,8 +576,8 @@ export default function AdminDashboard() {
 
   async function loadAnnouncements() {
     setLoadingTab(true);
-    const { data } = await supabase.from("announcements").select("*").order("created_at", { ascending: false });
-    setAnnouncements(data || []);
+    const { data } = await supabase.from("admin_announcements").select("*").order("created_at", { ascending: false });
+    setAnnouncements((data || []).map((a: any) => ({ ...a, is_active: a.active, options: a.poll_options })));
     setLoadingTab(false);
   }
 
@@ -588,14 +588,14 @@ export default function AdminDashboard() {
     }
     setSavingAnn(true);
     const filteredOptions = annType === "poll" ? annOptions.map((o) => o.trim()).filter(Boolean) : null;
-    const { error } = await supabase.from("announcements").insert({
+    const { error } = await supabase.from("admin_announcements").insert({
       title: annTitle.trim(),
       body: annBody.trim(),
       type: annType,
       cta_label: annCtaLabel.trim() || null,
       cta_url: annCtaUrl.trim() || null,
-      options: filteredOptions && filteredOptions.length >= 2 ? filteredOptions : null,
-      is_active: true,
+      poll_options: filteredOptions && filteredOptions.length >= 2 ? filteredOptions : null,
+      active: true,
       created_by: user!.id,
     });
     setSavingAnn(false);
@@ -613,7 +613,7 @@ export default function AdminDashboard() {
   }
 
   async function handleToggleAnnouncement(id: string, current: boolean) {
-    const { error } = await supabase.from("announcements").update({ is_active: !current }).eq("id", id);
+    const { error } = await supabase.from("admin_announcements").update({ active: !current }).eq("id", id);
     if (!error) {
       setAnnouncements((prev) => prev.map((a) => (a.id === id ? { ...a, is_active: !current } : a)));
       toast({ title: !current ? "Banner ativado" : "Banner desativado" });
@@ -621,7 +621,7 @@ export default function AdminDashboard() {
   }
 
   async function handleDeleteAnnouncement(id: string) {
-    const { error } = await supabase.from("announcements").delete().eq("id", id);
+    const { error } = await supabase.from("admin_announcements").delete().eq("id", id);
     if (!error) {
       setAnnouncements((prev) => prev.filter((a) => a.id !== id));
       toast({ title: "Banner excluído" });
