@@ -541,7 +541,7 @@ export default function AdminDashboard() {
   }
 
   async function handleToggleCommunityArchive(comm: any) {
-    const nextArchived = !comm.is_archived;
+    const nextArchived = !(comm.is_archived ?? !!comm.archived_at);
     const { error } = await supabase.from("communities").update({ archived_at: nextArchived ? new Date().toISOString() : null }).eq("id", comm.id);
     if (error) {
       toast({ title: "Erro ao alterar status", description: error.message, variant: "destructive" });
@@ -991,7 +991,7 @@ export default function AdminDashboard() {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
                             <h4 className="font-black text-sm truncate">{c.name}</h4>
-                            {c.is_archived && <Badge variant="destructive" className="text-[9px] px-2 py-0">Arquivada</Badge>}
+                            {(c.is_archived ?? !!c.archived_at) && <Badge variant="destructive" className="text-[9px] px-2 py-0">Arquivada</Badge>}
                           </div>
                           <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">{c.description || "Sem descrição"}</p>
                           <p className="text-[10px] font-bold text-muted-foreground mt-1 uppercase tracking-widest">{c.member_count || 0} membros · {c.type || "pública"}</p>
@@ -1000,9 +1000,9 @@ export default function AdminDashboard() {
                           <Button size="sm" variant="ghost" className="h-9 text-xs font-bold gap-1 rounded-xl" onClick={() => loadCommunityMembers(c.id)}>
                             {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />} Membros
                           </Button>
-                          <Button size="sm" variant={c.is_archived ? "default" : "outline"} className="h-9 text-xs font-black gap-1.5 rounded-xl" onClick={() => handleToggleCommunityArchive(c)}>
-                            {c.is_archived ? <ArchiveRestore className="h-4 w-4" /> : <Archive className="h-4 w-4" />}
-                            {c.is_archived ? "Desarquivar" : "Arquivar"}
+                          <Button size="sm" variant={(c.is_archived ?? !!c.archived_at) ? "default" : "outline"} className="h-9 text-xs font-black gap-1.5 rounded-xl" onClick={() => handleToggleCommunityArchive(c)}>
+                            {(c.is_archived ?? !!c.archived_at) ? <ArchiveRestore className="h-4 w-4" /> : <Archive className="h-4 w-4" />}
+                            {(c.is_archived ?? !!c.archived_at) ? "Desarquivar" : "Arquivar"}
                           </Button>
                         </div>
                       </div>
@@ -1070,7 +1070,7 @@ export default function AdminDashboard() {
                 >
                   <img src={mapSignedUrl} alt="Mapa Campus" className="w-full h-auto max-h-[600px] object-contain block mx-auto pointer-events-none" />
                   {campusBlocks.map((b) => (
-                    <div key={b.id} style={{ left: `${b.pin_x}%`, top: `${b.pin_y}%` }} className="absolute -translate-x-1/2 -translate-y-1/2 group">
+                    <div key={b.id} style={{ left: `${b.x_percent}%`, top: `${b.y_percent}%` }} className="absolute -translate-x-1/2 -translate-y-1/2 group">
                       <div className="h-6 w-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-lg border-2 border-background cursor-pointer"><MapPin className="h-3 w-3" /></div>
                       <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-1 hidden group-hover:flex items-center gap-1.5 bg-background border border-border/60 text-foreground text-[10px] font-black px-2 py-1 rounded-lg shadow-xl whitespace-nowrap z-20">
                         <span>{b.name}</span>
