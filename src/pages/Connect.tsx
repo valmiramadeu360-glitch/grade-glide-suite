@@ -26,6 +26,8 @@ import {
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { FeedVideo } from "@/components/feed/FeedVideo";
+import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 import { toast } from "@/hooks/use-toast";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -823,7 +825,7 @@ export default function Connect() {
             {vibes.map((vibe) => (
               <button type="button" key={vibe.id} onClick={() => handleVibeClick(vibe)} className="w-[76px] shrink-0 text-left">
                 <div className="relative">
-                  <div className="h-[76px] rounded-2xl overflow-hidden border bg-muted">
+                  <div className="h-[76px] w-[76px] rounded-full overflow-hidden border-[3px] border-primary bg-muted">
                     {vibe.media_url ? (
                       <img src={vibe.media_url} alt="" className="h-full w-full object-cover" />
                     ) : (
