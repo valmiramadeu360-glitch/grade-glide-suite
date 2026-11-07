@@ -710,8 +710,6 @@ export default function Connect() {
 
     setNewContent("");
     setNewTitle("");
-    setNewPrice("");
-    setNewOriginalPrice("");
     setSelectedTag(null);
     setMediaType("text");
     setSelectedFiles([]);
@@ -728,8 +726,6 @@ export default function Connect() {
     setNewContent(post.content || "");
     setNewTitle(post.title || "");
     setSelectedTag(post.tag || null);
-    setNewPrice(post.price != null ? String(post.price) : "");
-    setNewOriginalPrice(post.original_price != null ? String(post.original_price) : "");
     setEventAt(post.event_at ? new Date(post.event_at).toISOString().slice(0, 16) : "");
     setEventLocation(post.event_location || "");
     setComposerOpen(true);
@@ -852,8 +848,6 @@ export default function Connect() {
   }
 
   function renderComposer() {
-    const isMarket = activeTab === "market";
-
     return (
       <Dialog open={composerOpen} onOpenChange={(open) => (open ? setComposerOpen(true) : closeComposer())}>
         <DialogContent className="max-w-2xl p-0 overflow-hidden">
@@ -861,13 +855,11 @@ export default function Connect() {
             <div className="flex items-start justify-between gap-4">
               <div>
                 <DialogTitle className="text-xl">
-                  {isVibe ? "Criar status" : editingPost ? "Editar publicação" : isMarket ? "Criar anúncio" : "Criar publicação"}
+                  {isVibe ? "Criar status" : editingPost ? "Editar publicação" : "Criar publicação"}
                 </DialogTitle>
                 <DialogDescription className="mt-1">
                   {isVibe
                     ? "Compartilhe um momento rápido com a comunidade."
-                    : isMarket
-                    ? "Monte seu anúncio com informações claras e uma apresentação profissional."
                     : "Compartilhe conhecimento, oportunidades, eventos e ideias com outros estudantes."}
                 </DialogDescription>
               </div>
@@ -887,8 +879,7 @@ export default function Connect() {
                     full_name: user?.user_metadata?.full_name ?? null,
                     avatar_url: myAvatar,
                     course: null,
-                    institution: null,
-                  })}
+                    })}
                 </AvatarFallback>
               </Avatar>
 
@@ -915,7 +906,7 @@ export default function Connect() {
                     <Input
                       value={newTitle}
                       onChange={(event) => setNewTitle(event.target.value)}
-                      placeholder={isMarket ? "Título do anúncio" : "Título (opcional)"}
+                      placeholder="Título (opcional)"
                       className="mb-3"
                       maxLength={120}
                     />
@@ -923,9 +914,7 @@ export default function Connect() {
                       ref={composerTextareaRef}
                       value={newContent}
                       onChange={(event) => setNewContent(event.target.value)}
-                      placeholder={
-                        isMarket ? "Descreva o produto ou serviço..." : "O que você quer compartilhar com a comunidade?"
-                      }
+                      placeholder="O que você quer compartilhar com a comunidade?"
                       className="min-h-[160px] resize-none text-base"
                       maxLength={5000}
                     />
@@ -949,7 +938,7 @@ export default function Connect() {
                     )}
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    {(isMarket ? MARKET_TAGS : ACADEMIC_TAGS).map((tag) => {
+                    {ACADEMIC_TAGS.map((tag) => {
                       const Icon = POST_CATEGORY_ICONS[tag] ?? Tag;
                       return (
                         <button
@@ -969,27 +958,6 @@ export default function Connect() {
                   </div>
                 </div>
 
-                {isMarket && (
-                  <div className="rounded-xl border p-4 bg-muted/20">
-                    <div className="flex items-center gap-2 mb-3">
-                      <ShoppingBag className="h-4 w-4" />
-                      <div>
-                        <p className="text-sm font-semibold">Informações do anúncio</p>
-                        <p className="text-xs text-muted-foreground">Facilite a negociação para quem encontrar seu anúncio.</p>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div>
-                        <Label className="text-xs">Preço</Label>
-                        <Input value={newPrice} onChange={(event) => setNewPrice(event.target.value)} placeholder="R$ 0,00" className="mt-1.5" />
-                      </div>
-                      <div>
-                        <Label className="text-xs">Preço original</Label>
-                        <Input value={newOriginalPrice} onChange={(event) => setNewOriginalPrice(event.target.value)} placeholder="R$ 0,00" className="mt-1.5" />
-                      </div>
-                    </div>
-                  </div>
-                )}
 
                 {selectedTag === "Evento" && (
                   <div className="rounded-xl border p-4 bg-muted/20">
@@ -1170,123 +1138,6 @@ export default function Connect() {
                 )}
               </Button>
             </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-    );
-  }
-
-  function renderNewsComposer() {
-    return (
-      <Dialog
-        open={newsComposerOpen}
-        onOpenChange={(open) => {
-          if (!open) resetNewsComposer();
-          setNewsComposerOpen(open);
-        }}
-      >
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Publicar notícia</DialogTitle>
-            <DialogDescription>Publique uma notícia em um dos jornais aprovados pela administração.</DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-5">
-            <div>
-              <Label>Jornal</Label>
-              <select
-                value={newsChannelId ?? ""}
-                onChange={(event) => setNewsChannelId(event.target.value || null)}
-                className="mt-1.5 w-full h-10 rounded-md border bg-background px-3 text-sm"
-              >
-                <option value="">Selecione o jornal</option>
-                {approvedMyChannels.map((channel) => (
-                  <option key={channel.id} value={channel.id}>
-                    {channel.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <Label>Título</Label>
-              <Input
-                value={newsTitle}
-                onChange={(event) => setNewsTitle(event.target.value)}
-                placeholder="Título da notícia"
-                className="mt-1.5"
-              />
-            </div>
-
-            <div>
-              <Label>Conteúdo</Label>
-              <Textarea
-                value={newsContent}
-                onChange={(event) => setNewsContent(event.target.value)}
-                placeholder="Escreva a notícia..."
-                className="mt-1.5 min-h-[220px] resize-none"
-              />
-            </div>
-
-            <div>
-              <Label>
-                Link externo <span className="ml-1 text-muted-foreground font-normal">opcional</span>
-              </Label>
-              <Input
-                value={newsLink}
-                onChange={(event) => setNewsLink(event.target.value)}
-                placeholder="https://..."
-                className="mt-1.5"
-              />
-            </div>
-
-            <div>
-              <Label>
-                Capa <span className="ml-1 text-muted-foreground font-normal">opcional</span>
-              </Label>
-              <input type="file" accept="image/*" onChange={handleNewsCover} className="mt-1.5 block w-full text-sm" />
-              {newsCoverPreview && (
-                <div className="relative mt-3 rounded-xl overflow-hidden border aspect-video">
-                  <img src={newsCoverPreview} alt="" className="h-full w-full object-cover" />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (newsCoverPreview.startsWith("blob:")) URL.revokeObjectURL(newsCoverPreview);
-                      setNewsCoverPreview(null);
-                      setNewsCoverFile(null);
-                    }}
-                    className="absolute top-2 right-2 h-8 w-8 rounded-full bg-black/70 text-white flex items-center justify-center"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className="flex justify-end gap-2 mt-2">
-            <Button
-              variant="ghost"
-              onClick={() => {
-                resetNewsComposer();
-                setNewsComposerOpen(false);
-              }}
-            >
-              Cancelar
-            </Button>
-            <Button onClick={createNewsChannel} disabled={publishingNews || !hasNewsPermission} className="gap-2">
-              {publishingNews ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Publicando...
-                </>
-              ) : (
-                <>
-                  <Send className="h-4 w-4" />
-                  Publicar notícia
-                </>
-              )}
-            </Button>
           </div>
         </DialogContent>
       </Dialog>
@@ -1517,15 +1368,14 @@ export default function Connect() {
   }
 
   function renderFeedHeader() {
-    const isMarket = activeTab === "market";
 
     return (
       <div className="space-y-4 mb-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">{isMarket ? "Mercado Universitário" : "Feed"}</h1>
+            <h1 className="text-2xl font-bold tracking-tight">Feed</h1>
             <p className="text-sm text-muted-foreground mt-1">
-              {isMarket ? "Encontre produtos, materiais e serviços da comunidade acadêmica." : "Acompanhe o que está acontecendo na comunidade acadêmica."}
+              Acompanhe o que está acontecendo na comunidade acadêmica.
             </p>
           </div>
           <div className="flex gap-2">
@@ -1535,7 +1385,7 @@ export default function Connect() {
             </Button>
             <Button className="gap-2" onClick={() => openComposer(false)}>
               <Plus className="h-4 w-4" />
-              {isMarket ? "Criar anúncio" : "Publicar"}
+              Publicar
             </Button>
           </div>
         </div>
@@ -1550,7 +1400,6 @@ export default function Connect() {
                   full_name: user?.user_metadata?.full_name ?? null,
                   avatar_url: myAvatar,
                   course: null,
-                  institution: null,
                 })}
               </AvatarFallback>
             </Avatar>
@@ -1559,7 +1408,7 @@ export default function Connect() {
               onClick={() => openComposer(false)}
               className="flex-1 rounded-xl border bg-muted/30 hover:bg-muted/60 transition-colors text-left px-4 py-3 text-sm text-muted-foreground"
             >
-              {isMarket ? "O que você quer anunciar ou procurar?" : "O que você quer compartilhar hoje?"}
+              O que você quer compartilhar hoje?
             </button>
           </div>
         </div>
@@ -1570,12 +1419,12 @@ export default function Connect() {
             <Input
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
-              placeholder={isMarket ? "Pesquisar no mercado..." : "Pesquisar no feed..."}
+              placeholder="Pesquisar no feed..."
               className="pl-9"
             />
           </div>
 
-          {!isMarket && (
+          {(
             <div className="flex items-center gap-1 rounded-lg border p-1 overflow-x-auto">
               <Button size="sm" variant={feedMode === "for-you" ? "secondary" : "ghost"} onClick={() => setFeedMode("for-you")} className="shrink-0">
                 Para você
@@ -1608,107 +1457,6 @@ export default function Connect() {
     );
   }
 
-  function renderNewsTab() {
-    return (
-      <div className="space-y-5">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-bold">Notícias</h1>
-            <p className="text-sm text-muted-foreground mt-1">Acompanhe notícias publicadas pelos jornais da comunidade.</p>
-          </div>
-
-          {hasNewsPermission ? (
-            <Button className="gap-2" onClick={() => setNewsComposerOpen(true)}>
-              <PenLine className="h-4 w-4" />
-              Publicar notícia
-            </Button>
-          ) : (
-            <Button
-              variant="outline"
-              className="gap-2"
-              onClick={() =>
-                toast({
-                  title: "Publicação restrita",
-                  description: "Você precisa ter um jornal aprovado para publicar notícias.",
-                })
-              }
-            >
-              <Info className="h-4 w-4" />
-              Como publicar?
-            </Button>
-          )}
-        </div>
-
-        {hasNewsPermission && (
-          <div className="rounded-2xl border bg-primary/5 p-4">
-            <div className="flex items-start gap-3">
-              <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-                <Newspaper className="h-5 w-5 text-primary" />
-              </div>
-              <div className="min-w-0">
-                <p className="font-semibold text-sm">Você tem acesso à publicação</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {approvedMyChannels.length === 1
-                    ? `O jornal "${approvedMyChannels[0].name}" está aprovado.`
-                    : `Você possui ${approvedMyChannels.length} jornais aprovados.`}
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {newsLoading ? (
-          <div className="flex justify-center py-16">
-            <Loader2 className="h-7 w-7 animate-spin text-muted-foreground" />
-          </div>
-        ) : newsItems.length === 0 ? (
-          <Card>
-            <CardContent className="py-16 text-center">
-              <Newspaper className="h-10 w-10 mx-auto text-muted-foreground mb-3" />
-              <h2 className="font-semibold">Nenhuma notícia publicada</h2>
-              <p className="text-sm text-muted-foreground mt-1">Quando os jornais publicarem, as notícias aparecerão aqui.</p>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {newsItems.map((channel) => (
-              <Card key={channel.id} className="overflow-hidden">
-                <CardHeader>
-                  <div className="flex items-center gap-3">
-                    <Avatar className="h-11 w-11">
-                      <AvatarImage src={channel.logo_url ?? undefined} />
-                      <AvatarFallback>
-                        <Newspaper className="h-5 w-5" />
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="min-w-0">
-                      <h3 className="font-semibold truncate">{channel.name}</h3>
-                      <p className="text-xs text-muted-foreground">Jornal aprovado</p>
-                    </div>
-                    <CheckCircle2 className="h-5 w-5 text-primary ml-auto shrink-0" />
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-sm text-muted-foreground">{channel.description || "Jornal da comunidade acadêmica."}</p>
-                </CardContent>
-                <CardFooter>
-                  <Button
-                    variant="outline"
-                    className="w-full gap-2"
-                    onClick={() => toast({ title: "Jornal selecionado" })}
-                  >
-                    Ver notícias
-                    <ArrowUpRight className="h-4 w-4" />
-                  </Button>
-                </CardFooter>
-              </Card>
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  }
-
   function renderFeed() {
     if (loading) {
       return (
@@ -1719,27 +1467,24 @@ export default function Connect() {
     }
 
     if (filteredPosts.length === 0) {
-      const isMarket = activeTab === "market";
       return (
         <Card>
           <CardContent className="py-16 text-center">
             <div className="mx-auto h-14 w-14 rounded-2xl bg-muted flex items-center justify-center mb-4">
-              {isMarket ? <ShoppingBag className="h-7 w-7 text-muted-foreground" /> : <MessageCircle className="h-7 w-7 text-muted-foreground" />}
+              <MessageCircle className="h-7 w-7 text-muted-foreground" />
             </div>
-            <h2 className="font-semibold text-lg">{isMarket ? "Nenhum anúncio encontrado" : "Nenhuma publicação encontrada"}</h2>
+            <h2 className="font-semibold text-lg">Nenhuma publicação encontrada</h2>
             <p className="text-sm text-muted-foreground max-w-md mx-auto mt-1">
               {showSavedOnly
                 ? "Você ainda não salvou publicações."
                 : searchTerm
                 ? "Tente pesquisar por outro termo."
-                : isMarket
-                ? "Seja o primeiro a anunciar algo no mercado."
                 : "Seja o primeiro a compartilhar algo com a comunidade."}
             </p>
             {!showSavedOnly && !searchTerm && (
               <Button className="mt-5 gap-2" onClick={() => openComposer(false)}>
                 <Plus className="h-4 w-4" />
-                {isMarket ? "Criar anúncio" : "Criar publicação"}
+                Criar publicação
               </Button>
             )}
           </CardContent>
@@ -1867,54 +1612,12 @@ export default function Connect() {
   return (
     <div className="min-h-screen bg-background">
       <div className="container max-w-5xl mx-auto px-4 py-6">
-        <div className="flex items-center gap-1 rounded-xl border bg-card p-1 mb-6 shadow-sm">
-          <Button
-            variant={activeTab === "feed" ? "secondary" : "ghost"}
-            className="flex-1 gap-2"
-            onClick={() => setActiveTab("feed")}
-          >
-            <MessageCircle className="h-4 w-4" />
-            Feed
-          </Button>
-          <Button
-            variant={activeTab === "news" ? "secondary" : "ghost"}
-            className="flex-1 gap-2"
-            onClick={() => setActiveTab("news")}
-          >
-            <Newspaper className="h-4 w-4" />
-            Notícias
-          </Button>
-          <Button
-            variant={activeTab === "market" ? "secondary" : "ghost"}
-            className="flex-1 gap-2"
-            onClick={() => setActiveTab("market")}
-          >
-            <ShoppingBag className="h-4 w-4" />
-            Mercado
-          </Button>
-        </div>
-
-        {activeTab === "feed" && (
-          <>
-            {renderVibes()}
-            {renderFeedHeader()}
-            {renderFeed()}
-          </>
-        )}
-
-        {activeTab === "market" && (
-          <>
-            {renderVibes()}
-            {renderFeedHeader()}
-            {renderFeed()}
-          </>
-        )}
-
-        {activeTab === "news" && renderNewsTab()}
+        {renderVibes()}
+        {renderFeedHeader()}
+        {renderFeed()}
       </div>
 
       {renderComposer()}
-      {renderNewsComposer()}
       {renderCommentsDialog()}
       {renderVibeDialog()}
 

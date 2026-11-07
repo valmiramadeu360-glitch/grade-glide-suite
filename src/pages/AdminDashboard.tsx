@@ -514,8 +514,8 @@ export default function AdminDashboard() {
         name: blockName.trim(),
         category: blockCategory,
         description: blockDescription.trim() || null,
-        pin_x: pendingPin.x,
-        pin_y: pendingPin.y,
+        x_percent: pendingPin.x,
+        y_percent: pendingPin.y,
       }).select().single();
       if (error) throw error;
       setCampusBlocks((prev) => [...prev, data]);
@@ -541,8 +541,8 @@ export default function AdminDashboard() {
   }
 
   async function handleToggleCommunityArchive(comm: any) {
-    const nextArchived = !comm.is_archived;
-    const { error } = await supabase.from("communities").update({ is_archived: nextArchived }).eq("id", comm.id);
+    const nextArchived = !(comm.is_archived ?? !!comm.archived_at);
+    const { error } = await supabase.from("communities").update({ archived_at: nextArchived ? new Date().toISOString() : null }).eq("id", comm.id);
     if (error) {
       toast({ title: "Erro ao alterar status", description: error.message, variant: "destructive" });
       return;
@@ -576,8 +576,8 @@ export default function AdminDashboard() {
 
   async function loadAnnouncements() {
     setLoadingTab(true);
-    const { data } = await supabase.from("announcements").select("*").order("created_at", { ascending: false });
-    setAnnouncements(data || []);
+    const { data } = await supabase.from("admin_announcements").select("*").order("created_at", { ascending: false });
+    setAnnouncements((data || []).map((a: any) => ({ ...a, is_active: a.active, options: a.poll_options })));
     setLoadingTab(false);
   }
 
@@ -588,14 +588,14 @@ export default function AdminDashboard() {
     }
     setSavingAnn(true);
     const filteredOptions = annType === "poll" ? annOptions.map((o) => o.trim()).filter(Boolean) : null;
-    const { error } = await supabase.from("announcements").insert({
+    const { error } = await supabase.from("admin_announcements").insert({
       title: annTitle.trim(),
       body: annBody.trim(),
       type: annType,
       cta_label: annCtaLabel.trim() || null,
       cta_url: annCtaUrl.trim() || null,
-      options: filteredOptions && filteredOptions.length >= 2 ? filteredOptions : null,
-      is_active: true,
+      poll_options: filteredOptions && filteredOptions.length >= 2 ? filteredOptions : null,
+      active: true,
       created_by: user!.id,
     });
     setSavingAnn(false);
@@ -613,7 +613,7 @@ export default function AdminDashboard() {
   }
 
   async function handleToggleAnnouncement(id: string, current: boolean) {
-    const { error } = await supabase.from("announcements").update({ is_active: !current }).eq("id", id);
+    const { error } = await supabase.from("admin_announcements").update({ active: !current }).eq("id", id);
     if (!error) {
       setAnnouncements((prev) => prev.map((a) => (a.id === id ? { ...a, is_active: !current } : a)));
       toast({ title: !current ? "Banner ativado" : "Banner desativado" });
@@ -621,7 +621,7 @@ export default function AdminDashboard() {
   }
 
   async function handleDeleteAnnouncement(id: string) {
-    const { error } = await supabase.from("announcements").delete().eq("id", id);
+    const { error } = await supabase.from("admin_announcements").delete().eq("id", id);
     if (!error) {
       setAnnouncements((prev) => prev.filter((a) => a.id !== id));
       toast({ title: "Banner excluído" });
@@ -991,7 +991,7 @@ export default function AdminDashboard() {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
                             <h4 className="font-black text-sm truncate">{c.name}</h4>
-                            {c.is_archived && <Badge variant="destructive" className="text-[9px] px-2 py-0">Arquivada</Badge>}
+                            {(c.is_archived ?? !!c.archived_at) && <Badge variant="destructive" className="text-[9px] px-2 py-0">Arquivada</Badge>}
                           </div>
                           <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">{c.description || "Sem descrição"}</p>
                           <p className="text-[10px] font-bold text-muted-foreground mt-1 uppercase tracking-widest">{c.member_count || 0} membros · {c.type || "pública"}</p>
@@ -1000,9 +1000,9 @@ export default function AdminDashboard() {
                           <Button size="sm" variant="ghost" className="h-9 text-xs font-bold gap-1 rounded-xl" onClick={() => loadCommunityMembers(c.id)}>
                             {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />} Membros
                           </Button>
-                          <Button size="sm" variant={c.is_archived ? "default" : "outline"} className="h-9 text-xs font-black gap-1.5 rounded-xl" onClick={() => handleToggleCommunityArchive(c)}>
-                            {c.is_archived ? <ArchiveRestore className="h-4 w-4" /> : <Archive className="h-4 w-4" />}
-                            {c.is_archived ? "Desarquivar" : "Arquivar"}
+                          <Button size="sm" variant={(c.is_archived ?? !!c.archived_at) ? "default" : "outline"} className="h-9 text-xs font-black gap-1.5 rounded-xl" onClick={() => handleToggleCommunityArchive(c)}>
+                            {(c.is_archived ?? !!c.archived_at) ? <ArchiveRestore className="h-4 w-4" /> : <Archive className="h-4 w-4" />}
+                            {(c.is_archived ?? !!c.archived_at) ? "Desarquivar" : "Arquivar"}
                           </Button>
                         </div>
                       </div>
@@ -1070,7 +1070,7 @@ export default function AdminDashboard() {
                 >
                   <img src={mapSignedUrl} alt="Mapa Campus" className="w-full h-auto max-h-[600px] object-contain block mx-auto pointer-events-none" />
                   {campusBlocks.map((b) => (
-                    <div key={b.id} style={{ left: `${b.pin_x}%`, top: `${b.pin_y}%` }} className="absolute -translate-x-1/2 -translate-y-1/2 group">
+                    <div key={b.id} style={{ left: `${b.x_percent}%`, top: `${b.y_percent}%` }} className="absolute -translate-x-1/2 -translate-y-1/2 group">
                       <div className="h-6 w-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center shadow-lg border-2 border-background cursor-pointer"><MapPin className="h-3 w-3" /></div>
                       <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-1 hidden group-hover:flex items-center gap-1.5 bg-background border border-border/60 text-foreground text-[10px] font-black px-2 py-1 rounded-lg shadow-xl whitespace-nowrap z-20">
                         <span>{b.name}</span>
