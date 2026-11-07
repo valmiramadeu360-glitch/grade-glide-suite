@@ -164,6 +164,8 @@ export default function Connect() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const composerTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
+  const ptr = usePullToRefresh(() => Promise.all([loadPosts(), loadVibes()]));
+
   const filteredPosts = useMemo(() => {
     let result = [...posts];
 
@@ -1152,7 +1154,7 @@ export default function Connect() {
 
     return (
       <Card key={post.id} className="overflow-hidden border-border/70 shadow-sm hover:shadow-md transition-shadow">
-        <CardHeader className="pb-3">
+        <CardHeader className="p-4 pb-2 sm:p-5 sm:pb-3">
           <div className="flex items-start gap-3">
             <button type="button" onClick={() => openProfile(post.user_id)} className="shrink-0">
               <Avatar className="h-10 w-10">
@@ -1239,7 +1241,7 @@ export default function Connect() {
           )}
         </CardHeader>
 
-        <CardContent className="pb-3">
+        <CardContent className="px-4 pb-3 sm:px-5">
           {post.title && <h3 className="font-semibold text-lg mb-2 leading-snug">{post.title}</h3>}
           <p className="text-sm leading-6 whitespace-pre-wrap break-words">{post.content}</p>
 
