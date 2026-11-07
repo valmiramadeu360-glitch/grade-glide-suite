@@ -726,8 +726,6 @@ export default function Connect() {
     setNewContent(post.content || "");
     setNewTitle(post.title || "");
     setSelectedTag(post.tag || null);
-    setNewPrice(post.price != null ? String(post.price) : "");
-    setNewOriginalPrice(post.original_price != null ? String(post.original_price) : "");
     setEventAt(post.event_at ? new Date(post.event_at).toISOString().slice(0, 16) : "");
     setEventLocation(post.event_location || "");
     setComposerOpen(true);
