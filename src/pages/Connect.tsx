@@ -803,21 +803,21 @@ export default function Connect() {
             <h2 className="text-base font-semibold">Status</h2>
             <p className="text-xs text-muted-foreground">Compartilhe algo que está acontecendo agora.</p>
           </div>
-          <Button variant="ghost" size="sm" onClick={() => openComposer(true)} className="gap-1">
-            <Plus className="h-4 w-4" />
-            Novo
-          </Button>
         </div>
 
         <ScrollArea className="w-full whitespace-nowrap">
           <div className="flex gap-3 pb-2">
             <button type="button" onClick={() => openComposer(true)} className="w-[76px] shrink-0 text-left">
-              <div className="h-[76px] rounded-2xl border border-dashed flex items-center justify-center bg-muted/30">
-                <div className="flex flex-col items-center gap-1">
-                  <Plus className="h-6 w-6" />
-                  <span className="text-[10px] font-medium">Seu status</span>
-                </div>
+              <div className="relative h-[76px] w-[76px] rounded-full p-[3px] border-2 border-dashed border-primary/50">
+                <Avatar className="h-full w-full">
+                  <AvatarImage src={myAvatar ?? undefined} className="object-cover" />
+                  <AvatarFallback>Eu</AvatarFallback>
+                </Avatar>
+                <span className="absolute bottom-0 right-0 h-6 w-6 rounded-full bg-primary text-primary-foreground border-2 border-background flex items-center justify-center">
+                  <Plus className="h-3.5 w-3.5" />
+                </span>
               </div>
+              <p className="mt-2 text-[10px] text-center font-medium">Seu status</p>
             </button>
 
             {vibes.map((vibe) => (
@@ -1262,7 +1262,7 @@ export default function Connect() {
 
           {post.video_url && (
             <div className="mt-4 rounded-xl overflow-hidden border bg-black">
-              <video src={post.video_url} controls playsInline className="w-full max-h-[520px]" />
+              <FeedVideo src={post.video_url} />
             </div>
           )}
 
@@ -1378,11 +1378,7 @@ export default function Connect() {
               Acompanhe o que está acontecendo na comunidade acadêmica.
             </p>
           </div>
-          <div className="flex gap-2">
-            <Button variant="outline" className="gap-2" onClick={() => loadPosts()}>
-              <RefreshCw className="h-4 w-4" />
-              Atualizar
-            </Button>
+          <div className="hidden sm:flex gap-2">
             <Button className="gap-2" onClick={() => openComposer(false)}>
               <Plus className="h-4 w-4" />
               Publicar
@@ -1611,7 +1607,13 @@ export default function Connect() {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="container max-w-5xl mx-auto px-4 py-6">
+      <div
+        className="flex items-center justify-center overflow-hidden transition-[height] duration-200"
+        style={{ height: ptr.refreshing ? 48 : ptr.pull }}
+      >
+        <Loader2 className={cn("h-6 w-6 text-primary", (ptr.refreshing || ptr.ready) && "animate-spin")} />
+      </div>
+      <div className="mx-auto w-full max-w-2xl">
         {renderVibes()}
         {renderFeedHeader()}
         {renderFeed()}
