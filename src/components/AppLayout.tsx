@@ -131,7 +131,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
         </header>
 
         <main className="flex-1 overflow-x-hidden">
-          <div className="mx-auto w-full max-w-7xl px-3 py-4 pb-[calc(6rem+env(safe-area-inset-bottom,0px))] sm:px-6 sm:py-6 lg:px-8 lg:py-8 lg:pb-8">
+          <div className="mx-auto w-full max-w-7xl px-2.5 py-3 pb-[calc(6rem+env(safe-area-inset-bottom,0px))] sm:px-6 sm:py-6 lg:px-8 lg:py-8 lg:pb-8">
             {children}
           </div>
         </main>
