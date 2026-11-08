@@ -12,6 +12,10 @@ export interface RuRestaurant {
   latitude: number;
   longitude: number;
   radius_meters: number;
+  lunch_start: string | null;
+  lunch_end: string | null;
+  dinner_start: string | null;
+  dinner_end: string | null;
   is_open: boolean;
   closed_reason: string | null;
   notice: string | null;
@@ -85,7 +89,6 @@ export const CONFIDENCE_LABEL: Record<string, string> = {
 export const REPORT_COOLDOWN_SECONDS = 3 * 60;
 export const MEAL_LABEL: Record<"lunch" | "dinner", string> = { lunch: "Almoço", dinner: "Jantar" };
 
-/** Obtém a data/hora atual no fuso de Brasília de forma segura */
 export function getBrasiliaTime() {
   const now = new Date();
   const options = { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false } as const;
@@ -94,9 +97,9 @@ export function getBrasiliaTime() {
   const getPart = (type: string) => parts.find(p => p.type === type)?.value || "00";
   
   return {
-    dateStr: `${getPart('year')}-${getPart('month')}-${getPart('day')}`, // YYYY-MM-DD
-    timeStr: `${getPart('hour')}:${getPart('minute')}`, // HH:MM
-    dayOfWeek: new Date(`${getPart('year')}-${getPart('month')}-${getPart('day')}T00:00:00-03:00`).getDay(), // 0 = Domingo
+    dateStr: `${getPart('year')}-${getPart('month')}-${getPart('day')}`,
+    timeStr: `${getPart('hour')}:${getPart('minute')}`,
+    dayOfWeek: new Date(`${getPart('year')}-${getPart('month')}-${getPart('day')}T00:00:00-03:00`).getDay(),
     minutes: Number(getPart('hour')) * 60 + Number(getPart('minute'))
   };
 }
@@ -122,7 +125,6 @@ function minutesOf(value: string | null | undefined) {
   return Number(h) * 60 + Number(m ?? 0);
 }
 
-/** Descobre a refeição baseando-se nos horários definidos */
 export function currentMeal(schedules: RuSchedule[]): "lunch" | "dinner" {
   const brTime = getBrasiliaTime();
   const todaySchedules = schedules.filter(s => s.day_of_week === brTime.dayOfWeek);
@@ -193,27 +195,25 @@ export function useRu(campusId?: string | null, isResident: boolean = false) {
   const loadAll = useCallback(async () => {
     setLoading(true);
     try {
-      if (!campusId) return;
+      if (campusId === undefined) {
+        return;
+      }
 
-      // 1. Busca Restaurante
-      const { data: ru } = await supabase
-        .from("ru_restaurants")
-        .select("*")
-        .eq("campus_id", campusId)
-        .limit(1)
-        .maybeSingle();
+      // Restauração da lógica original de query para evitar o bug de "Nenhum restaurante"
+      let ruQuery = supabase.from("ru_restaurants").select("*").order("created_at", { ascending: true }).limit(1);
+      if (campusId) ruQuery = ruQuery.eq("campus_id", campusId);
+      const { data: ru } = await ruQuery.maybeSingle();
 
       if (!ru) {
         setRestaurant(null);
         return;
       }
 
-      // 2. Busca Horários (Schedules) e Exceções do Admin do dia de hoje (Fuso BR)
       const brTime = getBrasiliaTime();
       
       const [schedRes, excRes] = await Promise.all([
-        supabase.from("ru_schedules").select("*").eq("campus_id", campusId),
-        supabase.from("ru_exceptions").select("*").eq("campus_id", campusId).eq("exception_date", brTime.dateStr)
+        supabase.from("ru_schedules").select("*").eq("campus_id", ru.campus_id),
+        supabase.from("ru_exceptions").select("*").eq("campus_id", ru.campus_id).eq("exception_date", brTime.dateStr)
       ]);
       
       const schedulesData = (schedRes.data ?? []) as RuSchedule[];
@@ -222,7 +222,6 @@ export function useRu(campusId?: string | null, isResident: boolean = false) {
       const exceptionData = excRes.data && excRes.data.length > 0 ? (excRes.data[0] as RuException) : null;
       setActiveException(exceptionData);
 
-      // Lógica de Funcionamento Atual
       const meal = currentMeal(schedulesData);
       let is_open = false;
       let closed_reason = null;
@@ -258,7 +257,6 @@ export function useRu(campusId?: string | null, isResident: boolean = false) {
       
       setRestaurant(restaurantData);
 
-      // Carrega o resto do contexto
       const threeDayWindowStart = new Date();
       threeDayWindowStart.setDate(threeDayWindowStart.getDate() - 2);
       const windowStartDate = threeDayWindowStart.toISOString().slice(0, 10);
@@ -307,7 +305,6 @@ export function useRu(campusId?: string | null, isResident: boolean = false) {
     return () => clearInterval(timer);
   }, [restaurant, loadStatus]);
 
-  // Função para Estudante reportar Consenso (Aberto/Fechado)
   const reportRuStatus = async (reportedStatus: ReportedStatus) => {
     if (!restaurant || !campusId) return { success: false, message: "Restaurante não carregado." };
     
