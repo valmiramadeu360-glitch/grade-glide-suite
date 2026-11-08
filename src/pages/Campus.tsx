@@ -3,6 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/hooks/useAuth";
+import { useTenant } from "@/hooks/useTenant";
 import { useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { 
@@ -10,17 +11,28 @@ import {
   FlaskConical, Trophy, Map, FileText, Users, 
   ChevronRight, Clock, AlertCircle 
 } from "lucide-react";
+import { useRu, LEVEL_META, MEAL_LABEL } from "@/hooks/useRu";
 
 export default function Campus() {
   const { user } = useAuth();
+  const { profile } = useTenant();
   const navigate = useNavigate();
   const [activeCampus, setActiveCampus] = useState("Campus A. C. Simões (Maceió)");
 
-  // Mocks estruturais baseados na sua Arquitetura
-  const ruStatus = { status: "open", queueTime: "15 min", menu: "Feijoada e Frango Assado" };
+  // 1. Injetamos a inteligência real do RU aqui (Substituindo o Mock)
+  const isResident = Boolean(profile?.is_resident);
+  const { restaurant, status, menus, loading: ruLoading } = useRu(profile?.campus_id, isResident);
+
+  // Derivando os dados reais do RU
+  const isOpen = restaurant?.is_open;
+  const statusMeta = status?.level ? LEVEL_META[status.level] : null;
+  const todayMenu = menus[0] ?? null;
+  const mealItems = Array.isArray(todayMenu?.items)
+    ? (todayMenu?.items as unknown[]).map((i) => (typeof i === "string" ? i : (i as any)?.name)).filter(Boolean)
+    : [];
+
   const libraryStatus = { status: "open", availableRooms: 3 };
   
-  // Lista de serviços com o Mapa Interativo direcionando corretamente para a rota do mapa interativo
   const campusServices = [
     { title: "Mapa Interativo", icon: Map, desc: "Explore blocos e salas da UFAL", color: "text-blue-500", bg: "bg-blue-500/10", path: "/campus/map" },
     { title: "Transporte", icon: Bus, desc: "Horários e rotas do circular", color: "text-amber-500", bg: "bg-amber-500/10", path: "/campus/transport" },
@@ -33,7 +45,6 @@ export default function Campus() {
   return (
     <div className="max-w-5xl mx-auto space-y-6 animate-in fade-in duration-500 pb-28 px-4 sm:px-6 pt-4 sm:pt-6">
       
-      {/* HEADER PREMIUM DO CAMPUS */}
       <header className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 pb-2">
         <div className="flex items-center gap-3">
           <div className="h-12 w-12 bg-primary/10 rounded-2xl flex items-center justify-center text-primary shadow-inner shrink-0">
@@ -56,26 +67,35 @@ export default function Campus() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        {/* COLUNA PRINCIPAL: STATUS AO VIVO (RU E BIBLIOTECA) */}
         <div className="lg:col-span-2 space-y-6">
           
-          {/* PAINEL DO RESTAURANTE UNIVERSITÁRIO (RU) */}
+          {/* PAINEL DO RESTAURANTE UNIVERSITÁRIO (AGORA REAL E SINCRONIZADO) */}
           <Card onClick={() => navigate("/campus/ru")} className="rounded-[32px] border-0 shadow-sm bg-card overflow-hidden group cursor-pointer hover:shadow-md transition-all">
-            <div className="h-2 w-full bg-gradient-to-r from-orange-400 to-rose-500" />
+            <div className={cn("h-2 w-full", isOpen ? "bg-gradient-to-r from-orange-400 to-rose-500" : "bg-muted-foreground/30")} />
             <CardContent className="p-6">
               <div className="flex items-start justify-between mb-4">
                 <div className="flex items-center gap-3">
-                  <div className="h-12 w-12 rounded-2xl bg-orange-500/10 text-orange-500 flex items-center justify-center">
+                  <div className={cn("h-12 w-12 rounded-2xl flex items-center justify-center", isOpen ? "bg-orange-500/10 text-orange-500" : "bg-muted text-muted-foreground")}>
                     <Utensils className="h-6 w-6" />
                   </div>
                   <div>
-                    <h2 className="text-xl font-black text-foreground">Restaurante Universitário</h2>
+                    <h2 className="text-xl font-black text-foreground">{restaurant?.name ?? "Restaurante Universitário"}</h2>
                     <div className="flex items-center gap-2 mt-0.5">
-                      <span className="relative flex h-2.5 w-2.5">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-                      </span>
-                      <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600">Aberto Agora</span>
+                      {ruLoading ? (
+                         <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Sincronizando...</span>
+                      ) : isOpen ? (
+                        <>
+                          <span className="relative flex h-2.5 w-2.5">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                          </span>
+                          <span className="text-[10px] font-black uppercase tracking-widest text-emerald-600">Aberto Agora</span>
+                        </>
+                      ) : (
+                        <span className="text-[10px] font-black uppercase tracking-widest text-rose-500">
+                          {restaurant?.closed_reason ? "Fechado" : "Fechado Agora"}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -89,13 +109,18 @@ export default function Campus() {
                   <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground flex items-center gap-1.5 mb-1">
                     <Clock className="h-3.5 w-3.5" /> Fila Estimada
                   </p>
-                  <p className="text-2xl font-black text-foreground">{ruStatus.queueTime}</p>
+                  <p className="text-xl sm:text-2xl font-black text-foreground line-clamp-1">
+                    {ruLoading ? "..." : (isOpen ? (statusMeta ? statusMeta.minutes : "Sem dados") : "—")}
+                  </p>
                 </div>
                 <div className="bg-muted/30 p-4 rounded-[20px] border border-border/40">
                   <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground flex items-center gap-1.5 mb-1">
-                    <Utensils className="h-3.5 w-3.5" /> Cardápio
+                    <Utensils className="h-3.5 w-3.5" /> 
+                    Cardápio {todayMenu ? `(${MEAL_LABEL[todayMenu.meal]})` : ""}
                   </p>
-                  <p className="text-sm font-bold text-foreground leading-tight line-clamp-2">{ruStatus.menu}</p>
+                  <p className="text-sm font-bold text-foreground leading-tight line-clamp-2">
+                    {ruLoading ? "..." : (mealItems.length > 0 ? mealItems.slice(0, 3).join(", ") : "Não publicado")}
+                  </p>
                 </div>
               </div>
             </CardContent>
@@ -140,10 +165,9 @@ export default function Campus() {
 
         </div>
 
-        {/* COLUNA LATERAL: CALENDÁRIO E SERVIÇOS */}
+        {/* COLUNA LATERAL */}
         <div className="space-y-6">
           
-          {/* EVENTOS E CALENDÁRIO */}
           <div className="space-y-3">
             <div className="flex items-center justify-between ml-2">
               <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground flex items-center gap-1.5">
@@ -177,7 +201,6 @@ export default function Campus() {
             </div>
           </div>
 
-          {/* GRID DE SERVIÇOS (COM O MAPA INTERATIVO NO TOPO) */}
           <div className="pt-2">
             <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground flex items-center gap-1.5 ml-2 mb-3">
               <Building2 className="h-3.5 w-3.5" /> Mais Serviços
