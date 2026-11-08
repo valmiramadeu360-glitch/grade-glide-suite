@@ -8,7 +8,7 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  MessageSquare, Send, Loader2, ArrowLeft, Search, MoreVertical, Users, Phone, Paperclip, Mic, Square, Trash2
+  MessageSquare, Send, Loader2, ArrowLeft, Search, MoreVertical, Users, Phone, Paperclip, Mic, Trash2, Lock, ShoppingBag, ShieldAlert
 } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -19,6 +19,7 @@ import { Badge } from "@/components/ui/badge";
 import { VoiceNote } from "@/components/chat/VoiceNote";
 import { useCommunities } from "@/hooks/useCommunities";
 import { Link, useSearchParams } from "react-router-dom";
+import { checkCanMessageUser, DMPermissionCheck } from "@/lib/messagePrivacy";
 
 // Supabase ainda não gerou os tipos da view public_profiles nem das tabelas
 // novas do Marketplace — o cast evita erro de build até o types.ts ser atualizado.
@@ -91,6 +92,11 @@ export default function Messages() {
   const [loadingMessages, setLoadingMessages] = useState(false);
   const [newMessage, setNewMessage] = useState("");
   
+  // Controle de privacidade e contexto Marketplace
+  const [permissionCheck, setPermissionCheck] = useState<DMPermissionCheck | null>(null);
+  const [checkingPermission, setCheckingPermission] = useState(false);
+  const [isMarketplaceContext, setIsMarketplaceContext] = useState(false);
+  
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<Array<{ user_id: string; full_name: string | null; avatar_url: string | null; course: string | null }>>([]);
   const [searching, setSearching] = useState(false);
@@ -116,15 +122,15 @@ export default function Messages() {
   }, [user]);
 
   // Chegada vinda do Marketplace ("Falar com o vendedor"):
-  // sellerChatLink() (em src/lib/marketplace.ts) manda /messages?to=<vendedor>&text=<mensagem pronta>.
-  // Mantemos "listing" (só o título) como alternativa, para compatibilidade com outros pontos de entrada.
   useEffect(() => {
     const to = searchParams.get("to");
     if (!to || !user || to === user.id) return;
     const text = searchParams.get("text");
     const listingTitle = searchParams.get("listing");
     const prefill = text ?? (listingTitle ? `Olá! Vi seu anúncio "${listingTitle}" no Marketplace e queria saber mais.` : undefined);
-    openConversation(to, prefill);
+    
+    // Marca contexto de marketplace para liberar envio mesmo com privacidade restrita
+    openConversation(to, prefill, true);
     setSearchParams({}, { replace: true });
   }, [searchParams, user]);
 
@@ -132,7 +138,7 @@ export default function Messages() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // WebSocket
+  // WebSocket em tempo real
   useEffect(() => {
     if (!user) return;
     const channel = supabase
@@ -209,12 +215,20 @@ export default function Messages() {
     }
   }
 
-  async function openConversation(userId: string, prefill?: string) {
+  async function openConversation(userId: string, prefill?: string, isMarketplace = false) {
+    if (!user) return;
     setSelectedUserId(userId);
     setLoadingMessages(true);
+    setCheckingPermission(true);
+    setIsMarketplaceContext(isMarketplace);
     setSearchQuery("");
     setSearchResults([]);
     if (prefill) setNewMessage(prefill);
+
+    // Validação da privacidade (Instagram rules + Marketplace exception)
+    const check = await checkCanMessageUser(user.id, userId, isMarketplace);
+    setPermissionCheck(check);
+    setCheckingPermission(false);
 
     const conv = conversations.find(c => c.user_id === userId);
     if (conv) {
@@ -227,7 +241,7 @@ export default function Messages() {
     const { data } = await supabase
       .from("direct_messages")
       .select("*")
-      .or(`and(sender_id.eq.${user!.id},receiver_id.eq.${userId}),and(sender_id.eq.${userId},receiver_id.eq.${user!.id})`)
+      .or(`and(sender_id.eq.${user.id},receiver_id.eq.${userId}),and(sender_id.eq.${userId},receiver_id.eq.${user.id})`)
       .order("created_at", { ascending: true });
 
     setMessages(data ?? []);
@@ -237,7 +251,7 @@ export default function Messages() {
       .from("direct_messages")
       .update({ read_at: new Date().toISOString() })
       .eq("sender_id", userId)
-      .eq("receiver_id", user!.id)
+      .eq("receiver_id", user.id)
       .is("read_at", null);
       
     setConversations(prev => prev.map(c => c.user_id === userId ? { ...c, unread_count: 0 } : c));
@@ -246,6 +260,16 @@ export default function Messages() {
   async function handleSend() {
     const text = newMessage.trim();
     if (!text || !selectedUserId || !user) return;
+
+    // Bloqueia caso as regras de privacidade não permitam
+    if (permissionCheck && !permissionCheck.allowed) {
+      toast({
+        title: "Mensagem não permitida",
+        description: permissionCheck.message || "Este perfil possui restrições para recebimento de mensagens.",
+        variant: "destructive"
+      });
+      return;
+    }
     
     setNewMessage("");
 
@@ -276,7 +300,7 @@ export default function Messages() {
     setSearchQuery(query);
     if (query.trim().length < 2) { setSearchResults([]); return; }
     setSearching(true);
-    // Busca pela view pública (respeita privacidade); ver fetchPublicProfiles acima.
+    
     const { data } = await db
       .from("public_profiles")
       .select("user_id, display_name, avatar_url, course_id")
@@ -311,6 +335,15 @@ export default function Messages() {
   }
 
   async function startRecording() {
+    if (permissionCheck && !permissionCheck.allowed) {
+      toast({
+        title: "Envio bloqueado",
+        description: permissionCheck.message || "Restrição de privacidade para este destinatário.",
+        variant: "destructive"
+      });
+      return;
+    }
+
     if (!navigator.mediaDevices?.getUserMedia) {
       toast({ title: "Microfone indisponível", description: "Seu dispositivo não permite gravação de áudio.", variant: "destructive" });
       return;
@@ -429,6 +462,14 @@ export default function Messages() {
           </div>
         </header>
 
+        {/* Banner Informativo de Exceção do Marketplace */}
+        {isMarketplaceContext && (
+          <div className="bg-primary/10 border-b border-primary/20 px-4 py-2 flex items-center gap-2 text-xs font-semibold text-primary animate-in fade-in">
+            <ShoppingBag className="h-4 w-4 shrink-0" />
+            <span className="truncate">Negociação do Marketplace · Conversa liberada diretamente com o vendedor.</span>
+          </div>
+        )}
+
         {/* Área de Mensagens (WhatsApp Style) */}
         <ScrollArea className="flex-1 px-4 sm:px-6 py-6 bg-muted/10 relative" id="chat-container">
           {loadingMessages ? (
@@ -471,55 +512,75 @@ export default function Messages() {
           )}
         </ScrollArea>
 
-        {/* Input Area Premium */}
-        <div className="p-3 sm:p-5 bg-card/90 backdrop-blur-2xl border-t border-border/50 shrink-0">
-          {recording ? (
-            <div className="flex items-center gap-3 bg-destructive/10 p-2 pl-5 rounded-[28px] border border-destructive/30 animate-in fade-in">
-              <span className="h-2.5 w-2.5 rounded-full bg-destructive animate-pulse shrink-0" />
-              <p className="flex-1 text-sm font-black text-destructive tabular-nums">
-                Gravando… {formatRecordTime(recordSeconds)}
-              </p>
-              <Button variant="ghost" size="icon" className="h-11 w-11 rounded-full text-muted-foreground hover:text-destructive" onClick={() => stopRecording(true)} title="Descartar">
-                <Trash2 className="h-5 w-5" />
-              </Button>
-              <Button size="icon" className="h-12 w-12 rounded-full bg-primary text-primary-foreground shadow-md" onClick={() => stopRecording(false)} title="Enviar nota de voz">
-                <Send className="h-5 w-5 ml-0.5" />
-              </Button>
+        {/* Input Area ou Card de Restrição de Privacidade */}
+        {checkingPermission ? (
+          <div className="p-4 bg-card/90 border-t border-border/50 flex items-center justify-center gap-2 text-xs font-semibold text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin text-primary" /> Verificando permissões de contato...
+          </div>
+        ) : permissionCheck && !permissionCheck.allowed ? (
+          /* Bloqueio por Privacidade (estilo Instagram) */
+          <div className="p-5 bg-card/95 backdrop-blur-2xl border-t border-border/50 shrink-0 text-center flex flex-col items-center gap-2 animate-in fade-in">
+            <div className="h-10 w-10 rounded-full bg-destructive/10 text-destructive flex items-center justify-center mb-1">
+              <Lock className="h-5 w-5" />
             </div>
-          ) : (
-          <div className="flex items-end gap-2 bg-muted/40 p-1.5 rounded-[28px] border border-border/50 focus-within:border-primary/40 focus-within:bg-background transition-all shadow-sm">
-            <Button variant="ghost" size="icon" className="h-11 w-11 rounded-full shrink-0 mb-0.5 text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors" title="Anexar arquivo">
-              <Paperclip className="h-5 w-5" />
-            </Button>
-            <Textarea
-              value={newMessage}
-              onChange={e => setNewMessage(e.target.value)}
-              placeholder="Digite sua mensagem..."
-              className="min-h-[44px] max-h-[120px] bg-transparent border-none shadow-none focus-visible:ring-0 text-base resize-none py-3 px-2 font-medium"
-              onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-            />
-            {newMessage.trim() ? (
-            <Button 
-              onClick={handleSend} 
-              size="icon" 
-              className="h-12 w-12 rounded-full shrink-0 mb-0.5 mr-0.5 transition-all duration-300 shadow-md bg-primary text-primary-foreground hover:scale-105"
-            >
-              <Send className="h-5 w-5 ml-0.5" />
-            </Button>
+            <p className="text-sm font-bold text-foreground max-w-md">
+              {permissionCheck.message}
+            </p>
+            <p className="text-xs text-muted-foreground max-w-sm">
+              Para interagir com este perfil, passe a segui-lo ou aguarde que ele inicie uma conversa com você.
+            </p>
+          </div>
+        ) : (
+          /* Barra de Input Padrão Liberada */
+          <div className="p-3 sm:p-5 bg-card/90 backdrop-blur-2xl border-t border-border/50 shrink-0">
+            {recording ? (
+              <div className="flex items-center gap-3 bg-destructive/10 p-2 pl-5 rounded-[28px] border border-destructive/30 animate-in fade-in">
+                <span className="h-2.5 w-2.5 rounded-full bg-destructive animate-pulse shrink-0" />
+                <p className="flex-1 text-sm font-black text-destructive tabular-nums">
+                  Gravando… {formatRecordTime(recordSeconds)}
+                </p>
+                <Button variant="ghost" size="icon" className="h-11 w-11 rounded-full text-muted-foreground hover:text-destructive" onClick={() => stopRecording(true)} title="Descartar">
+                  <Trash2 className="h-5 w-5" />
+                </Button>
+                <Button size="icon" className="h-12 w-12 rounded-full bg-primary text-primary-foreground shadow-md" onClick={() => stopRecording(false)} title="Enviar nota de voz">
+                  <Send className="h-5 w-5 ml-0.5" />
+                </Button>
+              </div>
             ) : (
-            <Button
-              onClick={startRecording}
-              disabled={sendingAudio}
-              size="icon"
-              title="Gravar nota de voz"
-              className="h-12 w-12 rounded-full shrink-0 mb-0.5 mr-0.5 transition-all duration-300 shadow-md bg-primary/10 text-primary hover:bg-primary/20"
-            >
-              {sendingAudio ? <Loader2 className="h-5 w-5 animate-spin" /> : <Mic className="h-5 w-5" />}
-            </Button>
+              <div className="flex items-end gap-2 bg-muted/40 p-1.5 rounded-[28px] border border-border/50 focus-within:border-primary/40 focus-within:bg-background transition-all shadow-sm">
+                <Button variant="ghost" size="icon" className="h-11 w-11 rounded-full shrink-0 mb-0.5 text-muted-foreground hover:bg-muted/50 hover:text-foreground transition-colors" title="Anexar arquivo">
+                  <Paperclip className="h-5 w-5" />
+                </Button>
+                <Textarea
+                  value={newMessage}
+                  onChange={e => setNewMessage(e.target.value)}
+                  placeholder="Digite sua mensagem..."
+                  className="min-h-[44px] max-h-[120px] bg-transparent border-none shadow-none focus-visible:ring-0 text-base resize-none py-3 px-2 font-medium"
+                  onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+                />
+                {newMessage.trim() ? (
+                  <Button 
+                    onClick={handleSend} 
+                    size="icon" 
+                    className="h-12 w-12 rounded-full shrink-0 mb-0.5 mr-0.5 transition-all duration-300 shadow-md bg-primary text-primary-foreground hover:scale-105"
+                  >
+                    <Send className="h-5 w-5 ml-0.5" />
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={startRecording}
+                    disabled={sendingAudio}
+                    size="icon"
+                    title="Gravar nota de voz"
+                    className="h-12 w-12 rounded-full shrink-0 mb-0.5 mr-0.5 transition-all duration-300 shadow-md bg-primary/10 text-primary hover:bg-primary/20"
+                  >
+                    {sendingAudio ? <Loader2 className="h-5 w-5 animate-spin" /> : <Mic className="h-5 w-5" />}
+                  </Button>
+                )}
+              </div>
             )}
           </div>
-          )}
-        </div>
+        )}
       </div>
     );
   }
@@ -539,7 +600,7 @@ export default function Messages() {
         </div>
       </header>
 
-      {/* Navegação da Arquitetura: Privado vs Comunidades */}
+      {/* Navegação: Conversas vs Comunidades */}
       <Tabs value={activeTab} onValueChange={(v: any) => setActiveTab(v)}>
         <TabsList className="w-full rounded-[24px] bg-muted/40 p-1.5 flex shadow-inner">
           <TabsTrigger value="private" className="flex-1 rounded-[20px] font-bold text-sm h-11 gap-2 data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-foreground text-muted-foreground transition-all">
@@ -553,7 +614,7 @@ export default function Messages() {
 
       {activeTab === "private" && (
         <div className="space-y-6 animate-in fade-in">
-          {/* Barra de Busca Premium */}
+          {/* Barra de Busca */}
           <div className="relative group">
             <Search className="absolute left-5 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground group-focus-within:text-primary transition-colors" />
             <Input
@@ -564,7 +625,7 @@ export default function Messages() {
             />
           </div>
 
-          {/* Resultados da Busca (Overlay Dinâmico) */}
+          {/* Resultados da Busca */}
           {searchResults.length > 0 && (
             <Card className="rounded-[28px] border-border/30 shadow-xl overflow-hidden animate-in slide-in-from-top-2 bg-card">
               <div className="bg-muted/20 px-5 py-3 border-b border-border/20 flex items-center justify-between">
@@ -592,7 +653,7 @@ export default function Messages() {
             </Card>
           )}
 
-          {/* Lista de Conversas Recentes */}
+          {/* Histórico Recente */}
           {!searchQuery && (
             <div className="space-y-4 pt-2">
               {conversations.length > 0 && (
@@ -651,7 +712,7 @@ export default function Messages() {
         </div>
       )}
 
-      {/* Aba de Comunidades (Estrutura pronta para integrar as mensagens de grupo depois) */}
+      {/* Aba de Comunidades */}
       {activeTab === "communities" && (
         <div className="space-y-2 animate-in fade-in">
           {loadingCommunities ? (
@@ -687,4 +748,4 @@ export default function Messages() {
       )}
     </div>
   );
-                  }
+}
