@@ -11,7 +11,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { TRANSPORT_STATUS_META, TransportStatus, nextDepartures, useIsAdmin, useTransport } from "@/hooks/useCampusServices";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { ArrowLeft, Bus, Plus, MapPin, Clock } from "lucide-react";
+import { ArrowLeft, Bus, Plus, MapPin, Clock, Map as MapIcon } from "lucide-react";
+
+// Imports cruciais para o Mapa funcionar
+import "leaflet/dist/leaflet.css";
+import { MapContainer, TileLayer, Polyline, CircleMarker, Popup } from "react-leaflet";
 
 function timeAgo(iso: string) {
   const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
@@ -20,14 +24,19 @@ function timeAgo(iso: string) {
   return `${Math.floor(diff / 60)} h`;
 }
 
+// Coordenada central da UFAL (Maceió)
+const UFAL_CENTER: [number, number] = [-9.5539, -35.7772];
+
 export default function CampusTransport() {
   const navigate = useNavigate();
   const isAdmin = useIsAdmin();
   const { routes, stops, departures, latest, loading, report, reload } = useTransport();
+  
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState({ name: "", description: "", stops: "", times: "" });
   const [delayFor, setDelayFor] = useState<string | null>(null);
   const [delay, setDelay] = useState("10");
+  const [activeRouteId, setActiveRouteId] = useState<string | null>(null); // Rota selecionada no mapa
 
   async function createRoute() {
     if (!form.name.trim()) return;
@@ -74,7 +83,7 @@ export default function CampusTransport() {
         </div>
         <div className="min-w-0 flex-1">
           <h1 className="text-xl font-bold tracking-tight truncate">Transporte circular</h1>
-          <p className="text-[11px] text-muted-foreground">Horários oficiais • status reportado pelos alunos</p>
+          <p className="text-[11px] text-muted-foreground">Mapa ao vivo e horários de Maceió</p>
         </div>
         {isAdmin && (
           <Dialog open={creating} onOpenChange={setCreating}>
@@ -89,12 +98,12 @@ export default function CampusTransport() {
               </DialogHeader>
               <div className="space-y-3">
                 <div className="space-y-1.5">
-                  <Label>Nome da rota</Label>
-                  <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Circular Interno" />
+                  <Label>Nome da rota (ex: 046 - Village)</Label>
+                  <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="046 - Village / Centro" />
                 </div>
                 <div className="space-y-1.5">
                   <Label>Paradas (separadas por vírgula)</Label>
-                  <Input value={form.stops} onChange={(e) => setForm({ ...form, stops: e.target.value })} placeholder="Portaria, Biblioteca, RU" />
+                  <Input value={form.stops} onChange={(e) => setForm({ ...form, stops: e.target.value })} placeholder="Portaria UFAL, HU, Shopping" />
                 </div>
                 <div className="space-y-1.5">
                   <Label>Horários de saída (separados por vírgula)</Label>
@@ -113,6 +122,80 @@ export default function CampusTransport() {
         )}
       </header>
 
+      {/* ÁREA DO MAPA - O "Cittamobi" do Campus */}
+      <Card className="rounded-[24px] border border-border/30 shadow-sm overflow-hidden relative z-0">
+        <div className="h-[35vh] w-full min-h-[250px] bg-muted/20 relative">
+          <MapContainer 
+            center={UFAL_CENTER} 
+            zoom={14} 
+            className="h-full w-full absolute inset-0 z-0"
+            zoomControl={false}
+          >
+            <TileLayer
+              url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+            />
+            
+            {/* Renderizar as Rotas no Mapa */}
+            {routes.map(route => {
+              // Se a rota tem o traçado salvo em JSON (route_path)
+              const pathData = (route as any).route_path; 
+              const isSelected = activeRouteId === route.id || activeRouteId === null;
+              
+              if (!pathData || !isSelected) return null;
+              
+              return (
+                <Polyline 
+                  key={`path-${route.id}`} 
+                  positions={pathData as [number, number][]} 
+                  pathOptions={{ 
+                    color: (route as any).route_color || '#3b82f6', 
+                    weight: 4,
+                    opacity: 0.8
+                  }} 
+                />
+              );
+            })}
+
+            {/* Renderizar as Paradas (Pinos) no Mapa */}
+            {stops.filter(s => s.latitude && s.longitude).map(stop => {
+              const isSelected = activeRouteId === stop.route_id || activeRouteId === null;
+              if (!isSelected) return null;
+
+              return (
+                <CircleMarker 
+                  key={`stop-${stop.id}`}
+                  center={[stop.latitude!, stop.longitude!]}
+                  radius={6}
+                  pathOptions={{ color: '#ffffff', fillColor: '#3b82f6', fillOpacity: 1, weight: 2 }}
+                >
+                  <Popup className="rounded-xl font-sans">
+                    <p className="text-xs font-bold">{stop.name}</p>
+                  </Popup>
+                </CircleMarker>
+              );
+            })}
+          </MapContainer>
+          
+          {/* Badge Informativa sobre o Mapa */}
+          <div className="absolute top-3 left-3 z-[1000]">
+            <Badge className="bg-background/90 text-foreground backdrop-blur-md border-border/50 shadow-sm font-bold shadow-black/10">
+              <MapIcon className="h-3 w-3 mr-1.5 text-primary" /> Maceió - AL
+            </Badge>
+          </div>
+        </div>
+      </Card>
+
+      {/* LISTA DE ROTAS E PAINEL DE CONTROLE */}
+      <div className="flex items-center justify-between px-1">
+        <h2 className="text-sm font-black tracking-tight">Linhas e Circulares</h2>
+        {activeRouteId && (
+          <Button variant="link" size="sm" onClick={() => setActiveRouteId(null)} className="h-auto p-0 text-[11px]">
+            Ver todas no mapa
+          </Button>
+        )}
+      </div>
+
       {loading ? (
         <div className="space-y-3">
           {[0, 1].map((i) => (
@@ -124,7 +207,7 @@ export default function CampusTransport() {
           <CardContent className="p-8 text-center space-y-2">
             <Bus className="h-8 w-8 mx-auto text-muted-foreground/50" />
             <p className="text-sm font-semibold">Nenhuma rota cadastrada</p>
-            <p className="text-xs text-muted-foreground">A administração precisa cadastrar as rotas e horários do circular.</p>
+            <p className="text-xs text-muted-foreground">A administração precisa cadastrar as rotas e horários.</p>
           </CardContent>
         </Card>
       ) : (
@@ -134,12 +217,27 @@ export default function CampusTransport() {
             const meta = last ? TRANSPORT_STATUS_META[last.status] : null;
             const routeStops = stops.filter((s) => s.route_id === route.id);
             const next = nextDepartures(departures, route.id);
+            const isActive = activeRouteId === route.id;
+
             return (
-              <Card key={route.id} className="rounded-[24px] border border-border/30 shadow-sm overflow-hidden">
+              <Card 
+                key={route.id} 
+                className={cn(
+                  "rounded-[24px] border shadow-sm overflow-hidden transition-colors",
+                  isActive ? "border-primary/50 ring-1 ring-primary/20" : "border-border/30 hover:border-border/60"
+                )}
+              >
                 <CardContent className="p-5 space-y-4">
-                  <div className="flex items-start justify-between gap-3">
+                  {/* Cabeçalho da Rota clicável para focar no mapa */}
+                  <div 
+                    className="flex items-start justify-between gap-3 cursor-pointer"
+                    onClick={() => setActiveRouteId(isActive ? null : route.id)}
+                  >
                     <div className="min-w-0">
-                      <h2 className="text-sm font-bold truncate">{route.name}</h2>
+                      <h2 className="text-sm font-bold truncate flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full" style={{ backgroundColor: (route as any).route_color || '#3b82f6' }} />
+                        {route.name}
+                      </h2>
                       {route.description && <p className="text-[11px] text-muted-foreground mt-0.5">{route.description}</p>}
                     </div>
                     <Badge
@@ -167,7 +265,7 @@ export default function CampusTransport() {
                     ) : (
                       <div className="flex flex-wrap gap-2">
                         {next.map((d) => (
-                          <span key={d.id} className="px-2.5 py-1 rounded-full bg-background border border-border/40 text-[11px] font-bold">
+                          <span key={d.id} className="px-2.5 py-1 rounded-full bg-background border border-border/40 text-[11px] font-bold shadow-sm">
                             {d.departure_time.slice(0, 5)}
                           </span>
                         ))}
@@ -193,7 +291,7 @@ export default function CampusTransport() {
                         key={status}
                         variant="outline"
                         onClick={() => (status === "delayed" ? setDelayFor(route.id) : void send(route.id, status))}
-                        className="h-11 rounded-2xl text-[11px] font-bold border-border/40"
+                        className="h-11 rounded-2xl text-[11px] font-bold border-border/40 hover:bg-muted/50 transition-colors"
                       >
                         {TRANSPORT_STATUS_META[status].label}
                       </Button>
@@ -201,13 +299,13 @@ export default function CampusTransport() {
                   </div>
 
                   {delayFor === route.id && (
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 animate-in fade-in slide-in-from-top-2">
                       <Input
                         autoFocus
                         type="number"
                         value={delay}
                         onChange={(e) => setDelay(e.target.value)}
-                        className="rounded-2xl h-11"
+                        className="rounded-2xl h-11 border-border/50"
                         placeholder="Minutos de atraso"
                       />
                       <Button onClick={() => void send(route.id, "delayed")} className="h-11 rounded-2xl font-bold shrink-0">
